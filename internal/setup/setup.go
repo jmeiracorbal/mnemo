@@ -135,7 +135,7 @@ fi
 exit 0
 `
 
-// sessionStopScript reads session_id from stdin and ends the session.
+// sessionStopScript reads session_id from stdin, ends the session, and warns if nothing was saved.
 const sessionStopScript = `#!/bin/bash
 # mnemo — Stop hook for Claude Code
 
@@ -144,7 +144,15 @@ SESSION_ID=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin)
 
 [ -z "$SESSION_ID" ] && exit 0
 
+# Check how many observations were saved this session before ending it
+OBS_COUNT=$(mnemo session obs-count "$SESSION_ID" 2>/dev/null)
+
 mnemo session end "$SESSION_ID" 2>/dev/null || true
+
+# Warn user (not the agent) if nothing was saved — zero token cost
+if [ "${OBS_COUNT:-0}" = "0" ]; then
+  printf "\n[mnemo] warning: session ended with 0 memories saved.\n" >&2
+fi
 
 exit 0
 `
@@ -429,8 +437,14 @@ Call ` + "`mem_save`" + ` IMMEDIATELY after ANY of these:
 - Starting work on something that might have been done before
 - User mentions a topic you have no context on
 
-### SESSION CLOSE — before saying "done":
-Call ` + "`mem_session_summary`" + ` with: Goal, Discoveries, Accomplished, Next Steps, Relevant Files.
+### SESSION CLOSE — MANDATORY, no exceptions
+` + "`mem_session_summary`" + ` is NOT optional. It is the final step of every session, like a ` + "`defer`" + ` — it always runs.
+Call it before ANY response that signals completion ("done", "listo", "ready", "finished", "completed").
+Fields: Goal, Discoveries, Accomplished, Next Steps, Relevant Files.
+
+If nothing was accomplished: call it anyway with Goal and Next Steps.
+If the user says goodbye: call it before responding.
+No session ends without ` + "`mem_session_summary`" + `.
 `
 
 func writeProtocolDoc(path string) error {

@@ -758,6 +758,15 @@ func (s *Store) GetSession(id string) (*Session, error) {
 	return &sess, nil
 }
 
+// ObsCount returns the number of non-deleted observations for a given session.
+func (s *Store) ObsCount(sessionID string) (int, error) {
+	var count int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM observations WHERE session_id = ? AND deleted_at IS NULL`, sessionID,
+	).Scan(&count)
+	return count, err
+}
+
 func (s *Store) RecentSessions(project string, limit int) ([]SessionSummary, error) {
 	if limit <= 0 {
 		limit = 5
