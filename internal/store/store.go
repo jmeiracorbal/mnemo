@@ -1638,8 +1638,18 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 		result.SessionsImported += int(n)
 	}
 
-	// Import observations (use new IDs — AUTOINCREMENT)
+	// Import observations — skip duplicates by normalized_hash (content hash)
 	for _, obs := range data.Observations {
+		hash := hashNormalized(obs.Content)
+		var exists int
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) FROM observations WHERE normalized_hash = ? AND deleted_at IS NULL`, hash,
+		).Scan(&exists); err != nil {
+			return nil, fmt.Errorf("import observation check %d: %w", obs.ID, err)
+		}
+		if exists > 0 {
+			continue
+		}
 		_, err := s.execHook(tx,
 			`INSERT INTO observations (sync_id, session_id, type, title, content, tool_name, project, scope, topic_key, normalized_hash, revision_count, duplicate_count, last_seen_at, created_at, updated_at, deleted_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1652,7 +1662,7 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 			obs.Project,
 			normalizeScope(obs.Scope),
 			nullableString(normalizeTopicKey(derefString(obs.TopicKey))),
-			hashNormalized(obs.Content),
+			hash,
 			maxInt(obs.RevisionCount, 1),
 			maxInt(obs.DuplicateCount, 1),
 			obs.LastSeenAt,
