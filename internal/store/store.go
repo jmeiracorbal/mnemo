@@ -227,7 +227,7 @@ type syncPromptPayload struct {
 	Project   *string `json:"project,omitempty"`
 }
 
-// ExportData is the full serializable dump of the engram database.
+// ExportData is the full serializable dump of the mnemo database.
 type ExportData struct {
 	Version      string        `json:"version"`
 	ExportedAt   string        `json:"exported_at"`
@@ -249,10 +249,10 @@ type Config struct {
 func DefaultConfig() (Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return Config{}, fmt.Errorf("engram: determine home directory: %w", err)
+		return Config{}, fmt.Errorf("mnemo: determine home directory: %w", err)
 	}
 	return Config{
-		DataDir:              filepath.Join(home, ".engram"),
+		DataDir:              filepath.Join(home, ".mnemo"),
 		MaxObservationLength: 50000,
 		MaxContextResults:    20,
 		MaxSearchResults:     20,
@@ -394,16 +394,16 @@ func (s *Store) commitHook(tx *sql.Tx) error {
 
 func New(cfg Config) (*Store, error) {
 	if !filepath.IsAbs(cfg.DataDir) {
-		return nil, fmt.Errorf("engram: data directory must be an absolute path, got %q — set ENGRAM_DATA_DIR or ensure your home directory is resolvable", cfg.DataDir)
+		return nil, fmt.Errorf("mnemo: data directory must be an absolute path, got %q", cfg.DataDir)
 	}
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
-		return nil, fmt.Errorf("engram: create data dir: %w", err)
+		return nil, fmt.Errorf("mnemo: create data dir: %w", err)
 	}
 
-	dbPath := filepath.Join(cfg.DataDir, "engram.db")
+	dbPath := filepath.Join(cfg.DataDir, "memory.db")
 	db, err := openDB("sqlite", dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("engram: open database: %w", err)
+		return nil, fmt.Errorf("mnemo: open database: %w", err)
 	}
 
 	// SQLite performance pragmas
@@ -415,16 +415,16 @@ func New(cfg Config) (*Store, error) {
 	}
 	for _, p := range pragmas {
 		if _, err := db.Exec(p); err != nil {
-			return nil, fmt.Errorf("engram: pragma %q: %w", p, err)
+			return nil, fmt.Errorf("mnemo: pragma %q: %w", p, err)
 		}
 	}
 
 	s := &Store{db: db, cfg: cfg, hooks: defaultStoreHooks()}
 	if err := s.migrate(); err != nil {
-		return nil, fmt.Errorf("engram: migration: %w", err)
+		return nil, fmt.Errorf("mnemo: migration: %w", err)
 	}
 	if err := s.repairEnrolledProjectSyncMutations(); err != nil {
-		return nil, fmt.Errorf("engram: repair enrolled sync journal: %w", err)
+		return nil, fmt.Errorf("mnemo: repair enrolled sync journal: %w", err)
 	}
 
 	return s, nil

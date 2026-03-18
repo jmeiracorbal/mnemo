@@ -444,6 +444,6 @@ Tool profiles for mcp:
   --tools=admin    3 tools for curation (delete, stats, timeline)
   --tools=all      All tools
 
-Storage: ~/.engram/engram.db (compatible with engram)
+Storage: ~/.mnemo/memory.db
 `, version)
 }

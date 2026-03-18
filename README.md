@@ -167,7 +167,7 @@ mnemo export backup.json
 
 ## Storage
 
-mnemo uses `~/.engram/engram.db` — the same database as engram. Both tools can run simultaneously and share all memories. The schema uses SQLite with FTS5 for full-text search.
+mnemo uses `~/.mnemo/memory.db`, created automatically on first run. The directory and database are created by `store.New()` during startup — no manual setup required. The schema uses SQLite with FTS5 for full-text search.
 
 ---
 
@@ -184,7 +184,7 @@ mnemo uses `~/.engram/engram.db` — the same database as engram. Both tools can
 | HTTP server | ✓ | ✗ |
 | Cloud sync | ✓ | ✗ |
 | Version check | ✓ | ✗ |
-| Storage | `~/.engram/engram.db` | `~/.engram/engram.db` |
+| Storage | `~/.engram/engram.db` | `~/.mnemo/memory.db` |
 
 ---
 
