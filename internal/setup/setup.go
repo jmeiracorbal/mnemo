@@ -437,6 +437,18 @@ Call ` + "`mem_save`" + ` IMMEDIATELY after ANY of these:
 - Starting work on something that might have been done before
 - User mentions a topic you have no context on
 
+### SUBAGENT OUTPUT — required format for passive capture
+When running as a subagent, always end your response with a structured section:
+
+` + "```" + `
+## Key Learnings
+- <learning 1>
+- <learning 2>
+` + "```" + `
+
+This enables mnemo to automatically extract and persist what you discovered.
+Omit the section only if the task produced no learnings worth retaining.
+
 ### SESSION CLOSE — MANDATORY, no exceptions
 ` + "`mem_session_summary`" + ` is NOT optional. It is the final step of every session, like a ` + "`defer`" + ` — it always runs.
 Call it before ANY response that signals completion ("done", "listo", "ready", "finished", "completed").
