@@ -1,7 +1,7 @@
 # mnemo
 
 [![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev)
-[![Status](https://img.shields.io/badge/status-beta-orange)](https://github.com/jmeiracorbal/mnemo)
+[![Status](https://img.shields.io/badge/status-stable-brightgreen)](https://github.com/jmeiracorbal/mnemo)
 [![Storage](https://img.shields.io/badge/storage-SQLite%2BFTS5-003B57?logo=sqlite&logoColor=white)](https://sqlite.org)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)](https://github.com/jmeiracorbal/mnemo)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
@@ -187,15 +187,6 @@ mnemo uses `~/.mnemo/memory.db`, created automatically on first run. The directo
 | Storage | `~/.engram/engram.db` | `~/.mnemo/memory.db` |
 
 ---
-
-## Status
-
-> **Beta** — core functionality works. The following are not yet fully validated:
->
-> - `SubagentStop` passive capture end-to-end
-> - Fresh install on a clean system
-> - `export` / `import` roundtrip
-> - All 14 MCP tools (core 4 confirmed: save, search, context, session_summary)
 
 ---
 
