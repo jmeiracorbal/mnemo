@@ -109,9 +109,9 @@ CWD=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print
 [ -z "$SESSION_ID" ] && exit 0
 [ -z "$CWD" ] && CWD="$(pwd)"
 
-# Detect project from git remote, fallback to directory name
-PROJECT=$(git -C "$CWD" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
-[ -z "$PROJECT" ] && PROJECT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null)
+# Detect project: prefer git root directory name, fallback to remote repo name, then cwd basename
+PROJECT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null)
+[ -z "$PROJECT" ] && PROJECT=$(git -C "$CWD" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
 [ -z "$PROJECT" ] && PROJECT=$(basename "$CWD")
 
 # Check if this is a resume (session already exists in store)
@@ -170,8 +170,8 @@ OUTPUT=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); pr
 [ -z "$OUTPUT" ] && exit 0
 
 [ -z "$CWD" ] && CWD="$(pwd)"
-PROJECT=$(git -C "$CWD" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
-[ -z "$PROJECT" ] && PROJECT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null)
+PROJECT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null)
+[ -z "$PROJECT" ] && PROJECT=$(git -C "$CWD" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
 [ -z "$PROJECT" ] && PROJECT=$(basename "$CWD")
 
 mnemo capture "$OUTPUT" --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null || true
