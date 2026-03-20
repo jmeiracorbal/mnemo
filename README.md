@@ -3,7 +3,7 @@
 [![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Status](https://img.shields.io/badge/status-stable-brightgreen)](https://github.com/jmeiracorbal/mnemo)
 [![Storage](https://img.shields.io/badge/storage-SQLite%2BFTS5-003B57?logo=sqlite&logoColor=white)](https://sqlite.org)
-[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)](https://github.com/jmeiracorbal/mnemo)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](https://github.com/jmeiracorbal/mnemo)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
 Persistent memory for Claude Code. mnemo stores decisions, bugs, conventions, and discoveries across sessions in a local SQLite database. A one-command setup wires it into Claude Code via hooks and MCP.
@@ -25,7 +25,7 @@ Persistent memory for Claude Code. mnemo stores decisions, bugs, conventions, an
 
 - Go 1.22+
 - [Claude Code](https://claude.ai/code) CLI (`claude` command available in PATH)
-- macOS (Linux should work, untested)
+- macOS or Linux (binaries available for both)
 
 ---
 
