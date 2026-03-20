@@ -6,9 +6,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey?logo=apple)](https://github.com/jmeiracorbal/mnemo)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-Persistent memory for Claude Code. Minimal fork of [engram](https://github.com/Gentleman-Programming/engram) — no TUI, no HTTP server, no sync, no version check.
-
-mnemo stores decisions, bugs, conventions, and discoveries across sessions in a local SQLite database. A one-command setup wires it into Claude Code via hooks and MCP.
+Persistent memory for Claude Code. mnemo stores decisions, bugs, conventions, and discoveries across sessions in a local SQLite database. A one-command setup wires it into Claude Code via hooks and MCP.
 
 ---
 
@@ -18,7 +16,7 @@ mnemo stores decisions, bugs, conventions, and discoveries across sessions in a 
 - **14 MCP tools** — `mem_save`, `mem_search`, `mem_context`, `mem_session_summary`, and more, available directly inside Claude Code
 - **Passive capture** — extracts learnings from subagent output automatically (SubagentStop hook)
 - **Full CLI** — save, search, export, import, and inspect memories from the terminal
-- **Storage-compatible with engram** — shares `~/.engram/engram.db`, can run side-by-side
+- **Own storage** — isolated `~/.mnemo/memory.db`, created automatically on first run
 - **One-command setup** — `mnemo setup` wires everything into Claude Code automatically
 
 ---
@@ -33,7 +31,17 @@ mnemo stores decisions, bugs, conventions, and discoveries across sessions in a 
 
 ## Installation
 
-### 1. Build
+### Option A — Plugin (recommended)
+
+```bash
+claude plugin marketplace add jmeiracorbal/mnemo
+claude plugin install mnemo@mnemo
+```
+
+> The binary must be in PATH. Download the latest release for your platform from
+> [GitHub Releases](https://github.com/jmeiracorbal/mnemo/releases) and place it in `~/.local/bin/`.
+
+### Option B — Manual build
 
 ```bash
 git clone https://github.com/jmeiracorbal/mnemo
@@ -47,7 +55,7 @@ Make sure `~/.local/bin` is in your `PATH`:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### 2. Setup
+Then run setup:
 
 ```bash
 mnemo setup
@@ -68,17 +76,11 @@ Preview what will change without writing:
 mnemo setup --dry-run
 ```
 
-### 3. Restart Claude Code
-
-```bash
-# Restart the Claude Code CLI to load the new MCP server
-```
-
-Verify the server is loaded:
+### Restart Claude Code
 
 ```bash
 claude mcp list
-# mnemo: ~/.local/bin/mnemo mcp --tools=agent
+# mnemo: ~/.local/bin/mnemo mcp --tools=agent  ✓ Connected
 ```
 
 ---
@@ -90,10 +92,10 @@ mnemo operates through three hooks that Claude Code fires automatically:
 | Hook | Trigger | Action |
 |---|---|---|
 | `SessionStart` | New session or `/resume` | Registers session, emits memory context |
-| `Stop` | Session ends | Marks session as completed |
+| `Stop` | Session ends | Marks session as completed, warns if nothing was saved |
 | `SubagentStop` | Subagent finishes | Passively captures learnings from subagent output |
 
-On session start, mnemo detects the project from the git remote URL (falls back to directory name) and emits relevant memories from previous sessions into the context.
+On session start, mnemo detects the project from the git root directory name and emits relevant memories from previous sessions into the context.
 
 ---
 
@@ -121,8 +123,6 @@ Tools available inside Claude Code via the `mcp__mnemo__*` namespace:
 
 Available with `--tools=admin`: `mem_delete`, `mem_stats`, `mem_timeline`.
 
-To use the admin profile, re-register with:
-
 ```bash
 claude mcp add -s user mnemo-admin -- ~/.local/bin/mnemo mcp --tools=admin
 ```
@@ -139,6 +139,7 @@ mnemo context [project]              Show context from previous sessions
 mnemo session start <id>             Register session start
 mnemo session end <id>               Mark session as completed
 mnemo session exists <id>            Check if a session exists (exits 1 if not)
+mnemo session obs-count <id>         Count observations saved in a session
 mnemo stats                          Show memory statistics
 mnemo export [file]                  Export all memories to JSON
 mnemo import <file.json>             Import memories from JSON
@@ -167,33 +168,10 @@ mnemo export backup.json
 
 ## Storage
 
-mnemo uses `~/.mnemo/memory.db`, created automatically on first run. The directory and database are created by `store.New()` during startup — no manual setup required. The schema uses SQLite with FTS5 for full-text search.
-
----
-
-## Comparison with engram
-
-| | engram | mnemo |
-|---|---|---|
-| MCP server | ✓ | ✓ |
-| CLI | ✓ | ✓ |
-| Session hooks | ✓ | ✓ |
-| Passive capture | ✓ | ✓ |
-| Auto-setup | ✗ | ✓ (`mnemo setup`) |
-| TUI | ✓ | ✗ |
-| HTTP server | ✓ | ✗ |
-| Cloud sync | ✓ | ✗ |
-| Version check | ✓ | ✗ |
-| Storage | `~/.engram/engram.db` | `~/.mnemo/memory.db` |
-
----
+mnemo uses `~/.mnemo/memory.db`, created automatically on first run. The directory and database are created during startup — no manual setup required. The schema uses SQLite with FTS5 for full-text search.
 
 ---
 
 ## License
 
 [Apache 2.0](LICENSE) — you may use, modify, and distribute freely, but must retain the copyright notice and include the [NOTICE](NOTICE) file in all distributions.
-
----
-
-Based on [engram](https://github.com/Gentleman-Programming/engram) by Gentleman Programming.

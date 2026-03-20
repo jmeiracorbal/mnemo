@@ -68,7 +68,7 @@ func (f *fakeRows) Close() error {
 func TestAddObservationDeduplicatesWithinWindow(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -77,7 +77,7 @@ func TestAddObservationDeduplicatesWithinWindow(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "Fixed tokenizer",
 		Content:   "Normalized tokenizer panic on edge case",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -89,7 +89,7 @@ func TestAddObservationDeduplicatesWithinWindow(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "Fixed tokenizer",
 		Content:   "normalized   tokenizer panic on EDGE case",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -112,7 +112,7 @@ func TestAddObservationDeduplicatesWithinWindow(t *testing.T) {
 func TestScopeFiltersSearchAndContext(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -121,7 +121,7 @@ func TestScopeFiltersSearchAndContext(t *testing.T) {
 		Type:      "decision",
 		Title:     "Project auth",
 		Content:   "Keep auth middleware in project memory",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -133,14 +133,14 @@ func TestScopeFiltersSearchAndContext(t *testing.T) {
 		Type:      "decision",
 		Title:     "Personal note",
 		Content:   "Use this regex trick later",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "personal",
 	})
 	if err != nil {
 		t.Fatalf("add personal observation: %v", err)
 	}
 
-	projectResults, err := s.Search("regex", SearchOptions{Project: "engram", Scope: "project", Limit: 10})
+	projectResults, err := s.Search("regex", SearchOptions{Project: "mnemo", Scope: "project", Limit: 10})
 	if err != nil {
 		t.Fatalf("search project scope: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestScopeFiltersSearchAndContext(t *testing.T) {
 		t.Fatalf("expected no project-scope regex results, got %d", len(projectResults))
 	}
 
-	personalResults, err := s.Search("regex", SearchOptions{Project: "engram", Scope: "personal", Limit: 10})
+	personalResults, err := s.Search("regex", SearchOptions{Project: "mnemo", Scope: "personal", Limit: 10})
 	if err != nil {
 		t.Fatalf("search personal scope: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestScopeFiltersSearchAndContext(t *testing.T) {
 		t.Fatalf("expected 1 personal-scope result, got %d", len(personalResults))
 	}
 
-	ctx, err := s.FormatContext("engram", "personal")
+	ctx, err := s.FormatContext("mnemo", "personal")
 	if err != nil {
 		t.Fatalf("format context personal: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestScopeFiltersSearchAndContext(t *testing.T) {
 func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "first",
 		Content:   "first event",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -192,7 +192,7 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "middle",
 		Content:   "to be deleted",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -204,7 +204,7 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "last",
 		Content:   "last event",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -234,7 +234,7 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 		t.Fatalf("expected deleted observation to be hidden from GetObservation")
 	}
 
-	searchResults, err := s.Search("deleted", SearchOptions{Project: "engram", Limit: 10})
+	searchResults, err := s.Search("deleted", SearchOptions{Project: "mnemo", Limit: 10})
 	if err != nil {
 		t.Fatalf("search after delete: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 func TestTopicKeyUpsertUpdatesSameTopicWithoutCreatingNewRow(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -270,7 +270,7 @@ func TestTopicKeyUpsertUpdatesSameTopicWithoutCreatingNewRow(t *testing.T) {
 		Type:      "architecture",
 		Title:     "Auth architecture",
 		Content:   "Use middleware for JWT validation.",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 		TopicKey:  "architecture auth model",
 	})
@@ -283,7 +283,7 @@ func TestTopicKeyUpsertUpdatesSameTopicWithoutCreatingNewRow(t *testing.T) {
 		Type:      "architecture",
 		Title:     "Auth architecture",
 		Content:   "Move auth to gateway + middleware chain.",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 		TopicKey:  "ARCHITECTURE   AUTH  MODEL",
 	})
@@ -313,7 +313,7 @@ func TestTopicKeyUpsertUpdatesSameTopicWithoutCreatingNewRow(t *testing.T) {
 func TestDifferentTopicsDoNotReplaceEachOther(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -322,7 +322,7 @@ func TestDifferentTopicsDoNotReplaceEachOther(t *testing.T) {
 		Type:      "architecture",
 		Title:     "Auth architecture",
 		Content:   "Architecture decision",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 		TopicKey:  "architecture/auth",
 	})
@@ -335,7 +335,7 @@ func TestDifferentTopicsDoNotReplaceEachOther(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "Fix auth nil panic",
 		Content:   "Bugfix details",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 		TopicKey:  "bug/auth-nil-panic",
 	})
@@ -347,7 +347,7 @@ func TestDifferentTopicsDoNotReplaceEachOther(t *testing.T) {
 		t.Fatalf("expected different topic keys to create different observations")
 	}
 
-	observations, err := s.AllObservations("engram", "project", 10)
+	observations, err := s.AllObservations("mnemo", "project", 10)
 	if err != nil {
 		t.Fatalf("all observations: %v", err)
 	}
@@ -358,7 +358,7 @@ func TestDifferentTopicsDoNotReplaceEachOther(t *testing.T) {
 
 func TestNewMigratesLegacyObservationIDSchema(t *testing.T) {
 	dataDir := t.TempDir()
-	dbPath := filepath.Join(dataDir, "engram.db")
+	dbPath := filepath.Join(dataDir, "memory.db")
 
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -384,12 +384,12 @@ func TestNewMigratesLegacyObservationIDSchema(t *testing.T) {
 			project TEXT,
 			created_at TEXT
 		);
-		INSERT INTO sessions (id, project, directory) VALUES ('s1', 'engram', '/tmp/engram');
+		INSERT INTO sessions (id, project, directory) VALUES ('s1', 'mnemo', '/tmp/mnemo');
 		INSERT INTO observations (id, session_id, type, title, content, project, created_at)
 		VALUES
-			(NULL, 's1', 'bugfix', 'legacy null', 'legacy null content', 'engram', datetime('now')),
-			(7, 's1', 'bugfix', 'legacy fixed', 'legacy fixed content', 'engram', datetime('now')),
-			(7, 's1', 'bugfix', 'legacy duplicate', 'legacy duplicate content', 'engram', datetime('now'));
+			(NULL, 's1', 'bugfix', 'legacy null', 'legacy null content', 'mnemo', datetime('now')),
+			(7, 's1', 'bugfix', 'legacy fixed', 'legacy fixed content', 'mnemo', datetime('now')),
+			(7, 's1', 'bugfix', 'legacy duplicate', 'legacy duplicate content', 'mnemo', datetime('now'));
 	`)
 	if err != nil {
 		_ = db.Close()
@@ -408,7 +408,7 @@ func TestNewMigratesLegacyObservationIDSchema(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
-	obs, err := s.AllObservations("engram", "", 20)
+	obs, err := s.AllObservations("mnemo", "", 20)
 	if err != nil {
 		t.Fatalf("all observations after migration: %v", err)
 	}
@@ -427,7 +427,7 @@ func TestNewMigratesLegacyObservationIDSchema(t *testing.T) {
 		seen[o.ID] = true
 	}
 
-	results, err := s.Search("legacy", SearchOptions{Project: "engram", Limit: 10})
+	results, err := s.Search("legacy", SearchOptions{Project: "mnemo", Limit: 10})
 	if err != nil {
 		t.Fatalf("search after migration: %v", err)
 	}
@@ -440,7 +440,7 @@ func TestNewMigratesLegacyObservationIDSchema(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "post migration",
 		Content:   "new row should get id",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -453,7 +453,7 @@ func TestNewMigratesLegacyObservationIDSchema(t *testing.T) {
 
 func TestNewMigratesLegacyUserPromptsSyncIDSchema(t *testing.T) {
 	dataDir := t.TempDir()
-	dbPath := filepath.Join(dataDir, "engram.db")
+	dbPath := filepath.Join(dataDir, "memory.db")
 
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -477,8 +477,8 @@ func TestNewMigratesLegacyUserPromptsSyncIDSchema(t *testing.T) {
 			created_at TEXT NOT NULL DEFAULT (datetime('now')),
 			FOREIGN KEY (session_id) REFERENCES sessions(id)
 		);
-		INSERT INTO sessions (id, project, directory) VALUES ('s1', 'engram', '/tmp/engram');
-		INSERT INTO user_prompts (session_id, content, project) VALUES ('s1', 'legacy prompt', 'engram');
+		INSERT INTO sessions (id, project, directory) VALUES ('s1', 'mnemo', '/tmp/mnemo');
+		INSERT INTO user_prompts (session_id, content, project) VALUES ('s1', 'legacy prompt', 'mnemo');
 	`)
 	if err != nil {
 		_ = db.Close()
@@ -567,7 +567,7 @@ func TestSuggestTopicKeyInfersFamilyFromTextWhenTypeIsGeneric(t *testing.T) {
 func TestTopicKeyUpsertIsScopedByProjectAndScope(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -576,7 +576,7 @@ func TestTopicKeyUpsertIsScopedByProjectAndScope(t *testing.T) {
 		Type:      "architecture",
 		Title:     "Auth model",
 		Content:   "Initial architecture",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 		TopicKey:  "architecture/auth-model",
 	})
@@ -589,7 +589,7 @@ func TestTopicKeyUpsertIsScopedByProjectAndScope(t *testing.T) {
 		Type:      "architecture",
 		Title:     "Auth model",
 		Content:   "Personal take",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "personal",
 		TopicKey:  "architecture/auth-model",
 	})
@@ -618,7 +618,7 @@ func TestTopicKeyUpsertIsScopedByProjectAndScope(t *testing.T) {
 func TestPromptProjectNullScan(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -803,7 +803,7 @@ func TestExtractLearningsCleansMarkdown(t *testing.T) {
 func TestPassiveCaptureStoresLearnings(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -815,7 +815,7 @@ func TestPassiveCaptureStoresLearnings(t *testing.T) {
 	result, err := s.PassiveCapture(PassiveCaptureParams{
 		SessionID: "s1",
 		Content:   text,
-		Project:   "engram",
+		Project:   "mnemo",
 		Source:    "test",
 	})
 	if err != nil {
@@ -828,7 +828,7 @@ func TestPassiveCaptureStoresLearnings(t *testing.T) {
 		t.Fatalf("expected 2 saved, got %d", result.Saved)
 	}
 
-	obs, err := s.AllObservations("engram", "", 10)
+	obs, err := s.AllObservations("mnemo", "", 10)
 	if err != nil {
 		t.Fatalf("all observations: %v", err)
 	}
@@ -848,14 +848,14 @@ func TestPassiveCaptureStoresLearnings(t *testing.T) {
 func TestPassiveCaptureEmptyContent(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
 	result, err := s.PassiveCapture(PassiveCaptureParams{
 		SessionID: "s1",
 		Content:   "",
-		Project:   "engram",
+		Project:   "mnemo",
 		Source:    "test",
 	})
 	if err != nil {
@@ -869,7 +869,7 @@ func TestPassiveCaptureEmptyContent(t *testing.T) {
 func TestPassiveCaptureDedupesAgainstExistingObservations(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -879,7 +879,7 @@ func TestPassiveCaptureDedupesAgainstExistingObservations(t *testing.T) {
 		Type:      "decision",
 		Title:     "bcrypt cost",
 		Content:   "bcrypt cost=12 is the right balance for our server performance",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -895,7 +895,7 @@ func TestPassiveCaptureDedupesAgainstExistingObservations(t *testing.T) {
 	result, err := s.PassiveCapture(PassiveCaptureParams{
 		SessionID: "s1",
 		Content:   text,
-		Project:   "engram",
+		Project:   "mnemo",
 		Source:    "test",
 	})
 	if err != nil {
@@ -922,7 +922,7 @@ func TestPassiveCaptureReturnsErrorWhenSessionDoesNotExist(t *testing.T) {
 	_, err := s.PassiveCapture(PassiveCaptureParams{
 		SessionID: "missing-session",
 		Content:   text,
-		Project:   "engram",
+		Project:   "mnemo",
 		Source:    "test",
 	})
 	if err == nil {
@@ -933,10 +933,10 @@ func TestPassiveCaptureReturnsErrorWhenSessionDoesNotExist(t *testing.T) {
 func TestStatsProjectsOrderedByMostRecentObservation(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session s1: %v", err)
 	}
-	if err := s.CreateSession("s2", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s2", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session s2: %v", err)
 	}
 
@@ -971,8 +971,8 @@ func TestSessionsOrderedByMostRecentActivity(t *testing.T) {
 		`INSERT INTO sessions (id, project, directory, started_at) VALUES
 		 (?, ?, ?, ?),
 		 (?, ?, ?, ?)`,
-		"s-older", "engram", "/tmp/engram", "2026-02-01 09:00:00",
-		"s-newer", "engram", "/tmp/engram", "2026-02-02 09:00:00",
+		"s-older", "mnemo", "/tmp/mnemo", "2026-02-01 09:00:00",
+		"s-newer", "mnemo", "/tmp/mnemo", "2026-02-02 09:00:00",
 	)
 	if err != nil {
 		t.Fatalf("insert sessions: %v", err)
@@ -981,7 +981,7 @@ func TestSessionsOrderedByMostRecentActivity(t *testing.T) {
 	_, err = s.db.Exec(
 		`INSERT INTO observations (session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`,
-		"s-older", "note", "latest", "session old got new activity", "engram", "project", hashNormalized("session old got new activity"), "2026-02-03 09:00:00", "2026-02-03 09:00:00",
+		"s-older", "note", "latest", "session old got new activity", "mnemo", "project", hashNormalized("session old got new activity"), "2026-02-03 09:00:00", "2026-02-03 09:00:00",
 	)
 	if err != nil {
 		t.Fatalf("insert latest observation: %v", err)
@@ -1013,7 +1013,7 @@ func TestSessionsOrderedByMostRecentActivity(t *testing.T) {
 func TestSessionObservationsAddPromptImportAndSyncChunks(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -1022,7 +1022,7 @@ func TestSessionObservationsAddPromptImportAndSyncChunks(t *testing.T) {
 		Type:      "decision",
 		Title:     "Auth",
 		Content:   "Use middleware chain",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -1030,7 +1030,7 @@ func TestSessionObservationsAddPromptImportAndSyncChunks(t *testing.T) {
 	}
 
 	longPrompt := strings.Repeat("x", s.cfg.MaxObservationLength+25)
-	promptID, err := s.AddPrompt(AddPromptParams{SessionID: "s1", Content: longPrompt, Project: "engram"})
+	promptID, err := s.AddPrompt(AddPromptParams{SessionID: "s1", Content: longPrompt, Project: "mnemo"})
 	if err != nil {
 		t.Fatalf("add prompt: %v", err)
 	}
@@ -1082,12 +1082,12 @@ func TestSessionObservationsAddPromptImportAndSyncChunks(t *testing.T) {
 func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 	s := newTestStore(t)
 
-	// Enroll "engram" so mutations are visible via ListPendingSyncMutations.
-	if err := s.EnrollProject("engram"); err != nil {
+	// Enroll "mnemo" so mutations are visible via ListPendingSyncMutations.
+	if err := s.EnrollProject("mnemo"); err != nil {
 		t.Fatalf("enroll: %v", err)
 	}
 
-	if err := s.CreateSession("sync-session", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("sync-session", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -1096,7 +1096,7 @@ func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 		Type:      "decision",
 		Title:     "Initial title",
 		Content:   "Initial content",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -1119,7 +1119,7 @@ func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 	promptID, err := s.AddPrompt(AddPromptParams{
 		SessionID: "sync-session",
 		Content:   "How do we keep this local-first?",
-		Project:   "engram",
+		Project:   "mnemo",
 	})
 	if err != nil {
 		t.Fatalf("add prompt: %v", err)
@@ -1294,7 +1294,7 @@ func TestApplyRemoteMutationIdempotent(t *testing.T) {
 		Entity:    SyncEntitySession,
 		EntityKey: "remote-session",
 		Op:        SyncOpUpsert,
-		Payload:   `{"id":"remote-session","project":"engram","directory":"/remote"}`,
+		Payload:   `{"id":"remote-session","project":"mnemo","directory":"/remote"}`,
 	}
 	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, create); err != nil {
 		t.Fatalf("apply session mutation: %v", err)
@@ -1309,7 +1309,7 @@ func TestApplyRemoteMutationIdempotent(t *testing.T) {
 		Entity:    SyncEntityObservation,
 		EntityKey: "obs-remote-1",
 		Op:        SyncOpUpsert,
-		Payload:   `{"sync_id":"obs-remote-1","session_id":"remote-session","type":"decision","title":"Remote","content":"Pulled from cloud","project":"engram","scope":"project"}`,
+		Payload:   `{"sync_id":"obs-remote-1","session_id":"remote-session","type":"decision","title":"Remote","content":"Pulled from cloud","project":"mnemo","scope":"project"}`,
 	}
 	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, obsMutation); err != nil {
 		t.Fatalf("apply observation mutation: %v", err)
@@ -1371,7 +1371,7 @@ func TestApplyPulledMutationAcceptsStringifiedSessionPayload(t *testing.T) {
 		Entity:    SyncEntitySession,
 		EntityKey: "remote-session",
 		Op:        SyncOpUpsert,
-		Payload:   `"{\"id\":\"remote-session\",\"project\":\"engram\",\"directory\":\"/remote\"}"`,
+		Payload:   `"{\"id\":\"remote-session\",\"project\":\"mnemo\",\"directory\":\"/remote\"}"`,
 	}
 	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, mutation); err != nil {
 		t.Fatalf("apply stringified session mutation: %v", err)
@@ -1381,7 +1381,7 @@ func TestApplyPulledMutationAcceptsStringifiedSessionPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get session: %v", err)
 	}
-	if session.Project != "engram" || session.Directory != "/remote" {
+	if session.Project != "mnemo" || session.Directory != "/remote" {
 		t.Fatalf("unexpected session after pulled apply: %+v", session)
 	}
 }
@@ -1427,7 +1427,7 @@ func TestUtilityHelpersCoverage(t *testing.T) {
 func TestEndSessionAndTimelineDefaults(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s-end", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s-end", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -1436,7 +1436,7 @@ func TestEndSessionAndTimelineDefaults(t *testing.T) {
 		Type:      "note",
 		Title:     "first",
 		Content:   "first note",
-		Project:   "engram",
+		Project:   "mnemo",
 	})
 	if err != nil {
 		t.Fatalf("add first observation: %v", err)
@@ -1446,7 +1446,7 @@ func TestEndSessionAndTimelineDefaults(t *testing.T) {
 		Type:      "note",
 		Title:     "second",
 		Content:   "second note",
-		Project:   "engram",
+		Project:   "mnemo",
 	})
 	if err != nil {
 		t.Fatalf("add second observation: %v", err)
@@ -1519,7 +1519,7 @@ func TestInferTopicFamilyCoverage(t *testing.T) {
 func TestStoreAdditionalQueryAndMutationBranches(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s-q", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s-q", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -1529,7 +1529,7 @@ func TestStoreAdditionalQueryAndMutationBranches(t *testing.T) {
 		Type:      "note",
 		Title:     "Private <private>secret</private> title",
 		Content:   longContent + " <private>token</private>",
-		Project:   "engram",
+		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -1632,7 +1632,7 @@ func TestStoreErrorBranchesWithClosedDatabase(t *testing.T) {
 func TestEndSessionEdgeCases(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s-edge", "engram", "/tmp/engram"); err != nil {
+	if err := s.CreateSession("s-edge", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
@@ -1669,7 +1669,7 @@ func TestTimelineHandlesMissingSessionRecord(t *testing.T) {
 	res, err := s.db.Exec(
 		`INSERT INTO observations (session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
-		"manual-save", "manual", "orphan", "orphan content", "engram", "project", hashNormalized("orphan content"),
+		"manual-save", "manual", "orphan", "orphan content", "mnemo", "project", hashNormalized("orphan content"),
 	)
 	if err != nil {
 		t.Fatalf("insert orphan observation: %v", err)
@@ -1842,7 +1842,7 @@ func TestExportImportEdgeBranches(t *testing.T) {
 				ID:        1,
 				SessionID: "missing-session",
 				Content:   "prompt",
-				Project:   "engram",
+				Project:   "mnemo",
 				CreatedAt: Now(),
 			}},
 		})
@@ -1871,7 +1871,7 @@ func TestNewErrorBranches(t *testing.T) {
 
 	t.Run("fails when db path is a directory", func(t *testing.T) {
 		dataDir := t.TempDir()
-		dbAsDir := filepath.Join(dataDir, "engram.db")
+		dbAsDir := filepath.Join(dataDir, "memory.db")
 		if err := os.Mkdir(dbAsDir, 0755); err != nil {
 			t.Fatalf("mkdir db path: %v", err)
 		}
@@ -1887,7 +1887,7 @@ func TestNewErrorBranches(t *testing.T) {
 
 	t.Run("fails when migration encounters conflicting object", func(t *testing.T) {
 		dataDir := t.TempDir()
-		dbPath := filepath.Join(dataDir, "engram.db")
+		dbPath := filepath.Join(dataDir, "memory.db")
 
 		db, err := sql.Open("sqlite", dbPath)
 		if err != nil {
@@ -2032,7 +2032,7 @@ func TestMigrationInternalErrorAndNoopBranches(t *testing.T) {
 				DROP TRIGGER IF EXISTS obs_fts_delete;
 				DROP TABLE IF EXISTS observations_fts;
 				DROP TABLE observations;
-				INSERT OR IGNORE INTO sessions (id, project, directory) VALUES ('s1', 'engram', '/tmp/engram');
+				INSERT OR IGNORE INTO sessions (id, project, directory) VALUES ('s1', 'mnemo', '/tmp/mnemo');
 				CREATE TABLE observations (
 					id INT,
 					session_id TEXT,
@@ -2052,7 +2052,7 @@ func TestMigrationInternalErrorAndNoopBranches(t *testing.T) {
 					deleted_at TEXT
 				);
 				INSERT INTO observations (id, session_id, type, title, content, project, created_at, updated_at)
-				VALUES (1, 's1', 'bugfix', 'legacy', 'legacy row', 'engram', datetime('now'), datetime('now'));
+				VALUES (1, 's1', 'bugfix', 'legacy', 'legacy row', 'mnemo', datetime('now'), datetime('now'));
 			`); err != nil {
 				t.Fatalf("prepare legacy table: %v", err)
 			}
@@ -2263,19 +2263,19 @@ func TestHookFallbacksAndAdditionalBranches(t *testing.T) {
 
 	t.Run("timeline includes before and after in chronological order", func(t *testing.T) {
 		s := newTestStore(t)
-		if err := s.CreateSession("s-tl", "engram", "/tmp/engram"); err != nil {
+		if err := s.CreateSession("s-tl", "mnemo", "/tmp/mnemo"); err != nil {
 			t.Fatalf("create session: %v", err)
 		}
 
-		firstID, err := s.AddObservation(AddObservationParams{SessionID: "s-tl", Type: "note", Title: "1", Content: "one", Project: "engram"})
+		firstID, err := s.AddObservation(AddObservationParams{SessionID: "s-tl", Type: "note", Title: "1", Content: "one", Project: "mnemo"})
 		if err != nil {
 			t.Fatalf("add first observation: %v", err)
 		}
-		middleID, err := s.AddObservation(AddObservationParams{SessionID: "s-tl", Type: "note", Title: "2", Content: "two", Project: "engram"})
+		middleID, err := s.AddObservation(AddObservationParams{SessionID: "s-tl", Type: "note", Title: "2", Content: "two", Project: "mnemo"})
 		if err != nil {
 			t.Fatalf("add middle observation: %v", err)
 		}
-		lastID, err := s.AddObservation(AddObservationParams{SessionID: "s-tl", Type: "note", Title: "3", Content: "three", Project: "engram"})
+		lastID, err := s.AddObservation(AddObservationParams{SessionID: "s-tl", Type: "note", Title: "3", Content: "three", Project: "mnemo"})
 		if err != nil {
 			t.Fatalf("add last observation: %v", err)
 		}
@@ -2303,7 +2303,7 @@ func TestHookFallbacksAndAdditionalBranches(t *testing.T) {
 
 		t.Run("recent observations error", func(t *testing.T) {
 			s := newTestStore(t)
-			if err := s.CreateSession("s-ctx", "engram", "/tmp/engram"); err != nil {
+			if err := s.CreateSession("s-ctx", "mnemo", "/tmp/mnemo"); err != nil {
 				t.Fatalf("create session: %v", err)
 			}
 			if _, err := s.db.Exec("DROP TABLE observations"); err != nil {
@@ -2316,7 +2316,7 @@ func TestHookFallbacksAndAdditionalBranches(t *testing.T) {
 
 		t.Run("recent prompts error", func(t *testing.T) {
 			s := newTestStore(t)
-			if err := s.CreateSession("s-ctx2", "engram", "/tmp/engram"); err != nil {
+			if err := s.CreateSession("s-ctx2", "mnemo", "/tmp/mnemo"); err != nil {
 				t.Fatalf("create session: %v", err)
 			}
 			if _, err := s.db.Exec("DROP TABLE user_prompts"); err != nil {
@@ -2420,11 +2420,11 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 
 	t.Run("add observation, prompt, update forced errors", func(t *testing.T) {
 		s := newTestStore(t)
-		if err := s.CreateSession("s-e", "engram", "/tmp/engram"); err != nil {
+		if err := s.CreateSession("s-e", "mnemo", "/tmp/mnemo"); err != nil {
 			t.Fatalf("create session: %v", err)
 		}
 
-		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "top", Content: "x", Project: "engram", TopicKey: "x"}); err != nil {
+		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "top", Content: "x", Project: "mnemo", TopicKey: "x"}); err != nil {
 			t.Fatalf("seed topic observation: %v", err)
 		}
 		origExec := s.hooks.exec
@@ -2434,12 +2434,12 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 			}
 			return origExec(db, query, args...)
 		}
-		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "top", Content: "x", Project: "engram", TopicKey: "x"}); err == nil {
+		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "top", Content: "x", Project: "mnemo", TopicKey: "x"}); err == nil {
 			t.Fatalf("expected topic upsert exec error")
 		}
 
 		s.hooks = defaultStoreHooks()
-		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "dup", Content: "dup content", Project: "engram"}); err != nil {
+		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "dup", Content: "dup content", Project: "mnemo"}); err != nil {
 			t.Fatalf("seed dedupe observation: %v", err)
 		}
 		origExec = s.hooks.exec
@@ -2449,17 +2449,17 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 			}
 			return origExec(db, query, args...)
 		}
-		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "dup", Content: "dup content", Project: "engram"}); err == nil {
+		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "dup", Content: "dup content", Project: "mnemo"}); err == nil {
 			t.Fatalf("expected dedupe exec error")
 		}
 
 		if err := s.Close(); err != nil {
 			t.Fatalf("close store: %v", err)
 		}
-		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "x", Content: "y", Project: "engram", TopicKey: "t"}); err == nil {
+		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "x", Content: "y", Project: "mnemo", TopicKey: "t"}); err == nil {
 			t.Fatalf("expected topic query error on closed db")
 		}
-		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "x", Content: "y", Project: "engram"}); err == nil {
+		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "x", Content: "y", Project: "mnemo"}); err == nil {
 			t.Fatalf("expected dedupe query error on closed db")
 		}
 		if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-e", Content: "x"}); err == nil {
@@ -2469,10 +2469,10 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 
 	t.Run("update observation remaining branches", func(t *testing.T) {
 		s := newTestStore(t)
-		if err := s.CreateSession("s-u", "engram", "/tmp/engram"); err != nil {
+		if err := s.CreateSession("s-u", "mnemo", "/tmp/mnemo"); err != nil {
 			t.Fatalf("create session: %v", err)
 		}
-		id, err := s.AddObservation(AddObservationParams{SessionID: "s-u", Type: "old", Title: "t", Content: "c", Project: "engram", TopicKey: "topic/key"})
+		id, err := s.AddObservation(AddObservationParams{SessionID: "s-u", Type: "old", Title: "t", Content: "c", Project: "mnemo", TopicKey: "topic/key"})
 		if err != nil {
 			t.Fatalf("seed observation: %v", err)
 		}
@@ -2521,13 +2521,13 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 			}
 		}
 
-		if err := s.CreateSession("s-iter", "engram", "/tmp/engram"); err != nil {
+		if err := s.CreateSession("s-iter", "mnemo", "/tmp/mnemo"); err != nil {
 			t.Fatalf("create session: %v", err)
 		}
-		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-iter", Type: "note", Title: "one", Content: "one", Project: "engram"}); err != nil {
+		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-iter", Type: "note", Title: "one", Content: "one", Project: "mnemo"}); err != nil {
 			t.Fatalf("add observation: %v", err)
 		}
-		if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-iter", Content: "prompt", Project: "engram"}); err != nil {
+		if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-iter", Content: "prompt", Project: "mnemo"}); err != nil {
 			t.Fatalf("add prompt: %v", err)
 		}
 
@@ -2624,15 +2624,15 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 
 	t.Run("timeline and search type filter branches", func(t *testing.T) {
 		s := newTestStore(t)
-		if err := s.CreateSession("s-t2", "engram", "/tmp/engram"); err != nil {
+		if err := s.CreateSession("s-t2", "mnemo", "/tmp/mnemo"); err != nil {
 			t.Fatalf("create session: %v", err)
 		}
-		first, _ := s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "a", Content: "a", Project: "engram"})
-		_, _ = s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "aa", Content: "aa", Project: "engram"})
-		focus, _ := s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "b", Content: "b", Project: "engram"})
-		_, _ = s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "c", Content: "c", Project: "engram"})
+		first, _ := s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "a", Content: "a", Project: "mnemo"})
+		_, _ = s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "aa", Content: "aa", Project: "mnemo"})
+		focus, _ := s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "b", Content: "b", Project: "mnemo"})
+		_, _ = s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "c", Content: "c", Project: "mnemo"})
 
-		if _, err := s.Search("b", SearchOptions{Type: "decision", Project: "engram", Scope: "project", Limit: 5}); err != nil {
+		if _, err := s.Search("b", SearchOptions{Type: "decision", Project: "mnemo", Scope: "project", Limit: 5}); err != nil {
 			t.Fatalf("search with type filter: %v", err)
 		}
 
@@ -2709,10 +2709,10 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 
 	t.Run("format context and stats remaining branches", func(t *testing.T) {
 		s := newTestStore(t)
-		if err := s.CreateSession("s-c", "engram", "/tmp/engram"); err != nil {
+		if err := s.CreateSession("s-c", "mnemo", "/tmp/mnemo"); err != nil {
 			t.Fatalf("create session: %v", err)
 		}
-		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-c", Type: "note", Title: "n", Content: "n", Project: "engram"}); err != nil {
+		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-c", Type: "note", Title: "n", Content: "n", Project: "mnemo"}); err != nil {
 			t.Fatalf("add obs: %v", err)
 		}
 
@@ -2723,7 +2723,7 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 			}
 			return origQueryIt(db, query, args...)
 		}
-		if _, err := s.FormatContext("engram", "project"); err == nil {
+		if _, err := s.FormatContext("mnemo", "project"); err == nil {
 			t.Fatalf("expected format context observations error")
 		}
 
@@ -2741,7 +2741,7 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 			t.Fatalf("end session: %v", err)
 		}
 		s.hooks.queryIt = origQueryIt
-		ctx, err := s.FormatContext("engram", "project")
+		ctx, err := s.FormatContext("mnemo", "project")
 		if err != nil {
 			t.Fatalf("format context with summary: %v", err)
 		}
@@ -2775,7 +2775,7 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 			DROP TRIGGER IF EXISTS obs_fts_delete;
 			DROP TABLE IF EXISTS observations_fts;
 			DROP TABLE observations;
-			INSERT OR IGNORE INTO sessions (id, project, directory) VALUES ('s1', 'engram', '/tmp/engram');
+			INSERT OR IGNORE INTO sessions (id, project, directory) VALUES ('s1', 'mnemo', '/tmp/mnemo');
 			CREATE TABLE observations (
 				id INT,
 				session_id TEXT,
@@ -2795,7 +2795,7 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 				deleted_at TEXT
 			);
 			INSERT INTO observations (id, session_id, type, title, content, project, created_at, updated_at)
-			VALUES (1, 's1', 'bugfix', 'legacy', 'legacy row', 'engram', datetime('now'), datetime('now'));
+			VALUES (1, 's1', 'bugfix', 'legacy', 'legacy row', 'mnemo', datetime('now'), datetime('now'));
 		`); err != nil {
 			t.Fatalf("prepare legacy table: %v", err)
 		}
@@ -2810,7 +2810,7 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 					DROP TRIGGER IF EXISTS obs_fts_delete;
 					DROP TABLE IF EXISTS observations_fts;
 					DROP TABLE observations;
-					INSERT OR IGNORE INTO sessions (id, project, directory) VALUES ('s1', 'engram', '/tmp/engram');
+					INSERT OR IGNORE INTO sessions (id, project, directory) VALUES ('s1', 'mnemo', '/tmp/mnemo');
 					CREATE TABLE observations (
 						id INT,
 						session_id TEXT,
@@ -2830,7 +2830,7 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 						deleted_at TEXT
 					);
 					INSERT INTO observations (id, session_id, type, title, content, project, created_at, updated_at)
-					VALUES (1, 's1', 'bugfix', 'legacy', 'legacy row', 'engram', datetime('now'), datetime('now'));
+					VALUES (1, 's1', 'bugfix', 'legacy', 'legacy row', 'mnemo', datetime('now'), datetime('now'));
 				`); err != nil {
 					t.Fatalf("prepare legacy schema: %v", err)
 				}
@@ -2995,7 +2995,7 @@ func TestEnrollProjectBasic(t *testing.T) {
 	s := newTestStore(t)
 
 	// Enroll a project.
-	if err := s.EnrollProject("engram"); err != nil {
+	if err := s.EnrollProject("mnemo"); err != nil {
 		t.Fatalf("enroll project: %v", err)
 	}
 
@@ -3007,15 +3007,15 @@ func TestEnrollProjectBasic(t *testing.T) {
 	if len(projects) != 1 {
 		t.Fatalf("expected 1 enrolled project, got %d", len(projects))
 	}
-	if projects[0].Project != "engram" {
-		t.Fatalf("expected project 'engram', got %q", projects[0].Project)
+	if projects[0].Project != "mnemo" {
+		t.Fatalf("expected project 'mnemo', got %q", projects[0].Project)
 	}
 	if projects[0].EnrolledAt == "" {
 		t.Fatal("expected enrolled_at to be set")
 	}
 
 	// Verify IsProjectEnrolled returns true.
-	enrolled, err := s.IsProjectEnrolled("engram")
+	enrolled, err := s.IsProjectEnrolled("mnemo")
 	if err != nil {
 		t.Fatalf("is project enrolled: %v", err)
 	}
@@ -3028,10 +3028,10 @@ func TestEnrollProjectIdempotent(t *testing.T) {
 	s := newTestStore(t)
 
 	// Enroll twice — should not error.
-	if err := s.EnrollProject("engram"); err != nil {
+	if err := s.EnrollProject("mnemo"); err != nil {
 		t.Fatalf("first enroll: %v", err)
 	}
-	if err := s.EnrollProject("engram"); err != nil {
+	if err := s.EnrollProject("mnemo"); err != nil {
 		t.Fatalf("second enroll (idempotent): %v", err)
 	}
 
@@ -3184,7 +3184,7 @@ func TestEnrollProjectBackfillIsIdempotentAndSkipsExistingMutations(t *testing.T
 
 func TestNewRepairsAlreadyEnrolledProjectsMissingHistoricalSyncMutations(t *testing.T) {
 	dataDir := t.TempDir()
-	dbPath := filepath.Join(dataDir, "engram.db")
+	dbPath := filepath.Join(dataDir, "memory.db")
 
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -3333,17 +3333,17 @@ func TestEnrollProjectEmptyNameReturnsError(t *testing.T) {
 func TestUnenrollProjectBasic(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.EnrollProject("engram"); err != nil {
+	if err := s.EnrollProject("mnemo"); err != nil {
 		t.Fatalf("enroll: %v", err)
 	}
 
 	// Unenroll.
-	if err := s.UnenrollProject("engram"); err != nil {
+	if err := s.UnenrollProject("mnemo"); err != nil {
 		t.Fatalf("unenroll: %v", err)
 	}
 
 	// Should be gone.
-	enrolled, err := s.IsProjectEnrolled("engram")
+	enrolled, err := s.IsProjectEnrolled("mnemo")
 	if err != nil {
 		t.Fatalf("is enrolled after unenroll: %v", err)
 	}
