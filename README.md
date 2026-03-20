@@ -12,12 +12,12 @@ Persistent memory for Claude Code. mnemo stores decisions, bugs, conventions, an
 
 ## Features
 
-- **Session hooks** — automatically starts/ends sessions and injects memory context on every new conversation and `/resume`
-- **14 MCP tools** — `mem_save`, `mem_search`, `mem_context`, `mem_session_summary`, and more, available directly inside Claude Code
-- **Passive capture** — extracts learnings from subagent output automatically (SubagentStop hook)
-- **Full CLI** — save, search, export, import, and inspect memories from the terminal
-- **Own storage** — isolated `~/.mnemo/memory.db`, created automatically on first run
-- **One-command setup** — `mnemo setup` wires everything into Claude Code automatically
+- **Session hooks:** Automatically starts/ends sessions and injects memory context on every new conversation and `/resume`
+- **14 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_session_summary`, and more, available directly inside Claude Code
+- **Passive capture:** Extracts learnings from subagent output automatically (SubagentStop hook)
+- **Full CLI:** Save, search, export, import, and inspect memories from the terminal
+- **Own storage:** Isolated `~/.mnemo/memory.db`, created automatically on first run
+- **One-command setup:** `mnemo setup` wires everything into Claude Code automatically
 
 ---
 
@@ -31,7 +31,7 @@ Persistent memory for Claude Code. mnemo stores decisions, bugs, conventions, an
 
 ## Installation
 
-### Option A — Plugin (recommended)
+### Option A: Plugin (recommended)
 
 ```bash
 claude plugin marketplace add jmeiracorbal/mnemo
@@ -41,7 +41,7 @@ claude plugin install mnemo@mnemo
 > The binary must be in PATH. Download the latest release for your platform from
 > [GitHub Releases](https://github.com/jmeiracorbal/mnemo/releases) and place it in `~/.local/bin/`.
 
-### Option B — Manual build
+### Option B: Manual build
 
 ```bash
 git clone https://github.com/jmeiracorbal/mnemo
@@ -168,10 +168,10 @@ mnemo export backup.json
 
 ## Storage
 
-mnemo uses `~/.mnemo/memory.db`, created automatically on first run. The directory and database are created during startup — no manual setup required. The schema uses SQLite with FTS5 for full-text search.
+mnemo uses `~/.mnemo/memory.db`, created automatically on first run. The directory and database are created during startup, no manual setup required. The schema uses SQLite with FTS5 for full-text search.
 
 ---
 
 ## License
 
-[Apache 2.0](LICENSE) — you may use, modify, and distribute freely, but must retain the copyright notice and include the [NOTICE](NOTICE) file in all distributions.
+[Apache 2.0](LICENSE): You may use, modify, and distribute freely, but must retain the copyright notice and include the [NOTICE](NOTICE) file in all distributions.
