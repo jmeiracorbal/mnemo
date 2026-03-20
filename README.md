@@ -31,7 +31,30 @@ Persistent memory for Claude Code. mnemo stores decisions, bugs, conventions, an
 
 ## Installation
 
-### Option A: Plugin (recommended)
+### Option A: One-line installer (recommended)
+
+```bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
+```
+
+This downloads the binary for your platform, installs it to `~/.local/bin/`, and runs `mnemo setup` automatically.
+
+**Options:**
+
+```bash
+# Install a specific version
+MNEMO_VERSION=v0.1.0 curl -sSf .../install.sh | bash
+
+# Preview without making changes
+MNEMO_DRY_RUN=true curl -sSf .../install.sh | bash
+
+# Custom install directory
+MNEMO_INSTALL_DIR=/usr/local/bin curl -sSf .../install.sh | bash
+```
+
+---
+
+### Option B: Plugin
 
 ```bash
 claude plugin marketplace add jmeiracorbal/mnemo
@@ -41,7 +64,7 @@ claude plugin install mnemo@mnemo
 > The binary must be in PATH. Download the latest release for your platform from
 > [GitHub Releases](https://github.com/jmeiracorbal/mnemo/releases) and place it in `~/.local/bin/`.
 
-### Option B: Manual build
+### Option C: Manual build
 
 ```bash
 git clone https://github.com/jmeiracorbal/mnemo
