@@ -1,0 +1,23 @@
+{
+  "name": "mnemo",
+  "metadata": {
+    "description": "Persistent memory for Claude Code — session tracking, passive capture, and full-text search across sessions."
+  },
+  "owner": {
+    "name": "jmeiracorbal",
+    "email": "jmeiracorbal@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "mnemo",
+      "description": "Persistent memory with session tracking, passive capture, and memory protocol. Gives Claude a brain that survives across sessions.",
+      "version": "0.1.0",
+      "author": {
+        "name": "jmeiracorbal"
+      },
+      "source": "./plugin",
+      "category": "productivity",
+      "homepage": "https://github.com/jmeiracorbal/mnemo"
+    }
+  ]
+}

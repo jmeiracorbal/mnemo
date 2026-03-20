@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mnemo": {
+      "command": "mnemo",
+      "args": ["mcp", "--tools=agent"]
+    }
+  }
+}
