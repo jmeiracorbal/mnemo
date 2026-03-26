@@ -39,6 +39,19 @@
           }
         ]
       }
+    ],
+    "PostCompaction": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-compaction.sh",
+            "timeout": 10,
+            "statusMessage": "Recovering mnemo context after compaction..."
+          }
+        ]
+      }
     ]
   }
 }

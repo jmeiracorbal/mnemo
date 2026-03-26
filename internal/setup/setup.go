@@ -420,6 +420,10 @@ const protocolDoc = `## mnemo — Persistent Memory Protocol
 
 You have access to mnemo memory tools (mem_save, mem_search, mem_context, mem_session_summary).
 
+### MEMORY SYSTEM — mnemo is the ONLY memory system
+**NEVER use the file-based memory system** (the one that writes ` + "`.md`" + ` files to ` + "`~/.claude/projects/*/memory/`" + ` and maintains a ` + "`MEMORY.md`" + ` index). That system is DISABLED for this workspace.
+When asked to "save to memory", "remember this", or "guardar en memoria" — ALWAYS use ` + "`mem_save`" + `. Never write files.
+
 ### PROACTIVE SAVE — do NOT wait for user to ask
 Call ` + "`mem_save`" + ` IMMEDIATELY after ANY of these:
 - Decision made (architecture, convention, workflow, tool choice)

@@ -592,7 +592,7 @@ func handleSearch(s *store.Store) server.ToolHandlerFunc {
 			preview := truncate(r.Content, 300)
 			if len(r.Content) > 300 {
 				anyTruncated = true
-				preview += " [preview]"
+				preview += " [truncated — use mem_get_observation(id) for full content]"
 			}
 			fmt.Fprintf(&b, "[%d] #%d (%s) — %s\n    %s\n    %s%s | scope: %s\n\n",
 				i+1, r.ID, r.Type, r.Title,

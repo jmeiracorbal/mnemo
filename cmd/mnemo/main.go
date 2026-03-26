@@ -187,7 +187,7 @@ func runSearch(s *store.Store) {
 		}
 		content := r.Content
 		if len(content) > 300 {
-			content = content[:300] + "... [truncated — use mem_get_observation]"
+			content = content[:300] + "... [truncated — use mem_get_observation(id) for full content]"
 		}
 		fmt.Printf("[%d] #%d (%s) — %s\n    %s\n    %s%s | scope: %s\n\n",
 			i+1, r.ID, r.Type, r.Title, content, r.CreatedAt, proj, r.Scope)
