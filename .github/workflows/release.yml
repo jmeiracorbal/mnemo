@@ -10,18 +10,22 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - goos: darwin
             goarch: arm64
+            runner: macos-latest
           - goos: darwin
             goarch: amd64
+            runner: macos-13
           - goos: linux
             goarch: amd64
+            runner: ubuntu-latest
           - goos: linux
             goarch: arm64
+            runner: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
