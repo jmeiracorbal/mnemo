@@ -184,8 +184,51 @@ mnemo capture "$OUTPUT" --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null
 exit 0
 `
 
+const postCompactResumeScript = `#!/bin/bash
+# mnemo — SessionStart (source: compact) hook for Claude Code plugin
+# Fires when a new context window starts after compaction.
+# The compacted summary was already persisted by the PostCompact hook.
+
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id',''))" 2>/dev/null)
+CWD=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" 2>/dev/null)
+
+[ -z "$SESSION_ID" ] && exit 0
+[ -z "$CWD" ] && CWD="$(pwd)"
+
+PROJECT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null)
+[ -z "$PROJECT" ] && PROJECT=$(git -C "$CWD" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
+[ -z "$PROJECT" ] && PROJECT=$(basename "$CWD")
+
+printf "\n[mnemo] Context restored after compaction (project: %s)\n" "$PROJECT"
+
+CONTEXT=$(mnemo context "$PROJECT" 2>/dev/null)
+
+cat <<'PROTOCOL'
+
+### FIRST ACTION — load memory tools
+Memory tools are deferred and must be loaded before use. Call ToolSearch NOW with:
+select:mcp__mnemo__mem_save,mcp__mnemo__mem_context,mcp__mnemo__mem_search,mcp__mnemo__mem_session_summary,mcp__mnemo__mem_session_end
+
+### POST-COMPACTION RECOVERY — context window was just reset
+The compacted summary above contains what happened before compaction.
+The summary was already persisted to mnemo by the PostCompact hook.
+
+Recovery steps (do BEFORE responding to user):
+1. Call mem_context with the current project to recover recent session history
+2. If you need detail on a specific topic, call mem_search with relevant keywords
+3. Only THEN continue working on what the user asked
+PROTOCOL
+
+if [ -n "$CONTEXT" ]; then
+  printf "\n%s\n" "$CONTEXT"
+fi
+
+exit 0
+`
+
 const postCompactionScript = `#!/bin/bash
-# mnemo — PostCompaction hook for Claude Code plugin
+# mnemo — PostCompact hook for Claude Code plugin
 # Injects memory protocol and context after compaction so the agent
 # persists the compacted summary and recovers session state.
 
@@ -301,10 +344,11 @@ No session ends without ` + "`mem_session_summary`" + `.
 
 func previewOrWriteHooks(dir string, dryRun bool) error {
 	scripts := map[string]string{
-		"session-start.sh":   sessionStartScript,
-		"session-stop.sh":    sessionStopScript,
-		"subagent-stop.sh":   subagentStopScript,
-		"post-compaction.sh": postCompactionScript,
+		"session-start.sh":       sessionStartScript,
+		"session-stop.sh":        sessionStopScript,
+		"subagent-stop.sh":       subagentStopScript,
+		"post-compaction.sh":     postCompactionScript,
+		"post-compact-resume.sh": postCompactResumeScript,
 	}
 
 	if dryRun {
@@ -416,17 +460,36 @@ func injectHooks(config map[string]json.RawMessage, hooksDir string) error {
 		hooks = make(map[string]json.RawMessage)
 	}
 
+	sessionStartScript := filepath.Join(hooksDir, "session-start.sh")
+	postCompactResumeScript := filepath.Join(hooksDir, "post-compact-resume.sh")
+	postCompactionScript := filepath.Join(hooksDir, "post-compaction.sh")
+
+	// SessionStart: separate matchers per source so compact gets its own recovery script.
+	if _, exists := hooks["SessionStart"]; !exists {
+		sessionStartHook := []map[string]interface{}{
+			{"matcher": "startup", "hooks": []map[string]interface{}{{"type": "command", "command": sessionStartScript}}},
+			{"matcher": "resume", "hooks": []map[string]interface{}{{"type": "command", "command": sessionStartScript}}},
+			{"matcher": "clear", "hooks": []map[string]interface{}{{"type": "command", "command": sessionStartScript}}},
+			{"matcher": "compact", "hooks": []map[string]interface{}{{"type": "command", "command": postCompactResumeScript}}},
+		}
+		raw, err := json.Marshal(sessionStartHook)
+		if err != nil {
+			return err
+		}
+		hooks["SessionStart"] = raw
+	}
+
 	type hookEntry struct {
 		key    string
 		script string
 	}
-	entries := []hookEntry{
-		{"SessionStart", filepath.Join(hooksDir, "session-start.sh")},
+	simpleEntries := []hookEntry{
 		{"Stop", filepath.Join(hooksDir, "session-stop.sh")},
 		{"SubagentStop", filepath.Join(hooksDir, "subagent-stop.sh")},
+		{"PostCompact", postCompactionScript},
 	}
 
-	for _, e := range entries {
+	for _, e := range simpleEntries {
 		if _, exists := hooks[e.key]; exists {
 			continue
 		}
