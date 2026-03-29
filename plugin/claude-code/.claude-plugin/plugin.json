@@ -1,7 +1,7 @@
 {
   "name": "mnemo",
   "description": "Persistent memory for Claude Code. Stores decisions, bugs, and discoveries across sessions in a local SQLite database.",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "author": {
     "name": "jmeiracorbal"
   },
