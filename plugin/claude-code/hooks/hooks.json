@@ -40,7 +40,7 @@
         ]
       }
     ],
-    "PostCompaction": [
+    "PostCompact": [
       {
         "matcher": "",
         "hooks": [

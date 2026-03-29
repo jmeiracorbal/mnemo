@@ -11,13 +11,16 @@
     {
       "name": "mnemo",
       "description": "Persistent memory with session tracking, passive capture, and memory protocol. Gives Claude a brain that survives across sessions.",
-      "version": "0.1.0",
+      "version": "0.3.0",
       "author": {
         "name": "jmeiracorbal"
       },
-      "source": "./plugin",
+      "source": "./plugin/claude-code",
       "category": "productivity",
-      "homepage": "https://github.com/jmeiracorbal/mnemo"
+      "homepage": "https://github.com/jmeiracorbal/mnemo",
+      "repository": "https://github.com/jmeiracorbal/mnemo",
+      "license": "Apache-2.0",
+      "keywords": ["memory", "persistence", "sessions", "sqlite", "mcp"]
     }
   ]
 }
