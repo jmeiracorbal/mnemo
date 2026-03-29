@@ -3,29 +3,32 @@
 [![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Status](https://img.shields.io/badge/status-stable-brightgreen)](https://github.com/jmeiracorbal/mnemo)
 [![Storage](https://img.shields.io/badge/storage-SQLite%2BFTS5-003B57?logo=sqlite&logoColor=white)](https://sqlite.org)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?logo=anthropic&logoColor=white)](https://claude.ai/code)
+[![Cursor](https://img.shields.io/badge/Cursor-2.6%2B-000000?logo=cursor&logoColor=white)](https://cursor.com)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](https://github.com/jmeiracorbal/mnemo)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-Persistent memory for Claude Code. mnemo stores decisions, bugs, conventions, and discoveries across sessions in a local SQLite database. A one-command setup wires it into Claude Code via hooks and MCP.
+Persistent memory for AI coding agents. mnemo stores decisions, bugs, conventions, and discoveries across sessions in a local SQLite database. A one-command setup wires it into Claude Code or Cursor via hooks and MCP.
 
 ---
 
 ## Features
 
-- **Session hooks:** Automatically starts/ends sessions and injects memory context on every new conversation and `/resume`
-- **14 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_session_summary`, and more, available directly inside Claude Code
-- **Passive capture:** Extracts learnings from subagent output automatically (SubagentStop hook)
+- **Session hooks:** Automatically starts/ends sessions and injects memory context at the beginning of every conversation
+- **14 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_session_summary`, and more, available directly inside your editor
+- **Passive capture:** Extracts learnings from conversation transcripts automatically at session end
 - **Full CLI:** Save, search, export, import, and inspect memories from the terminal
 - **Own storage:** Isolated `~/.mnemo/memory.db`, created automatically on first run
-- **One-command setup:** `mnemo setup` wires everything into Claude Code automatically
+- **Claude Code + Cursor:** Native integration for both editors via their respective hook systems
 
 ---
 
 ## Requirements
 
 - Go 1.22+
-- [Claude Code](https://claude.ai/code) CLI (`claude` command available in PATH)
-- macOS or Linux (binaries available for both)
+- macOS or Linux
+- [Claude Code](https://claude.ai/code) CLI — for `mnemo setup` (Claude Code integration)
+- [Cursor](https://cursor.com) 2.6+ — for `mnemo setup --cursor` (Cursor integration)
 
 ---
 
@@ -54,7 +57,7 @@ MNEMO_INSTALL_DIR=/usr/local/bin curl -sSf .../install.sh | bash
 
 ---
 
-### Option B: Plugin
+### Option B: Plugin (Claude Code)
 
 ```bash
 claude plugin marketplace add jmeiracorbal/mnemo
@@ -78,7 +81,11 @@ Make sure `~/.local/bin` is in your `PATH`:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Then run setup:
+---
+
+## Setup
+
+### Claude Code
 
 ```bash
 mnemo setup
@@ -93,24 +100,37 @@ This single command:
 5. Writes `~/.claude/mnemo.md` (the memory protocol document)
 6. Appends `@mnemo.md` to `~/.claude/CLAUDE.md`
 
-Preview what will change without writing:
-
 ```bash
-mnemo setup --dry-run
-```
-
-### Restart Claude Code
-
-```bash
+# Restart Claude Code, then verify:
 claude mcp list
 # mnemo: ~/.local/bin/mnemo mcp --tools=agent  ✓ Connected
 ```
+
+### Cursor
+
+```bash
+mnemo setup --cursor
+```
+
+This single command:
+
+1. Writes hook scripts to `~/.local/share/mnemo/cursor-hooks/`
+2. Registers the MCP server in `~/.cursor/mcp.json`
+3. Adds hooks to `~/.cursor/hooks.json` (beforeSubmitPrompt, stop)
+4. Writes `~/.cursor/rules/mnemo.mdc` (the memory protocol document)
+
+```bash
+# Preview without making changes:
+mnemo setup --cursor --dry-run
+```
+
+Restart Cursor after setup. mnemo will appear in the MCP tools panel.
 
 ---
 
 ## How it works
 
-mnemo operates through three hooks that Claude Code fires automatically:
+### Claude Code
 
 | Hook | Trigger | Action |
 |---|---|---|
@@ -118,13 +138,20 @@ mnemo operates through three hooks that Claude Code fires automatically:
 | `Stop` | Session ends | Marks session as completed, warns if nothing was saved |
 | `SubagentStop` | Subagent finishes | Passively captures learnings from subagent output |
 
+### Cursor
+
+| Hook | Trigger | Action |
+|---|---|---|
+| `beforeSubmitPrompt` | First prompt of a conversation | Registers session, emits memory context |
+| `stop` | Conversation ends | Reads transcript JSONL for passive capture, closes session |
+
 On session start, mnemo detects the project from the git root directory name and emits relevant memories from previous sessions into the context.
 
 ---
 
 ## MCP tools
 
-Tools available inside Claude Code via the `mcp__mnemo__*` namespace:
+Tools available inside your editor via the `mcp__mnemo__*` namespace:
 
 ### Agent profile (default, 11 tools)
 
@@ -168,6 +195,7 @@ mnemo export [file]                  Export all memories to JSON
 mnemo import <file.json>             Import memories from JSON
 mnemo capture <content>              Extract learnings from text (passive capture)
 mnemo setup [--dry-run]              Install hooks and configure Claude Code
+mnemo setup --cursor [--dry-run]     Install hooks and configure Cursor
 mnemo version                        Show version
 ```
 

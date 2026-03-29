@@ -7,7 +7,8 @@ import (
 	"strconv"
 
 	mcpserver "github.com/jmeiracorbal/mnemo/internal/mcp"
-	"github.com/jmeiracorbal/mnemo/internal/setup"
+	"github.com/jmeiracorbal/mnemo/internal/plugin/claudecode"
+	"github.com/jmeiracorbal/mnemo/internal/plugin/cursor"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -409,12 +410,23 @@ func runCapture(s *store.Store) {
 
 func runSetup() {
 	dryRun := false
+	forCursor := false
 	for _, arg := range os.Args[2:] {
-		if arg == "--dry-run" {
+		switch arg {
+		case "--dry-run":
 			dryRun = true
+		case "--cursor":
+			forCursor = true
 		}
 	}
-	if err := setup.Install(dryRun); err != nil {
+
+	var err error
+	if forCursor {
+		err = (cursor.Installer{}).Install(dryRun)
+	} else {
+		err = (claudecode.Installer{}).Install(dryRun)
+	}
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: setup failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -437,6 +449,7 @@ Usage:
   mnemo import <file.json>             Import memories from JSON
   mnemo capture <content>              Extract learnings from text (passive capture)
   mnemo setup [--dry-run]              Install hooks and configure Claude Code
+  mnemo setup --cursor [--dry-run]     Install hooks and configure Cursor
   mnemo version                        Show version
 
 Tool profiles for mcp:

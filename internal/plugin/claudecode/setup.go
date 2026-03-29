@@ -1,4 +1,4 @@
-// Package setup handles mnemo installation into the local environment.
+// Package claudecode installs mnemo into a Claude Code environment.
 //
 // Registration order:
 //  1. Hook scripts → ~/.local/share/mnemo/hooks/
@@ -8,9 +8,10 @@
 //  5. Protocol doc → ~/.claude/mnemo.md
 //  6. CLAUDE.md    → append @mnemo.md
 //
+// NOTE: Script constants below must stay in sync with plugin/claude-code/scripts/.
 // NOTE: mcpServers in settings.json is NOT used by Claude Code for standalone
 // servers — the correct mechanism is `claude mcp add` which writes to ~/.claude.json.
-package setup
+package claudecode
 
 import (
 	"encoding/json"
@@ -19,6 +20,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/jmeiracorbal/mnemo/internal/plugin"
 )
 
 const mnemoMDReference = "@mnemo.md"
@@ -38,10 +41,12 @@ var mnemoTools = []string{
 	"mcp__mnemo__mem_update",
 }
 
+// Installer installs mnemo into a Claude Code environment.
+type Installer struct{}
+
 // Install configures mnemo in the local Claude Code environment.
-// It modifies ~/.claude/settings.json and ~/.claude/CLAUDE.md.
 // If dryRun is true, prints what would change without writing anything.
-func Install(dryRun bool) error {
+func (i Installer) Install(dryRun bool) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("home dir: %w", err)
@@ -63,7 +68,7 @@ func Install(dryRun bool) error {
 		return fmt.Errorf("hooks: %w", err)
 	}
 
-	if err := previewOrRegisterMCP(hooksDir, dryRun); err != nil {
+	if err := previewOrRegisterMCP(dryRun); err != nil {
 		return fmt.Errorf("mcp: %w", err)
 	}
 
@@ -74,7 +79,7 @@ func Install(dryRun bool) error {
 	if dryRun {
 		fmt.Printf("\n[~/.claude/mnemo.md]\n%s\n", protocolDoc)
 	} else {
-		if err := writeProtocolDoc(mnemoMDPath); err != nil {
+		if err := os.WriteFile(mnemoMDPath, []byte(protocolDoc), 0644); err != nil {
 			return fmt.Errorf("mnemo.md: %w", err)
 		}
 		fmt.Println("✓ ~/.claude/mnemo.md written")
@@ -90,17 +95,18 @@ func Install(dryRun bool) error {
 	return nil
 }
 
-// ─── Hook scripts ─────────────────────────────────────────────────────────────
+// Uninstall is not yet implemented.
+func (i Installer) Uninstall() error {
+	return fmt.Errorf("uninstall not yet implemented for Claude Code")
+}
 
-// sessionStartScript reads session_id and cwd from Claude Code's stdin JSON.
-// Distinguishes between new session and resume:
-// - New session: creates session + emits full memory context
-// - Resume: skips creation (session exists) + emits a compact status line only
+// ─── Hook scripts ─────────────────────────────────────────────────────────────
+// Keep in sync with plugin/claude-code/scripts/.
+
 const sessionStartScript = `#!/bin/bash
-# mnemo — SessionStart hook for Claude Code
+# mnemo — SessionStart hook for Claude Code plugin
 # Claude Code passes hook input via stdin as JSON:
 #   { "session_id": "...", "cwd": "..." }
-# Fires on both new sessions and /resume.
 
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id',''))" 2>/dev/null)
@@ -114,42 +120,42 @@ PROJECT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null | xargs basename 2
 [ -z "$PROJECT" ] && PROJECT=$(git -C "$CWD" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
 [ -z "$PROJECT" ] && PROJECT=$(basename "$CWD")
 
-# Check if this is a resume (session already exists in store)
 IS_RESUME=$(mnemo session exists "$SESSION_ID" 2>/dev/null)
 
 if [ "$IS_RESUME" = "true" ]; then
-  # Resume — session already exists, skip creation
   printf "\n[mnemo] Session resumed (project: %s)\n" "$PROJECT"
 else
-  # New session — register in store
   mnemo session start "$SESSION_ID" --project "$PROJECT" --dir "$CWD" 2>/dev/null || true
   printf "\n[mnemo] New session started (project: %s)\n" "$PROJECT"
 fi
 
-# Always emit memory context — mnemo output is independent of other hooks
 CONTEXT=$(mnemo context "$PROJECT" 2>/dev/null)
 if [ -n "$CONTEXT" ]; then
   printf "\n%s\n" "$CONTEXT"
 fi
 
+cat <<'PROTOCOL'
+
+### FIRST ACTION — load memory tools
+Memory tools are deferred and must be loaded before use. Call ToolSearch NOW with:
+select:mcp__mnemo__mem_save,mcp__mnemo__mem_context,mcp__mnemo__mem_search,mcp__mnemo__mem_session_summary,mcp__mnemo__mem_session_end
+PROTOCOL
+
 exit 0
 `
 
-// sessionStopScript reads session_id from stdin, ends the session, and warns if nothing was saved.
 const sessionStopScript = `#!/bin/bash
-# mnemo — Stop hook for Claude Code
+# mnemo — Stop hook for Claude Code plugin
 
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id',''))" 2>/dev/null)
 
 [ -z "$SESSION_ID" ] && exit 0
 
-# Check how many observations were saved this session before ending it
 OBS_COUNT=$(mnemo session obs-count "$SESSION_ID" 2>/dev/null)
 
 mnemo session end "$SESSION_ID" 2>/dev/null || true
 
-# Warn user (not the agent) if nothing was saved — zero token cost
 if [ "${OBS_COUNT:-0}" = "0" ]; then
   printf "\n[mnemo] warning: session ended with 0 memories saved.\n" >&2
 fi
@@ -157,9 +163,8 @@ fi
 exit 0
 `
 
-// subagentStopScript reads the subagent stdout from stdin and runs passive capture.
 const subagentStopScript = `#!/bin/bash
-# mnemo — SubagentStop hook for Claude Code
+# mnemo — SubagentStop hook for Claude Code plugin
 # Extracts learnings from subagent output (async, does not block).
 
 INPUT=$(cat)
@@ -179,11 +184,127 @@ mnemo capture "$OUTPUT" --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null
 exit 0
 `
 
+const postCompactionScript = `#!/bin/bash
+# mnemo — PostCompaction hook for Claude Code plugin
+# Injects memory protocol and context after compaction so the agent
+# persists the compacted summary and recovers session state.
+
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id',''))" 2>/dev/null)
+CWD=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" 2>/dev/null)
+
+[ -z "$CWD" ] && CWD="$(pwd)"
+
+PROJECT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null)
+[ -z "$PROJECT" ] && PROJECT=$(git -C "$CWD" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
+[ -z "$PROJECT" ] && PROJECT=$(basename "$CWD")
+
+# Ensure session exists
+if [ -n "$SESSION_ID" ] && [ -n "$PROJECT" ]; then
+  mnemo session start "$SESSION_ID" --project "$PROJECT" --dir "$CWD" 2>/dev/null || true
+fi
+
+CONTEXT=$(mnemo context "$PROJECT" 2>/dev/null)
+
+cat <<'PROTOCOL'
+## mnemo Persistent Memory — ACTIVE PROTOCOL
+
+You have mnemo memory tools (mem_save, mem_search, mem_context, mem_session_summary).
+This protocol is MANDATORY and ALWAYS ACTIVE.
+
+### PROACTIVE SAVE — do NOT wait for user to ask
+Call ` + "`mem_save`" + ` IMMEDIATELY after ANY of these:
+- Decision made (architecture, convention, workflow, tool choice)
+- Bug fixed (include root cause)
+- Convention or workflow documented/updated
+- Non-obvious discovery, gotcha, or edge case found
+- Pattern established (naming, structure, approach)
+- User preference or constraint learned
+- Feature implemented with non-obvious approach
+
+### SESSION CLOSE — before saying "done"/"listo":
+Call ` + "`mem_session_summary`" + ` with: Goal, Discoveries, Accomplished, Next Steps, Relevant Files.
+
+---
+
+CRITICAL INSTRUCTION POST-COMPACTION — follow these steps IN ORDER:
+PROTOCOL
+
+printf "\n1. FIRST: Call mem_session_summary with the content of the compacted summary above. Use project: '%s'.\n" "$PROJECT"
+printf "   This preserves what was accomplished before compaction.\n\n"
+printf "2. THEN: Call mem_context with project: '%s' to recover recent session history and observations.\n" "$PROJECT"
+printf "   Read the returned context carefully — it tells you what was being worked on.\n\n"
+
+cat <<'PROTOCOL'
+3. If you need more detail on a specific topic, call mem_search with relevant keywords.
+
+4. Only THEN continue working on what the user asked.
+
+All 4 steps are MANDATORY. Without them, you lose context and start blind.
+PROTOCOL
+
+if [ -n "$CONTEXT" ]; then
+  printf "\n%s\n" "$CONTEXT"
+fi
+
+exit 0
+`
+
+// protocolDoc is written to ~/.claude/mnemo.md during install.
+// Keep in sync with plugin/templates/memory/mnemo.md.
+const protocolDoc = `## mnemo — Persistent Memory Protocol
+
+You have access to mnemo memory tools (mem_save, mem_search, mem_context, mem_session_summary).
+
+### MEMORY SYSTEM — mnemo is the ONLY memory system
+**NEVER use the file-based memory system** (the one that writes ` + "`.md`" + ` files to ` + "`~/.claude/projects/*/memory/`" + ` and maintains a ` + "`MEMORY.md`" + ` index). That system is DISABLED for this workspace.
+When asked to "save to memory", "remember this", or "guardar en memoria" — ALWAYS use ` + "`mem_save`" + `. Never write files.
+
+### PROACTIVE SAVE — do NOT wait for user to ask
+Call ` + "`mem_save`" + ` IMMEDIATELY after ANY of these:
+- Decision made (architecture, convention, workflow, tool choice)
+- Bug fixed (include root cause)
+- Convention or workflow documented/updated
+- Non-obvious discovery, gotcha, or edge case found
+- Pattern established (naming, structure, approach)
+- User preference or constraint learned
+- Feature implemented with non-obvious approach
+
+**Self-check after EVERY task**: "Did I just make a decision, fix a bug, learn something, or establish a convention? If yes → mem_save NOW."
+
+### SEARCH MEMORY when:
+- User asks to recall anything
+- Starting work on something that might have been done before
+- User mentions a topic you have no context on
+
+### SUBAGENT OUTPUT — required format for passive capture
+When running as a subagent, always end your response with a structured section:
+
+` + "```" + `
+## Key Learnings
+- <learning 1>
+- <learning 2>
+` + "```" + `
+
+This enables mnemo to automatically extract and persist what you discovered.
+Omit the section only if the task produced no learnings worth retaining.
+
+### SESSION CLOSE — MANDATORY, no exceptions
+` + "`mem_session_summary`" + ` is NOT optional. It is the final step of every session, like a ` + "`defer`" + ` — it always runs.
+Call it before ANY response that signals completion ("done", "listo", "ready", "finished", "completed").
+Fields: Goal, Discoveries, Accomplished, Next Steps, Relevant Files.
+
+If nothing was accomplished: call it anyway with Goal and Next Steps.
+If the user says goodbye: call it before responding.
+No session ends without ` + "`mem_session_summary`" + `.
+`
+
 func previewOrWriteHooks(dir string, dryRun bool) error {
 	scripts := map[string]string{
-		"session-start.sh":  sessionStartScript,
-		"session-stop.sh":   sessionStopScript,
-		"subagent-stop.sh":  subagentStopScript,
+		"session-start.sh":   sessionStartScript,
+		"session-stop.sh":    sessionStopScript,
+		"subagent-stop.sh":   subagentStopScript,
+		"post-compaction.sh": postCompactionScript,
 	}
 
 	if dryRun {
@@ -210,15 +331,14 @@ func previewOrWriteHooks(dir string, dryRun bool) error {
 
 // ─── MCP server registration via claude CLI ───────────────────────────────────
 
-func previewOrRegisterMCP(hooksDir string, dryRun bool) error {
-	mnemoPath := resolveBinaryPath("mnemo")
+func previewOrRegisterMCP(dryRun bool) error {
+	mnemoPath := plugin.ResolveBinaryPath("mnemo")
 
 	if dryRun {
 		fmt.Printf("\n[claude mcp add] would run:\n  claude mcp add -s user mnemo -- %s mcp --tools=agent\n", mnemoPath)
 		return nil
 	}
 
-	// Check if already registered
 	listOut, _ := exec.Command("claude", "mcp", "list").CombinedOutput()
 	if strings.Contains(string(listOut), "mnemo:") {
 		fmt.Println("✓ MCP server mnemo — already registered")
@@ -238,12 +358,11 @@ func previewOrRegisterMCP(hooksDir string, dryRun bool) error {
 // ─── settings.json (hooks + permissions only) ─────────────────────────────────
 
 func previewOrInjectSettings(path, hooksDir string, dryRun bool) error {
-	config, err := readJSON(path)
+	config, err := plugin.ReadJSON(path)
 	if err != nil {
 		return err
 	}
 
-	// Remove stale mcpServers.mnemo entry if present (was written by earlier setup versions)
 	removeStaleMCPEntry(config)
 
 	if err := injectHooks(config, hooksDir); err != nil {
@@ -259,15 +378,13 @@ func previewOrInjectSettings(path, hooksDir string, dryRun bool) error {
 		return nil
 	}
 
-	if err := writeJSON(path, config); err != nil {
+	if err := plugin.WriteJSON(path, config); err != nil {
 		return err
 	}
 	fmt.Println("✓ ~/.claude/settings.json updated (hooks + permissions)")
 	return nil
 }
 
-// removeStaleMCPEntry removes the mcpServers.mnemo entry written by older
-// versions of setup that incorrectly used settings.json for MCP registration.
 func removeStaleMCPEntry(config map[string]json.RawMessage) {
 	raw, ok := config["mcpServers"]
 	if !ok {
@@ -311,7 +428,7 @@ func injectHooks(config map[string]json.RawMessage, hooksDir string) error {
 
 	for _, e := range entries {
 		if _, exists := hooks[e.key]; exists {
-			continue // do not overwrite existing hooks
+			continue
 		}
 		hook := []map[string]interface{}{
 			{
@@ -412,106 +529,4 @@ func previewOrInjectCLAUDEMD(path string, dryRun bool) error {
 	}
 	fmt.Println("✓ ~/.claude/CLAUDE.md updated")
 	return nil
-}
-
-// ─── protocol doc ─────────────────────────────────────────────────────────────
-
-const protocolDoc = `## mnemo — Persistent Memory Protocol
-
-You have access to mnemo memory tools (mem_save, mem_search, mem_context, mem_session_summary).
-
-### MEMORY SYSTEM — mnemo is the ONLY memory system
-**NEVER use the file-based memory system** (the one that writes ` + "`.md`" + ` files to ` + "`~/.claude/projects/*/memory/`" + ` and maintains a ` + "`MEMORY.md`" + ` index). That system is DISABLED for this workspace.
-When asked to "save to memory", "remember this", or "guardar en memoria" — ALWAYS use ` + "`mem_save`" + `. Never write files.
-
-### PROACTIVE SAVE — do NOT wait for user to ask
-Call ` + "`mem_save`" + ` IMMEDIATELY after ANY of these:
-- Decision made (architecture, convention, workflow, tool choice)
-- Bug fixed (include root cause)
-- Convention or workflow documented/updated
-- Non-obvious discovery, gotcha, or edge case found
-- Pattern established (naming, structure, approach)
-- User preference or constraint learned
-- Feature implemented with non-obvious approach
-
-**Self-check after EVERY task**: "Did I just make a decision, fix a bug, learn something, or establish a convention? If yes → mem_save NOW."
-
-### SEARCH MEMORY when:
-- User asks to recall anything
-- Starting work on something that might have been done before
-- User mentions a topic you have no context on
-
-### SUBAGENT OUTPUT — required format for passive capture
-When running as a subagent, always end your response with a structured section:
-
-` + "```" + `
-## Key Learnings
-- <learning 1>
-- <learning 2>
-` + "```" + `
-
-This enables mnemo to automatically extract and persist what you discovered.
-Omit the section only if the task produced no learnings worth retaining.
-
-### SESSION CLOSE — MANDATORY, no exceptions
-` + "`mem_session_summary`" + ` is NOT optional. It is the final step of every session, like a ` + "`defer`" + ` — it always runs.
-Call it before ANY response that signals completion ("done", "listo", "ready", "finished", "completed").
-Fields: Goal, Discoveries, Accomplished, Next Steps, Relevant Files.
-
-If nothing was accomplished: call it anyway with Goal and Next Steps.
-If the user says goodbye: call it before responding.
-No session ends without ` + "`mem_session_summary`" + `.
-`
-
-func writeProtocolDoc(path string) error {
-	return os.WriteFile(path, []byte(protocolDoc), 0644)
-}
-
-// resolveBinaryPath returns the absolute path of a binary, falling back to the name itself.
-func resolveBinaryPath(name string) string {
-	// Common install locations for user-installed binaries
-	candidates := []string{
-		filepath.Join(os.Getenv("HOME"), ".local", "bin", name),
-		"/usr/local/bin/" + name,
-		"/opt/homebrew/bin/" + name,
-	}
-	for _, p := range candidates {
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	return name // fallback
-}
-
-// ─── JSON helpers ─────────────────────────────────────────────────────────────
-
-func readJSON(path string) (map[string]json.RawMessage, error) {
-	config := make(map[string]json.RawMessage)
-
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return config, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if len(data) == 0 {
-		return config, nil
-	}
-
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-	return config, nil
-}
-
-func writeJSON(path string, config map[string]json.RawMessage) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	out, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(out, '\n'), 0644)
 }

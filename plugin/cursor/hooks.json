@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "_comment": "Template — paths substituted at install time by 'mnemo setup --cursor'. Tested on Cursor 2.6.21.",
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "${MNEMO_CURSOR_HOOKS_DIR}/before-submit-prompt.sh"
+      }
+    ],
+    "stop": [
+      {
+        "command": "${MNEMO_CURSOR_HOOKS_DIR}/stop.sh"
+      }
+    ]
+  }
+}
