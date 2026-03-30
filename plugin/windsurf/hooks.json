@@ -1,0 +1,15 @@
+{
+  "_comment": "Template — paths substituted at install time by 'mnemo setup --windsurf'.",
+  "hooks": {
+    "pre_user_prompt": [
+      {
+        "command": "${MNEMO_WINDSURF_HOOKS_DIR}/pre-user-prompt.sh"
+      }
+    ],
+    "post_cascade_response_with_transcript": [
+      {
+        "command": "${MNEMO_WINDSURF_HOOKS_DIR}/post-cascade-response.sh"
+      }
+    ]
+  }
+}

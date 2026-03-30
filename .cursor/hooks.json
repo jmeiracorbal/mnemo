@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [{"command": "/tmp/mnemo-cursor-debug.sh"}],
+    "beforeMCPExecution": [{"command": "/tmp/mnemo-cursor-debug.sh"}],
+    "afterFileEdit": [{"command": "/tmp/mnemo-cursor-debug.sh"}],
+    "beforeSubmitPrompt": [{"command": "/tmp/mnemo-cursor-debug.sh"}],
+    "stop": [{"command": "/tmp/mnemo-cursor-debug.sh"}]
+  }
+}

@@ -457,6 +457,7 @@ Usage:
   mnemo capture <content>              Extract learnings from text (passive capture)
   mnemo setup [--dry-run]              Install hooks and configure Claude Code
   mnemo setup --cursor [--dry-run]     Install hooks and configure Cursor
+  mnemo setup --windsurf [--dry-run]   Install hooks and configure Windsurf
   mnemo version                        Show version
 
 Tool profiles for mcp:
