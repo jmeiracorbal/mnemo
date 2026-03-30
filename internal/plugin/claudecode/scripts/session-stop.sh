@@ -2,7 +2,7 @@
 # mnemo — Stop hook for Claude Code plugin
 
 INPUT=$(cat)
-SESSION_ID=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('session_id',''))" 2>/dev/null)
+SESSION_ID=$(echo "$INPUT" | mnemo json session_id 2>/dev/null)
 
 [ -z "$SESSION_ID" ] && exit 0
 

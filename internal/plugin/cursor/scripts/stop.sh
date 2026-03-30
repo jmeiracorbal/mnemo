@@ -10,9 +10,9 @@
 # }
 
 INPUT=$(cat)
-CONVERSATION_ID=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('conversation_id',''))" 2>/dev/null)
-TRANSCRIPT_PATH=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('transcript_path') or '')" 2>/dev/null)
-WORKSPACE=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); roots=d.get('workspace_roots',[]); print(roots[0] if roots else '')" 2>/dev/null)
+CONVERSATION_ID=$(echo "$INPUT" | mnemo json conversation_id 2>/dev/null)
+TRANSCRIPT_PATH=$(echo "$INPUT" | mnemo json transcript_path 2>/dev/null)
+WORKSPACE=$(echo "$INPUT" | mnemo json workspace_roots 0 2>/dev/null)
 
 [ -z "$CONVERSATION_ID" ] && exit 0
 [ -z "$WORKSPACE" ] && WORKSPACE="$(pwd)"
@@ -23,26 +23,7 @@ PROJECT=$(git -C "$WORKSPACE" rev-parse --show-toplevel 2>/dev/null | xargs base
 
 # Passive capture from transcript if available
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-  # Extract assistant messages from JSONL for passive capture
-  CONTENT=$(python3 -c "
-import sys, json
-lines = []
-for line in open('$TRANSCRIPT_PATH'):
-    try:
-        msg = json.loads(line)
-        role = msg.get('role','')
-        content = msg.get('content','')
-        if role == 'assistant' and content:
-            if isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict) and block.get('type') == 'text':
-                        lines.append(block.get('text',''))
-            elif isinstance(content, str):
-                lines.append(content)
-    except:
-        pass
-print('\n'.join(lines))
-" 2>/dev/null)
+  CONTENT=$(mnemo extract-transcript "$TRANSCRIPT_PATH" 2>/dev/null)
 
   if [ -n "$CONTENT" ]; then
     mnemo capture "$CONTENT" --session "$CONVERSATION_ID" --project "$PROJECT" 2>/dev/null || true

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	mcpserver "github.com/jmeiracorbal/mnemo/internal/mcp"
 	"github.com/jmeiracorbal/mnemo/internal/plugin/claudecode"
@@ -20,6 +22,22 @@ func main() {
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
+	}
+
+	// Commands that don't need the store.
+	switch os.Args[1] {
+	case "json":
+		runJSON()
+		return
+	case "extract-transcript":
+		runExtractTranscript()
+		return
+	case "--version", "version":
+		fmt.Printf("mnemo %s\n", version)
+		return
+	case "setup":
+		runSetup()
+		return
 	}
 
 	cfg, err := store.DefaultConfig()
@@ -39,6 +57,7 @@ func main() {
 		runMCP(s)
 	case "save":
 		runSave(s)
+
 	case "search":
 		runSearch(s)
 	case "context":
@@ -53,10 +72,6 @@ func main() {
 		runImport(s)
 	case "capture":
 		runCapture(s)
-	case "setup":
-		runSetup()
-	case "--version", "version":
-		fmt.Printf("mnemo %s\n", version)
 	default:
 		fmt.Fprintf(os.Stderr, "mnemo: unknown command %q\n", os.Args[1])
 		printUsage()
@@ -407,6 +422,125 @@ func runCapture(s *store.Store) {
 		result.Extracted, result.Saved, result.Duplicates)
 }
 
+// ─── json ────────────────────────────────────────────────────────────────────
+
+// runJSON reads JSON from stdin and extracts a value by key path.
+// Intended for use in hook scripts as a replacement for inline python3 -c.
+//
+// Usage: mnemo json KEY [KEY ...]
+// Examples:
+//
+//	mnemo json session_id
+//	mnemo json workspace_roots 0
+//	mnemo json tool_info transcript_path
+func runJSON() {
+	if len(os.Args) < 3 {
+		fmt.Fprintln(os.Stderr, "usage: mnemo json KEY [KEY ...]")
+		os.Exit(1)
+	}
+
+	var data any
+	if err := json.NewDecoder(os.Stdin).Decode(&data); err != nil {
+		fmt.Println("")
+		return
+	}
+
+	value := data
+	for _, key := range os.Args[2:] {
+		switch v := value.(type) {
+		case map[string]any:
+			value = v[key]
+		case []any:
+			i, err := strconv.Atoi(key)
+			if err != nil || i < 0 || i >= len(v) {
+				value = nil
+			} else {
+				value = v[i]
+			}
+		default:
+			value = nil
+		}
+		if value == nil {
+			break
+		}
+	}
+
+	switch v := value.(type) {
+	case string:
+		fmt.Println(v)
+	case float64:
+		if v == float64(int64(v)) {
+			fmt.Println(int64(v))
+		} else {
+			fmt.Println(v)
+		}
+	case bool:
+		fmt.Println(v)
+	default:
+		fmt.Println("")
+	}
+}
+
+// ─── extract-transcript ───────────────────────────────────────────────────────
+
+// runExtractTranscript reads a JSONL transcript file and prints the text
+// content of all assistant messages. Intended for passive capture in hooks.
+//
+// Usage: mnemo extract-transcript /path/to/transcript.jsonl
+func runExtractTranscript() {
+	if len(os.Args) < 3 {
+		fmt.Fprintln(os.Stderr, "usage: mnemo extract-transcript <file.jsonl>")
+		os.Exit(1)
+	}
+
+	f, err := os.Open(os.Args[2])
+	if err != nil {
+		// Silent failure: transcript may not exist yet.
+		return
+	}
+	defer f.Close()
+
+	type block struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	type message struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+	}
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	for scanner.Scan() {
+		var msg message
+		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil || msg.Role != "assistant" {
+			continue
+		}
+
+		// Try plain string content first.
+		var text string
+		if err := json.Unmarshal(msg.Content, &text); err == nil {
+			if text != "" {
+				lines = append(lines, text)
+			}
+			continue
+		}
+
+		// Try array of content blocks.
+		var blocks []block
+		if err := json.Unmarshal(msg.Content, &blocks); err == nil {
+			for _, b := range blocks {
+				if b.Type == "text" && b.Text != "" {
+					lines = append(lines, b.Text)
+				}
+			}
+		}
+	}
+
+	fmt.Println(strings.Join(lines, "\n"))
+}
+
 // ─── setup ───────────────────────────────────────────────────────────────────
 
 func runSetup() {
@@ -455,6 +589,8 @@ Usage:
   mnemo export [file]                  Export all memories to JSON
   mnemo import <file.json>             Import memories from JSON
   mnemo capture <content>              Extract learnings from text (passive capture)
+  mnemo json KEY [KEY ...]             Extract field from JSON on stdin (used by hooks)
+  mnemo extract-transcript <file>      Extract assistant text from JSONL transcript
   mnemo setup [--dry-run]              Install hooks and configure Claude Code
   mnemo setup --cursor [--dry-run]     Install hooks and configure Cursor
   mnemo setup --windsurf [--dry-run]   Install hooks and configure Windsurf
