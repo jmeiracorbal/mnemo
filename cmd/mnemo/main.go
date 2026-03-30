@@ -9,6 +9,7 @@ import (
 	mcpserver "github.com/jmeiracorbal/mnemo/internal/mcp"
 	"github.com/jmeiracorbal/mnemo/internal/plugin/claudecode"
 	"github.com/jmeiracorbal/mnemo/internal/plugin/cursor"
+	"github.com/jmeiracorbal/mnemo/internal/plugin/windsurf"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -411,19 +412,25 @@ func runCapture(s *store.Store) {
 func runSetup() {
 	dryRun := false
 	forCursor := false
+	forWindsurf := false
 	for _, arg := range os.Args[2:] {
 		switch arg {
 		case "--dry-run":
 			dryRun = true
 		case "--cursor":
 			forCursor = true
+		case "--windsurf":
+			forWindsurf = true
 		}
 	}
 
 	var err error
-	if forCursor {
+	switch {
+	case forCursor:
 		err = (cursor.Installer{}).Install(dryRun)
-	} else {
+	case forWindsurf:
+		err = (windsurf.Installer{}).Install(dryRun)
+	default:
 		err = (claudecode.Installer{}).Install(dryRun)
 	}
 	if err != nil {

@@ -115,6 +115,21 @@ CWD=$(echo "$INPUT" | python3 -c "import sys,json; d=json.load(sys.stdin); print
 [ -z "$SESSION_ID" ] && exit 0
 [ -z "$CWD" ] && CWD="$(pwd)"
 
+# ─── Ensure ~/.claude/mnemo.md and CLAUDE.md are configured ──────────────────
+CLAUDE_HOME="${HOME}/.claude"
+MNEMO_MD="${CLAUDE_HOME}/mnemo.md"
+CLAUDE_MD="${CLAUDE_HOME}/CLAUDE.md"
+
+if [ ! -f "$MNEMO_MD" ]; then
+  cat > "$MNEMO_MD" << 'MNEMOMD'
+` + protocolDoc + `MNEMOMD
+fi
+
+if ! grep -q "@mnemo.md" "$CLAUDE_MD" 2>/dev/null; then
+  printf "@mnemo.md\n" >> "$CLAUDE_MD"
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Detect project: prefer git root directory name, fallback to remote repo name, then cwd basename
 PROJECT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null)
 [ -z "$PROJECT" ] && PROJECT=$(git -C "$CWD" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
