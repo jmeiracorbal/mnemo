@@ -135,7 +135,9 @@ func runSave(s *store.Store) {
 	if project != "" {
 		sessionID = "manual-save-" + project
 	}
-	s.CreateSession(sessionID, project, "")
+	if err := s.CreateSession(sessionID, project, ""); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: warning: could not create session: %v\n", err)
+	}
 
 	id, err := s.AddObservation(store.AddObservationParams{
 		SessionID: sessionID,
@@ -405,7 +407,9 @@ func runCapture(s *store.Store) {
 			sessionID = "manual-save-" + project
 		}
 	}
-	s.CreateSession(sessionID, project, "")
+	if err := s.CreateSession(sessionID, project, ""); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: warning: could not create session: %v\n", err)
+	}
 
 	result, err := s.PassiveCapture(store.PassiveCaptureParams{
 		SessionID: sessionID,

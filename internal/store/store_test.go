@@ -3782,7 +3782,7 @@ func TestSkipAckPreservesEnrolledProjectMutations(t *testing.T) {
 
 	// Count total pending before skip-ack.
 	var totalBefore int
-	s.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations WHERE acked_at IS NULL`).Scan(&totalBefore)
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations WHERE acked_at IS NULL`).Scan(&totalBefore)
 
 	skipped, err := s.SkipAckNonEnrolledMutations(DefaultSyncTargetKey)
 	if err != nil {
@@ -3920,12 +3920,18 @@ func TestMigrateProject(t *testing.T) {
 	old, new_ := "old-name", "new-name"
 
 	// Seed data under old project name
-	s.CreateSession("s1", old, "/tmp/old")
-	s.AddObservation(AddObservationParams{
+	if err := s.CreateSession("s1", old, "/tmp/old"); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
 		SessionID: "s1", Type: "decision", Title: "test obs",
 		Content: "some content", Project: old, Scope: "project",
-	})
-	s.AddPrompt(AddPromptParams{SessionID: "s1", Content: "test prompt", Project: old})
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s1", Content: "test prompt", Project: old}); err != nil {
+		t.Fatalf("AddPrompt: %v", err)
+	}
 
 	// Run migration
 	result, err := s.MigrateProject(old, new_)
@@ -3981,11 +3987,15 @@ func TestMigrateProjectIdempotent(t *testing.T) {
 	s := newTestStore(t)
 	old, new_ := "old-proj", "new-proj"
 
-	s.CreateSession("s1", old, "/tmp")
-	s.AddObservation(AddObservationParams{
+	if err := s.CreateSession("s1", old, "/tmp"); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
 		SessionID: "s1", Type: "decision", Title: "test",
 		Content: "content", Project: old, Scope: "project",
-	})
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
 
 	// First migration
 	r1, err := s.MigrateProject(old, new_)

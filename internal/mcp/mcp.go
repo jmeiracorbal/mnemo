@@ -625,7 +625,9 @@ func handleSave(s *store.Store) server.ToolHandlerFunc {
 		}
 		suggestedTopicKey := suggestTopicKey(typ, title, content)
 
-		s.CreateSession(sessionID, project, "")
+		if err := s.CreateSession(sessionID, project, ""); err != nil {
+			return nil, fmt.Errorf("create session: %w", err)
+		}
 
 		truncated := len(content) > s.MaxObservationLength()
 
@@ -751,7 +753,9 @@ func handleSavePrompt(s *store.Store) server.ToolHandlerFunc {
 			sessionID = defaultSessionID(project)
 		}
 
-		s.CreateSession(sessionID, project, "")
+		if err := s.CreateSession(sessionID, project, ""); err != nil {
+			return nil, fmt.Errorf("create session: %w", err)
+		}
 
 		_, err := s.AddPrompt(store.AddPromptParams{
 			SessionID: sessionID,
@@ -913,7 +917,9 @@ func handleSessionSummary(s *store.Store) server.ToolHandlerFunc {
 			sessionID = defaultSessionID(project)
 		}
 
-		s.CreateSession(sessionID, project, "")
+		if err := s.CreateSession(sessionID, project, ""); err != nil {
+			return nil, fmt.Errorf("create session: %w", err)
+		}
 
 		_, err := s.AddObservation(store.AddObservationParams{
 			SessionID: sessionID,

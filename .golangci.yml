@@ -1,0 +1,11 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*database/sql.Tx).Rollback
+        - (*os.File).Close
+        - (*github.com/jmeiracorbal/mnemo/internal/store.Store).Close
+        - (github.com/jmeiracorbal/mnemo/internal/store.rowScanner).Close
+        - (*database/sql.Rows).Close

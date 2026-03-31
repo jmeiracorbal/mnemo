@@ -1381,7 +1381,8 @@ func (s *Store) Timeline(observationID int64, before, after int) (*TimelineResul
 
 	// 5. Count total observations in the session for context
 	var totalInRange int
-	s.db.QueryRow(
+	// COUNT(*) always returns a row; Scan only fails on DB-level errors.
+	_ = s.db.QueryRow(
 		"SELECT COUNT(*) FROM observations WHERE session_id = ? AND deleted_at IS NULL", focus.SessionID,
 	).Scan(&totalInRange)
 
@@ -1463,9 +1464,10 @@ func (s *Store) Search(query string, opts SearchOptions) ([]SearchResult, error)
 func (s *Store) Stats() (*Stats, error) {
 	stats := &Stats{}
 
-	s.db.QueryRow("SELECT COUNT(*) FROM sessions").Scan(&stats.TotalSessions)
-	s.db.QueryRow("SELECT COUNT(*) FROM observations WHERE deleted_at IS NULL").Scan(&stats.TotalObservations)
-	s.db.QueryRow("SELECT COUNT(*) FROM user_prompts").Scan(&stats.TotalPrompts)
+	// COUNT(*) always returns a row; Scan only fails on DB-level errors.
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM sessions").Scan(&stats.TotalSessions)
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM observations WHERE deleted_at IS NULL").Scan(&stats.TotalObservations)
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM user_prompts").Scan(&stats.TotalPrompts)
 
 	rows, err := s.queryItHook(s.db, "SELECT project FROM observations WHERE project IS NOT NULL AND deleted_at IS NULL GROUP BY project ORDER BY MAX(created_at) DESC")
 	if err != nil {
