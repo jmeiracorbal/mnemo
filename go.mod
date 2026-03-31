@@ -1,6 +1,6 @@
 module github.com/jmeiracorbal/mnemo
 
-go 1.25.0
+go 1.25.8
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
