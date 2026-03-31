@@ -17,9 +17,8 @@ WORKSPACE=$(echo "$INPUT" | mnemo json workspace_roots 0 2>/dev/null)
 [ -z "$CONVERSATION_ID" ] && exit 0
 [ -z "$WORKSPACE" ] && WORKSPACE="$(pwd)"
 
-PROJECT=$(git -C "$WORKSPACE" rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null)
-[ -z "$PROJECT" ] && PROJECT=$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
-[ -z "$PROJECT" ] && PROJECT=$(basename "$WORKSPACE")
+PROJECT=$(realpath "$WORKSPACE" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+[ -z "$PROJECT" ] && PROJECT=$(basename "$WORKSPACE" | tr '[:upper:]' '[:lower:]')
 
 # Passive capture from transcript if available
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then

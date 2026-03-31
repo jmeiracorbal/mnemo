@@ -16,9 +16,8 @@ TRANSCRIPT_PATH=$(echo "$INPUT" | mnemo json tool_info transcript_path 2>/dev/nu
 [ -z "$TRAJECTORY_ID" ] && exit 0
 
 WORKSPACE="$(pwd)"
-PROJECT=$(git -C "$WORKSPACE" rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null)
-[ -z "$PROJECT" ] && PROJECT=$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
-[ -z "$PROJECT" ] && PROJECT=$(basename "$WORKSPACE")
+PROJECT=$(realpath "$WORKSPACE" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+[ -z "$PROJECT" ] && PROJECT=$(basename "$WORKSPACE" | tr '[:upper:]' '[:lower:]')
 
 # Passive capture from transcript if available
 if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
