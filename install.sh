@@ -44,48 +44,82 @@ detect_platform() {
   echo "${os}-${arch}"
 }
 
+# ── fetch ──────────────────────────────────────────────────────────────────────
+
+fetch() {
+  local url="$1" dest="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -sSfL "$url" -o "$dest" 2>/dev/null
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$dest" "$url" 2>/dev/null
+  else
+    err "curl or wget required"
+  fi
+}
+
+fetch_stdout() {
+  local url="$1"
+  if command -v curl >/dev/null 2>&1; then
+    curl -sSfL "$url" 2>/dev/null
+  else
+    wget -qO- "$url" 2>/dev/null
+  fi
+}
+
 # ── fetch latest version ───────────────────────────────────────────────────────
 
 fetch_latest_version() {
   local version
-
-  if command -v curl >/dev/null 2>&1; then
-    version=$(curl -sSf "https://api.github.com/repos/${REPO}/releases/latest" \
-      | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" 2>/dev/null)
-  elif command -v wget >/dev/null 2>&1; then
-    version=$(wget -qO- "https://api.github.com/repos/${REPO}/releases/latest" \
-      | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])" 2>/dev/null)
-  else
-    err "curl or wget required"
-  fi
-
+  version=$(fetch_stdout "https://api.github.com/repos/${REPO}/releases/latest" \
+    | grep '"tag_name"' \
+    | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
   [ -z "$version" ] && err "Could not fetch latest release version"
   echo "$version"
 }
 
-# ── download binary ────────────────────────────────────────────────────────────
+# ── download and verify binary ─────────────────────────────────────────────────
 
 download_binary() {
   local version="$1" platform="$2"
-  local url="https://github.com/${REPO}/releases/download/${version}/mnemo-${platform}"
+  local base_url="https://github.com/${REPO}/releases/download/${version}"
+  local binary_url="${base_url}/mnemo-${platform}"
+  local checksum_url="${base_url}/mnemo-${platform}.sha256"
   local dest="${INSTALL_DIR}/mnemo"
 
   info "Downloading mnemo ${version} for ${platform}..."
 
   if [ "$DRY_RUN" = "true" ]; then
-    dry "curl -sSfL \"${url}\" -o \"${dest}\""
+    dry "curl -sSfL \"${binary_url}\" -o \"${dest}\""
+    dry "curl -sSfL \"${checksum_url}\" | shasum -a 256 -c"
     dry "chmod +x \"${dest}\""
     return
   fi
 
   mkdir -p "$INSTALL_DIR"
 
-  if command -v curl >/dev/null 2>&1; then
-    curl -sSfL "$url" -o "$dest" || err "Download failed: ${url}"
-  else
-    wget -qO "$dest" "$url" || err "Download failed: ${url}"
+  local tmp
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' EXIT
+
+  fetch "$binary_url" "$tmp" || err "Download failed: ${binary_url}"
+
+  local checksum_file
+  checksum_file=$(mktemp)
+  trap 'rm -f "$tmp" "$checksum_file"' EXIT
+
+  fetch_stdout "$checksum_url" > "$checksum_file" || err "Checksum download failed: ${checksum_url}"
+
+  # shasum -c expects "hash  filename" — rewrite the path to match $tmp
+  local expected_hash
+  expected_hash=$(awk '{print $1}' "$checksum_file")
+  local actual_hash
+  actual_hash=$(shasum -a 256 "$tmp" | awk '{print $1}')
+
+  if [ "$expected_hash" != "$actual_hash" ]; then
+    err "Checksum mismatch — aborting. Expected: ${expected_hash}, got: ${actual_hash}"
   fi
 
+  mv "$tmp" "$dest"
   chmod +x "$dest"
   ok "Binary installed: ${dest}"
 }
