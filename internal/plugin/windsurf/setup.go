@@ -1,7 +1,7 @@
 // Package windsurf installs mnemo into a Windsurf environment.
 //
 // Registration order:
-//  1. Hook scripts → ~/.local/share/mnemo/windsurf-hooks/
+//  1. Hook scripts → ~/.codeium/windsurf/hooks/
 //  2. MCP server   → ~/.codeium/windsurf/mcp_config.json
 //  3. Hooks        → ~/.codeium/windsurf/hooks.json
 //  4. Global rules → ~/.codeium/windsurf/memories/global_rules.md
@@ -37,7 +37,7 @@ func (i Installer) Install(dryRun bool) error {
 		return fmt.Errorf("home dir: %w", err)
 	}
 
-	hooksDir := filepath.Join(home, ".local", "share", "mnemo", "windsurf-hooks")
+	hooksDir := filepath.Join(home, ".codeium", "windsurf", "hooks")
 	windsurfHooksJSON := filepath.Join(home, ".codeium", "windsurf", "hooks.json")
 	windsurfMCPJSON := filepath.Join(home, ".codeium", "windsurf", "mcp_config.json")
 
@@ -102,7 +102,7 @@ var hookScripts = []string{
 
 func previewOrWriteHooks(dir string, dryRun bool) error {
 	if dryRun {
-		fmt.Printf("[~/.local/share/mnemo/windsurf-hooks/] — would write:\n")
+		fmt.Printf("[~/.codeium/windsurf/hooks/] — would write:\n")
 		for _, name := range hookScripts {
 			fmt.Printf("  %s\n", name)
 		}

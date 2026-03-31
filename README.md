@@ -77,7 +77,7 @@ mnemo setup
 
 This command:
 
-1. Writes hook scripts to `~/.local/share/mnemo/hooks/`
+1. Writes hook scripts to `~/.claude/hooks/`
 2. Registers the MCP server via `claude mcp add -s user mnemo`
 3. Injects hooks into `~/.claude/settings.json`
 4. Adds all `mcp__mnemo__*` tools to `permissions.allow`
@@ -96,7 +96,7 @@ mnemo setup --cursor
 
 This command:
 
-1. Writes hook scripts to `~/.local/share/mnemo/cursor-hooks/`
+1. Writes hook scripts to `~/.cursor/hooks/`
 2. Registers the MCP server in `~/.cursor/mcp.json`
 3. Adds hooks to `~/.cursor/hooks.json` (beforeSubmitPrompt, stop)
 4. Writes `~/.cursor/rules/mnemo.mdc` (memory protocol, `alwaysApply: true`)
@@ -115,7 +115,7 @@ mnemo setup --windsurf
 
 This command:
 
-1. Writes hook scripts to `~/.local/share/mnemo/windsurf-hooks/`
+1. Writes hook scripts to `~/.codeium/windsurf/hooks/`
 2. Registers the MCP server in `~/.codeium/windsurf/mcp_config.json`
 3. Adds hooks to `~/.codeium/windsurf/hooks.json` (pre_user_prompt, post_cascade_response_with_transcript)
 4. Appends the memory protocol to `~/.codeium/windsurf/memories/global_rules.md`

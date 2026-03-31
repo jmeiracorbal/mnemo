@@ -1,7 +1,7 @@
 // Package cursor installs mnemo into a Cursor environment.
 //
 // Registration order:
-//  1. Hook scripts → ~/.local/share/mnemo/cursor-hooks/
+//  1. Hook scripts → ~/.cursor/hooks/
 //  2. MCP server   → ~/.cursor/mcp.json
 //  3. Hooks        → ~/.cursor/hooks.json (beforeSubmitPrompt, stop)
 //  4. Rules doc    → ~/.cursor/rules/mnemo.mdc
@@ -39,7 +39,7 @@ func (i Installer) Install(dryRun bool) error {
 		return fmt.Errorf("home dir: %w", err)
 	}
 
-	hooksDir := filepath.Join(home, ".local", "share", "mnemo", "cursor-hooks")
+	hooksDir := filepath.Join(home, ".cursor", "hooks")
 	cursorHooksJSON := filepath.Join(home, ".cursor", "hooks.json")
 	cursorMCPJSON := filepath.Join(home, ".cursor", "mcp.json")
 	cursorRulesDir := filepath.Join(home, ".cursor", "rules")
@@ -104,7 +104,7 @@ var hookScripts = []string{
 
 func previewOrWriteHooks(dir string, dryRun bool) error {
 	if dryRun {
-		fmt.Printf("[~/.local/share/mnemo/cursor-hooks/] — would write:\n")
+		fmt.Printf("[~/.cursor/hooks/] — would write:\n")
 		for _, name := range hookScripts {
 			fmt.Printf("  %s\n", name)
 		}

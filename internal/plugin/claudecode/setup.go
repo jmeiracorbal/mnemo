@@ -1,7 +1,7 @@
 // Package claudecode installs mnemo into a Claude Code environment.
 //
 // Registration order:
-//  1. Hook scripts → ~/.local/share/mnemo/hooks/
+//  1. Hook scripts → ~/.claude/hooks/
 //  2. MCP server   → `claude mcp add -s user mnemo` (writes to ~/.claude.json)
 //  3. Hooks        → ~/.claude/settings.json (SessionStart, Stop, SubagentStop)
 //  4. Permissions  → ~/.claude/settings.json permissions.allow
@@ -63,7 +63,7 @@ func (i Installer) Install(dryRun bool) error {
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
 	claudeMDPath := filepath.Join(home, ".claude", "CLAUDE.md")
 	mnemoMDPath := filepath.Join(home, ".claude", "mnemo.md")
-	hooksDir := filepath.Join(home, ".local", "share", "mnemo", "hooks")
+	hooksDir := filepath.Join(home, ".claude", "hooks")
 
 	if dryRun {
 		fmt.Println("mnemo setup --dry-run (no changes will be written)")
@@ -151,7 +151,7 @@ var hookProtocols = []string{
 
 func previewOrWriteHooks(dir string, dryRun bool) error {
 	if dryRun {
-		fmt.Printf("[~/.local/share/mnemo/hooks/] — would write:\n")
+		fmt.Printf("[~/.claude/hooks/] — would write:\n")
 		for _, name := range hookScripts {
 			fmt.Printf("  %s\n", name)
 		}

@@ -31,7 +31,7 @@ All of this data stays on your machine and is fully under your control.
 
 ## Deleting your data
 
-To remove all mnemo data, delete `~/.mnemo/memory.db`. To remove mnemo entirely, also delete `~/.local/share/mnemo/` and `~/.local/bin/mnemo`.
+To remove all mnemo data, delete `~/.mnemo/memory.db`. To remove the binary, delete `~/.local/bin/mnemo`. Hook scripts are in `~/.claude/hooks/`, `~/.cursor/hooks/`, and `~/.codeium/windsurf/hooks/`.
 
 ## Open source
 
