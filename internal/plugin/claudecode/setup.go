@@ -18,9 +18,6 @@ import (
 	"text/template"
 )
 
-//go:embed scripts/*
-var scriptsFS embed.FS
-
 //go:embed templates/*
 var templatesFS embed.FS
 
