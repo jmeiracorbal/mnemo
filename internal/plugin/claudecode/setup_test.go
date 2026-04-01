@@ -8,36 +8,11 @@ import (
 	"testing"
 )
 
-var expectedScripts = []string{
-	"session-start.sh",
-	"session-stop.sh",
-	"subagent-stop.sh",
-	"post-compact.sh",
-	"post-compact-resume.sh",
-}
-
 var expectedProtocols = []string{
 	"session-start-protocol.md",
 	"post-compact-protocol-header.md",
 	"post-compact-protocol-footer.md",
 	"post-compact-resume-protocol.md",
-}
-
-func TestEmbeddedScripts(t *testing.T) {
-	for _, name := range expectedScripts {
-		t.Run(name, func(t *testing.T) {
-			data, err := scriptsFS.ReadFile("scripts/" + name)
-			if err != nil {
-				t.Fatalf("script not embedded: %v", err)
-			}
-			if len(data) == 0 {
-				t.Fatal("script is empty")
-			}
-			if !strings.HasPrefix(string(data), "#!/bin/bash") {
-				t.Fatalf("script missing shebang, starts with: %q", string(data[:min(40, len(data))]))
-			}
-		})
-	}
 }
 
 func TestEmbeddedTemplates(t *testing.T) {
@@ -86,36 +61,6 @@ func TestEmbeddedProtocols(t *testing.T) {
 	}
 }
 
-func TestHookScriptsList(t *testing.T) {
-	if len(hookScripts) != len(expectedScripts) {
-		t.Errorf("hookScripts has %d entries, want %d", len(hookScripts), len(expectedScripts))
-	}
-	nameSet := make(map[string]bool, len(hookScripts))
-	for _, name := range hookScripts {
-		nameSet[name] = true
-	}
-	for _, name := range expectedScripts {
-		if !nameSet[name] {
-			t.Errorf("hookScripts missing expected entry: %s", name)
-		}
-	}
-}
-
-func TestHookProtocolsList(t *testing.T) {
-	if len(hookProtocols) != len(expectedProtocols) {
-		t.Errorf("hookProtocols has %d entries, want %d", len(hookProtocols), len(expectedProtocols))
-	}
-	nameSet := make(map[string]bool, len(hookProtocols))
-	for _, name := range hookProtocols {
-		nameSet[name] = true
-	}
-	for _, name := range expectedProtocols {
-		if !nameSet[name] {
-			t.Errorf("hookProtocols missing expected entry: %s", name)
-		}
-	}
-}
-
 func TestInstallDryRun(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	i := Installer{}
@@ -133,9 +78,8 @@ func min(a, b int) int {
 
 // TestShippedHooksReferenceRealScripts validates that every command in
 // plugin/claude-code/hooks/hooks.json points to a script that actually
-// exists in the embedded scripts filesystem. This catches filename
-// mismatches (e.g. post-compaction.sh vs post-compact.sh) before they
-// reach a published release.
+// exists in plugin/claude-code/scripts/. This catches filename mismatches
+// before they reach a published release.
 func TestShippedHooksReferenceRealScripts(t *testing.T) {
 	hooksFile := filepath.Join("..", "..", "..", "plugin", "claude-code", "hooks", "hooks.json")
 	data, err := os.ReadFile(hooksFile)
@@ -155,6 +99,7 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 	}
 
 	const prefix = "${CLAUDE_PLUGIN_ROOT}/scripts/"
+	scriptsDir := filepath.Join("..", "..", "..", "plugin", "claude-code", "scripts")
 
 	for event, matchers := range raw.Hooks {
 		for _, matcher := range matchers {
@@ -164,8 +109,9 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 					continue
 				}
 				scriptName := strings.TrimPrefix(cmd, prefix)
-				if _, err := scriptsFS.ReadFile("scripts/" + scriptName); err != nil {
-					t.Errorf("hooks.json [%s]: references %q but script is not embedded: %v", event, scriptName, err)
+				scriptPath := filepath.Join(scriptsDir, scriptName)
+				if _, err := os.Stat(scriptPath); err != nil {
+					t.Errorf("hooks.json [%s]: references %q but file does not exist at %s", event, scriptName, scriptPath)
 				}
 			}
 		}
