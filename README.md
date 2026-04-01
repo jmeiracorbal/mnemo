@@ -62,6 +62,8 @@ Two installation paths:
 
 **Via plugin (recommended):**
 
+Requires the `mnemo` binary in PATH — install it first following the [prerequisite step](#prerequisite-binary-in-path).
+
 ```bash
 claude plugin marketplace add jmeiracorbal/mnemo
 claude plugin install mnemo@mnemo

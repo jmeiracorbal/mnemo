@@ -79,9 +79,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-compaction.sh",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-compact.sh",
             "timeout": 10,
-            "statusMessage": "Recovering mnemo context after compaction..."
+            "statusMessage": "Saving mnemo compaction summary..."
           }
         ]
       }

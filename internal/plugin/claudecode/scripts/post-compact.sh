@@ -11,9 +11,8 @@ CWD=$(echo "$INPUT" | mnemo json cwd 2>/dev/null)
 
 [ -z "$CWD" ] && CWD="$(pwd)"
 
-PROJECT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null | xargs basename 2>/dev/null)
-[ -z "$PROJECT" ] && PROJECT=$(git -C "$CWD" remote get-url origin 2>/dev/null | sed 's/\.git$//' | sed 's|.*[/:]||')
-[ -z "$PROJECT" ] && PROJECT=$(basename "$CWD")
+PROJECT=$(realpath "$CWD" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+[ -z "$PROJECT" ] && PROJECT=$(basename "$CWD" | tr '[:upper:]' '[:lower:]')
 
 if [ -n "$SESSION_ID" ] && [ -n "$PROJECT" ]; then
   mnemo session start "$SESSION_ID" --project "$PROJECT" --dir "$CWD" 2>/dev/null || true
