@@ -69,13 +69,6 @@ func TestInstallDryRun(t *testing.T) {
 	}
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // TestShippedHooksReferenceRealScripts validates that every command in
 // plugin/claude-code/hooks/hooks.json points to a script that actually
 // exists in plugin/claude-code/scripts/. This catches filename mismatches
