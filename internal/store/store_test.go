@@ -4432,3 +4432,102 @@ func TestTopicKeyUpsertPreservesTags(t *testing.T) {
 		t.Errorf("expected tags [auth, jwt] after upsert, got: %v", obs.Tags)
 	}
 }
+
+func TestExportImportRoundTripPreservesTags(t *testing.T) {
+	src := newTestStore(t)
+	newTestSession(t, src, "sess-export-tags", "mnemo")
+
+	id1, err := src.AddObservation(AddObservationParams{
+		SessionID: "sess-export-tags",
+		Type:      "decision",
+		Title:     "exported with tags",
+		Content:   "this observation has tags that must survive export and import",
+		Project:   "mnemo",
+		Tags:      []string{"database", "auth", "backend"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	_, err = src.AddObservation(AddObservationParams{
+		SessionID: "sess-export-tags",
+		Type:      "decision",
+		Title:     "exported without tags",
+		Content:   "this observation has no tags and should import cleanly",
+		Project:   "mnemo",
+	})
+	if err != nil {
+		t.Fatalf("AddObservation (no tags): %v", err)
+	}
+
+	// Verify tags exist before export
+	orig, err := src.GetObservation(id1)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+	if len(orig.Tags) != 3 {
+		t.Fatalf("pre-export: expected 3 tags, got %d: %v", len(orig.Tags), orig.Tags)
+	}
+
+	data, err := src.Export()
+	if err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+
+	// Verify Export populated Tags in the export data
+	var found bool
+	for _, o := range data.Observations {
+		if o.Title == "exported with tags" {
+			found = true
+			if len(o.Tags) != 3 {
+				t.Fatalf("export data: expected 3 tags on %q, got %d: %v", o.Title, len(o.Tags), o.Tags)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("export data did not contain the expected observation")
+	}
+
+	// Import into a clean store
+	dst := newTestStore(t)
+	result, err := dst.Import(data)
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if result.ObservationsImported != 2 {
+		t.Fatalf("expected 2 imported observations, got %d", result.ObservationsImported)
+	}
+
+	// Verify tags survived in the destination store
+	imported, err := dst.AllObservations("mnemo", "project", 10)
+	if err != nil {
+		t.Fatalf("AllObservations: %v", err)
+	}
+	if len(imported) != 2 {
+		t.Fatalf("expected 2 observations after import, got %d", len(imported))
+	}
+
+	tagMap := make(map[string][]string)
+	for _, o := range imported {
+		tagMap[o.Title] = o.Tags
+	}
+
+	wantTags := []string{"auth", "backend", "database"}
+	gotTags := tagMap["exported with tags"]
+	if len(gotTags) != len(wantTags) {
+		t.Fatalf("after import: expected tags %v, got %v", wantTags, gotTags)
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range gotTags {
+		tagSet[tag] = true
+	}
+	for _, want := range wantTags {
+		if !tagSet[want] {
+			t.Errorf("after import: missing tag %q, got: %v", want, gotTags)
+		}
+	}
+
+	if len(tagMap["exported without tags"]) != 0 {
+		t.Errorf("observation without tags should have none after import, got: %v", tagMap["exported without tags"])
+	}
+}
