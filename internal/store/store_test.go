@@ -4015,3 +4015,843 @@ func TestMigrateProjectIdempotent(t *testing.T) {
 		t.Fatal("second migration should be a no-op")
 	}
 }
+
+
+// ─── Tags ────────────────────────────────────────────────────────────────────
+
+func newTestSession(t *testing.T, s *Store, id, project string) {
+	t.Helper()
+	if err := s.CreateSession(id, project, ""); err != nil {
+		t.Fatalf("CreateSession(%q): %v", id, err)
+	}
+}
+
+func TestAddObservationWithTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-tags-1", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-tags-1",
+		Type:      "decision",
+		Title:     "use sqlite for storage",
+		Content:   "decided to use sqlite because it is embedded and requires no external process",
+		Project:   "mnemo",
+		Tags:      []string{"database", "architecture", "sqlite"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	if len(obs.Tags) != 3 {
+		t.Fatalf("expected 3 tags, got %d: %v", len(obs.Tags), obs.Tags)
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range obs.Tags {
+		tagSet[tag] = true
+	}
+	for _, want := range []string{"database", "architecture", "sqlite"} {
+		if !tagSet[want] {
+			t.Errorf("missing tag %q, got: %v", want, obs.Tags)
+		}
+	}
+}
+
+func TestAddObservationTagNormalization(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-norm", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-norm",
+		Type:      "decision",
+		Title:     "normalization test",
+		Content:   "tags should be normalized to lowercase with hyphens",
+		Project:   "mnemo",
+		Tags:      []string{"  Auth  ", "BACKEND", "some thing"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	tagSet := make(map[string]bool)
+	for _, tag := range obs.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["auth"] {
+		t.Errorf("expected normalized tag 'auth', got: %v", obs.Tags)
+	}
+	if !tagSet["backend"] {
+		t.Errorf("expected normalized tag 'backend', got: %v", obs.Tags)
+	}
+	if !tagSet["some-thing"] {
+		t.Errorf("expected normalized tag 'some-thing', got: %v", obs.Tags)
+	}
+}
+
+func TestUpdateObservationReplaceTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-update-tags", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-update-tags",
+		Type:      "decision",
+		Title:     "original tags",
+		Content:   "content with original tags",
+		Project:   "mnemo",
+		Tags:      []string{"alpha", "beta"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	newTags := []string{"gamma", "delta"}
+	_, err = s.UpdateObservation(id, UpdateObservationParams{
+		Tags: &newTags,
+	})
+	if err != nil {
+		t.Fatalf("UpdateObservation: %v", err)
+	}
+
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	if len(obs.Tags) != 2 {
+		t.Fatalf("expected 2 tags after update, got %d: %v", len(obs.Tags), obs.Tags)
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range obs.Tags {
+		tagSet[tag] = true
+	}
+	if tagSet["alpha"] || tagSet["beta"] {
+		t.Error("old tags should have been replaced")
+	}
+	if !tagSet["gamma"] || !tagSet["delta"] {
+		t.Errorf("new tags missing, got: %v", obs.Tags)
+	}
+}
+
+func TestUpdateObservationClearTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-clear-tags", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-clear-tags",
+		Type:      "decision",
+		Title:     "tags to be cleared",
+		Content:   "will have tags removed after update",
+		Project:   "mnemo",
+		Tags:      []string{"remove-me"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	empty := []string{}
+	_, err = s.UpdateObservation(id, UpdateObservationParams{
+		Tags: &empty,
+	})
+	if err != nil {
+		t.Fatalf("UpdateObservation: %v", err)
+	}
+
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	if len(obs.Tags) != 0 {
+		t.Errorf("expected no tags after clear, got: %v", obs.Tags)
+	}
+}
+
+func TestUpdateObservationOmittedTagsPreserved(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-preserve-tags", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-preserve-tags",
+		Type:      "decision",
+		Title:     "preserve tags",
+		Content:   "tags should not change when Tags field is nil",
+		Project:   "mnemo",
+		Tags:      []string{"keep-me"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	newTitle := "updated title"
+	_, err = s.UpdateObservation(id, UpdateObservationParams{
+		Title: &newTitle,
+		// Tags is nil — should not touch tags
+	})
+	if err != nil {
+		t.Fatalf("UpdateObservation: %v", err)
+	}
+
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	if len(obs.Tags) != 1 || obs.Tags[0] != "keep-me" {
+		t.Errorf("expected tags to be preserved, got: %v", obs.Tags)
+	}
+}
+
+func TestSearchFilterByTags(t *testing.T) {
+	s := newTestStore(t)
+	sessID := "sess-search-tags"
+	newTestSession(t, s, sessID, "mnemo")
+
+	_, err := s.AddObservation(AddObservationParams{
+		SessionID: sessID,
+		Type:      "decision",
+		Title:     "jwt authentication middleware",
+		Content:   "jwt middleware implemented for authenticated routes",
+		Project:   "mnemo",
+		Tags:      []string{"auth", "backend"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation auth: %v", err)
+	}
+
+	_, err = s.AddObservation(AddObservationParams{
+		SessionID: sessID,
+		Type:      "decision",
+		Title:     "sqlite schema migrations",
+		Content:   "sqlite schema migration system applied",
+		Project:   "mnemo",
+		Tags:      []string{"database", "backend"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation db: %v", err)
+	}
+
+	// "auth" tag present only in first observation
+	results, err := s.Search("jwt", SearchOptions{Tags: []string{"auth"}})
+	if err != nil {
+		t.Fatalf("Search with auth tag: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result with tag 'auth', got %d", len(results))
+	}
+	if results[0].Title != "jwt authentication middleware" {
+		t.Errorf("unexpected result title: %q", results[0].Title)
+	}
+
+	// "backend" tag present in both
+	results, err = s.Search("decision", SearchOptions{Tags: []string{"backend"}})
+	if err != nil {
+		t.Fatalf("Search with backend tag: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results with tag 'backend', got %d", len(results))
+	}
+}
+
+func TestSearchResultsHaveTags(t *testing.T) {
+	s := newTestStore(t)
+	sessID := "sess-search-tags-load"
+	newTestSession(t, s, sessID, "mnemo")
+
+	_, err := s.AddObservation(AddObservationParams{
+		SessionID: sessID,
+		Type:      "decision",
+		Title:     "tagged memory observation",
+		Content:   "observation with tags for search result verification purpose",
+		Project:   "mnemo",
+		Tags:      []string{"verify", "search"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	results, err := s.Search("tagged memory", SearchOptions{})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("expected at least one result")
+	}
+	if len(results[0].Tags) == 0 {
+		t.Error("search results should have tags loaded")
+	}
+}
+
+func TestRecentObservationsFilterByTags(t *testing.T) {
+	s := newTestStore(t)
+	sessID := "sess-recent-tags"
+	newTestSession(t, s, sessID, "mnemo")
+
+	_, err := s.AddObservation(AddObservationParams{
+		SessionID: sessID,
+		Type:      "decision",
+		Title:     "auth decision",
+		Content:   "auth content details",
+		Project:   "mnemo",
+		Tags:      []string{"auth"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation auth: %v", err)
+	}
+
+	_, err = s.AddObservation(AddObservationParams{
+		SessionID: sessID,
+		Type:      "decision",
+		Title:     "perf decision",
+		Content:   "performance content details",
+		Project:   "mnemo",
+		Tags:      []string{"performance"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation perf: %v", err)
+	}
+
+	obs, err := s.RecentObservations("mnemo", "project", 10, "auth")
+	if err != nil {
+		t.Fatalf("RecentObservations: %v", err)
+	}
+	if len(obs) != 1 {
+		t.Fatalf("expected 1 observation with tag 'auth', got %d", len(obs))
+	}
+	if obs[0].Title != "auth decision" {
+		t.Errorf("unexpected observation: %q", obs[0].Title)
+	}
+}
+
+func TestSuggestTags(t *testing.T) {
+	cases := []struct {
+		typ     string
+		title   string
+		content string
+		wantTag string
+	}{
+		{"bugfix", "fix auth crash", "nil pointer in auth handler", "bug"},
+		{"architecture", "database design", "chose sqlite over postgres", "architecture"},
+		{"decision", "api versioning", "decided to use semver for api", "decision"},
+		{"config", "ci pipeline", "set up github actions for ci", "config"},
+		{"", "some observation", "general content without matching keywords", "topic"},
+	}
+
+	for _, tc := range cases {
+		tags := SuggestTags(tc.typ, tc.title, tc.content)
+		if len(tags) == 0 {
+			t.Errorf("SuggestTags(%q, %q, ...) returned no tags", tc.typ, tc.title)
+			continue
+		}
+		found := false
+		for _, tag := range tags {
+			if tag == tc.wantTag {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("SuggestTags(%q, %q, ...) = %v, want tag %q", tc.typ, tc.title, tags, tc.wantTag)
+		}
+	}
+}
+
+func TestNormalizeTag(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"auth", "auth"},
+		{"  Auth  ", "auth"},
+		{"BACKEND", "backend"},
+		{"some thing", "some-thing"},
+		{"foo--bar", "foo-bar"},
+		{"", ""},
+		{"   ", ""},
+		{"-leading", "leading"},
+		{"trailing-", "trailing"},
+	}
+	for _, tc := range cases {
+		got := normalizeTag(tc.input)
+		if got != tc.want {
+			t.Errorf("normalizeTag(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestTopicKeyUpsertPreservesTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-topic-tags", "mnemo")
+
+	// First save with topic key and tags
+	_, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-topic-tags",
+		Type:      "architecture",
+		Title:     "auth model",
+		Content:   "initial auth design details",
+		Project:   "mnemo",
+		TopicKey:  "architecture/auth-model",
+		Tags:      []string{"auth", "architecture"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation first: %v", err)
+	}
+
+	// Upsert via topic key with different tags
+	id2, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-topic-tags",
+		Type:      "architecture",
+		Title:     "auth model updated",
+		Content:   "revised auth design with jwt token",
+		Project:   "mnemo",
+		TopicKey:  "architecture/auth-model",
+		Tags:      []string{"auth", "jwt"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation upsert: %v", err)
+	}
+
+	obs, err := s.GetObservation(id2)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	tagSet := make(map[string]bool)
+	for _, tag := range obs.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["auth"] || !tagSet["jwt"] {
+		t.Errorf("expected tags [auth, jwt] after upsert, got: %v", obs.Tags)
+	}
+}
+
+func TestExportImportRoundTripPreservesTags(t *testing.T) {
+	src := newTestStore(t)
+	newTestSession(t, src, "sess-export-tags", "mnemo")
+
+	id1, err := src.AddObservation(AddObservationParams{
+		SessionID: "sess-export-tags",
+		Type:      "decision",
+		Title:     "exported with tags",
+		Content:   "this observation has tags that must survive export and import",
+		Project:   "mnemo",
+		Tags:      []string{"database", "auth", "backend"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	_, err = src.AddObservation(AddObservationParams{
+		SessionID: "sess-export-tags",
+		Type:      "decision",
+		Title:     "exported without tags",
+		Content:   "this observation has no tags and should import cleanly",
+		Project:   "mnemo",
+	})
+	if err != nil {
+		t.Fatalf("AddObservation (no tags): %v", err)
+	}
+
+	// Verify tags exist before export
+	orig, err := src.GetObservation(id1)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+	if len(orig.Tags) != 3 {
+		t.Fatalf("pre-export: expected 3 tags, got %d: %v", len(orig.Tags), orig.Tags)
+	}
+
+	data, err := src.Export()
+	if err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+
+	// Verify Export populated Tags in the export data
+	var found bool
+	for _, o := range data.Observations {
+		if o.Title == "exported with tags" {
+			found = true
+			if len(o.Tags) != 3 {
+				t.Fatalf("export data: expected 3 tags on %q, got %d: %v", o.Title, len(o.Tags), o.Tags)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("export data did not contain the expected observation")
+	}
+
+	// Import into a clean store
+	dst := newTestStore(t)
+	result, err := dst.Import(data)
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if result.ObservationsImported != 2 {
+		t.Fatalf("expected 2 imported observations, got %d", result.ObservationsImported)
+	}
+
+	// Verify tags survived in the destination store
+	imported, err := dst.AllObservations("mnemo", "project", 10)
+	if err != nil {
+		t.Fatalf("AllObservations: %v", err)
+	}
+	if len(imported) != 2 {
+		t.Fatalf("expected 2 observations after import, got %d", len(imported))
+	}
+
+	tagMap := make(map[string][]string)
+	for _, o := range imported {
+		tagMap[o.Title] = o.Tags
+	}
+
+	wantTags := []string{"auth", "backend", "database"}
+	gotTags := tagMap["exported with tags"]
+	if len(gotTags) != len(wantTags) {
+		t.Fatalf("after import: expected tags %v, got %v", wantTags, gotTags)
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range gotTags {
+		tagSet[tag] = true
+	}
+	for _, want := range wantTags {
+		if !tagSet[want] {
+			t.Errorf("after import: missing tag %q, got: %v", want, gotTags)
+		}
+	}
+
+	if len(tagMap["exported without tags"]) != 0 {
+		t.Errorf("observation without tags should have none after import, got: %v", tagMap["exported without tags"])
+	}
+}
+
+// ─── Sync + Tags ─────────────────────────────────────────────────────────────
+
+
+// ─── Sync + Tags ─────────────────────────────────────────────────────────────
+
+// enrollAndList enrolls project and returns pending mutations.
+func enrollAndList(t *testing.T, s *Store, project string) []SyncMutation {
+	t.Helper()
+	if err := s.EnrollProject(project); err != nil {
+		t.Fatalf("EnrollProject: %v", err)
+	}
+	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 50)
+	if err != nil {
+		t.Fatalf("ListPendingSyncMutations: %v", err)
+	}
+	return mutations
+}
+
+func findObsMutation(t *testing.T, mutations []SyncMutation, syncID string) SyncMutation {
+	t.Helper()
+	for _, m := range mutations {
+		if m.Entity != SyncEntityObservation {
+			continue
+		}
+		if syncID == "" {
+			return m
+		}
+		var p syncObservationPayload
+		if err := decodeSyncPayload([]byte(m.Payload), &p); err == nil && p.SyncID == syncID {
+			return m
+		}
+	}
+	t.Fatalf("observation mutation not found (syncID=%q)", syncID)
+	return SyncMutation{}
+}
+
+func TestSyncPayloadIncludesTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-sync-tags", "mnemo")
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-sync-tags",
+		Type:      "decision",
+		Title:     "sync payload tags test",
+		Content:   "verifies that tags are serialized into the sync mutation payload",
+		Project:   "mnemo",
+		Tags:      []string{"auth", "backend"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	m := findObsMutation(t, enrollAndList(t, s, "mnemo"), "")
+
+	var payload syncObservationPayload
+	if err := decodeSyncPayload([]byte(m.Payload), &payload); err != nil {
+		t.Fatalf("decodeSyncPayload: %v", err)
+	}
+	if payload.Tags == nil {
+		t.Fatal("payload.Tags is nil — tags were not included in sync payload")
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range *payload.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["auth"] || !tagSet["backend"] {
+		t.Errorf("expected tags [auth, backend] in payload, got: %v", *payload.Tags)
+	}
+}
+
+func TestSyncPayloadEmptyTagsForUntaggedObservation(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-sync-notags", "mnemo")
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-sync-notags",
+		Type:      "decision",
+		Title:     "no tags observation",
+		Content:   "this observation has no tags at all anywhere",
+		Project:   "mnemo",
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	m := findObsMutation(t, enrollAndList(t, s, "mnemo"), "")
+
+	var payload syncObservationPayload
+	if err := decodeSyncPayload([]byte(m.Payload), &payload); err != nil {
+		t.Fatalf("decodeSyncPayload: %v", err)
+	}
+	if payload.Tags == nil {
+		t.Fatal("payload.Tags should be a non-nil empty slice, not nil")
+	}
+	if len(*payload.Tags) != 0 {
+		t.Errorf("expected empty tags, got: %v", *payload.Tags)
+	}
+}
+
+func TestApplyPulledMutationWithTagsPersistsTags(t *testing.T) {
+	src := newTestStore(t)
+	newTestSession(t, src, "sess-apply-tags", "mnemo")
+
+	if _, err := src.AddObservation(AddObservationParams{
+		SessionID: "sess-apply-tags",
+		Type:      "decision",
+		Title:     "observation to sync",
+		Content:   "content that will travel through sync with tags attached to it",
+		Project:   "mnemo",
+		Tags:      []string{"sync", "test"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	mutations := enrollAndList(t, src, "mnemo")
+
+	dst := newTestStore(t)
+	for _, m := range mutations {
+		if err := dst.ApplyPulledMutation(DefaultSyncTargetKey, m); err != nil {
+			t.Fatalf("ApplyPulledMutation: %v", err)
+		}
+	}
+
+	obs, err := dst.AllObservations("mnemo", "project", 10)
+	if err != nil {
+		t.Fatalf("AllObservations: %v", err)
+	}
+	if len(obs) == 0 {
+		t.Fatal("no observations in destination store after apply")
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range obs[0].Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["sync"] || !tagSet["test"] {
+		t.Errorf("expected tags [sync, test] after apply, got: %v", obs[0].Tags)
+	}
+}
+
+func TestApplyPulledMutationClearsTagsOnUpdate(t *testing.T) {
+	src := newTestStore(t)
+	newTestSession(t, src, "sess-clear-sync", "mnemo")
+
+	id, err := src.AddObservation(AddObservationParams{
+		SessionID: "sess-clear-sync",
+		Type:      "decision",
+		Title:     "will lose tags via sync update",
+		Content:   "initial content with tags that will be removed on next update",
+		Project:   "mnemo",
+		Tags:      []string{"old-tag"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	origObs, err := src.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	emptyTags := []string{}
+	if _, err := src.UpdateObservation(id, UpdateObservationParams{Tags: &emptyTags}); err != nil {
+		t.Fatalf("UpdateObservation: %v", err)
+	}
+
+	mutations := enrollAndList(t, src, "mnemo")
+
+	// Find the last mutation for this observation (the update)
+	updateMutation := findObsMutation(t, mutations[len(mutations)-1:], origObs.SyncID)
+
+	dst := newTestStore(t)
+	// Apply all mutations in order (session + insert + update)
+	for _, m := range mutations {
+		if err := dst.ApplyPulledMutation(DefaultSyncTargetKey, m); err != nil {
+			t.Fatalf("ApplyPulledMutation (seq=%d): %v", m.Seq, err)
+		}
+	}
+	_ = updateMutation
+
+	dstObs, err := dst.AllObservations("mnemo", "project", 10)
+	if err != nil {
+		t.Fatalf("AllObservations: %v", err)
+	}
+	if len(dstObs) == 0 {
+		t.Fatal("no observations after apply")
+	}
+	if len(dstObs[0].Tags) != 0 {
+		t.Errorf("expected no tags after clear via sync, got: %v", dstObs[0].Tags)
+	}
+}
+
+func TestSetSessionTagsPersistsAndLoads(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-tag-session", "mnemo")
+
+	if err := s.SetSessionTags("sess-tag-session", []string{"backend", "AUTH", "back-end"}); err != nil {
+		t.Fatalf("SetSessionTags: %v", err)
+	}
+
+	sess, err := s.GetSession("sess-tag-session")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range sess.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["backend"] {
+		t.Errorf("expected tag 'backend', got: %v", sess.Tags)
+	}
+	if !tagSet["auth"] {
+		t.Errorf("expected tag 'auth' (normalized from 'AUTH'), got: %v", sess.Tags)
+	}
+	// "back-end" normalizes to "back-end" but "backend" is already in the set —
+	// both should be present since they normalize differently.
+	if !tagSet["back-end"] {
+		t.Errorf("expected tag 'back-end', got: %v", sess.Tags)
+	}
+}
+
+func TestSessionTagsExportImportRoundTrip(t *testing.T) {
+	src := newTestStore(t)
+	newTestSession(t, src, "sess-export-tags", "mnemo")
+
+	if err := src.SetSessionTags("sess-export-tags", []string{"feature", "sync"}); err != nil {
+		t.Fatalf("SetSessionTags: %v", err)
+	}
+
+	data, err := src.Export()
+	if err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+
+	var exported *Session
+	for i := range data.Sessions {
+		if data.Sessions[i].ID == "sess-export-tags" {
+			exported = &data.Sessions[i]
+			break
+		}
+	}
+	if exported == nil {
+		t.Fatal("session not found in export")
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range exported.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["feature"] || !tagSet["sync"] {
+		t.Errorf("expected tags [feature, sync] in export, got: %v", exported.Tags)
+	}
+
+	dst := newTestStore(t)
+	if _, err := dst.Import(data); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	sess, err := dst.GetSession("sess-export-tags")
+	if err != nil {
+		t.Fatalf("GetSession after import: %v", err)
+	}
+	tagSet2 := make(map[string]bool)
+	for _, tag := range sess.Tags {
+		tagSet2[tag] = true
+	}
+	if !tagSet2["feature"] || !tagSet2["sync"] {
+		t.Errorf("expected tags [feature, sync] after import, got: %v", sess.Tags)
+	}
+}
+
+func TestSessionTagsSyncPayloadIncludesTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-sync-session-tags", "mnemo")
+
+	if err := s.SetSessionTags("sess-sync-session-tags", []string{"api", "refactor"}); err != nil {
+		t.Fatalf("SetSessionTags: %v", err)
+	}
+
+	mutations := enrollAndList(t, s, "mnemo")
+
+	var sessionMutation *SyncMutation
+	for i := range mutations {
+		if mutations[i].Entity == SyncEntitySession && mutations[i].EntityKey == "sess-sync-session-tags" {
+			sessionMutation = &mutations[i]
+		}
+	}
+	if sessionMutation == nil {
+		t.Fatal("no session mutation found")
+	}
+
+	var payload syncSessionPayload
+	if err := decodeSyncPayload([]byte(sessionMutation.Payload), &payload); err != nil {
+		t.Fatalf("decodeSyncPayload: %v", err)
+	}
+	if payload.Tags == nil {
+		t.Fatal("payload.Tags is nil — session tags not included in sync payload")
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range *payload.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["api"] || !tagSet["refactor"] {
+		t.Errorf("expected tags [api, refactor] in session payload, got: %v", *payload.Tags)
+	}
+}
+
+func TestSuggestTagsNoSubstringMatch(t *testing.T) {
+	// "decision" as type should not suggest "ci" (substring of "decision")
+	tags := SuggestTags("decision", "some decision about architecture", "we decided to use X")
+	for _, tag := range tags {
+		if tag == "ci" {
+			t.Errorf("SuggestTags incorrectly suggested 'ci' from 'decision' via substring match")
+		}
+	}
+}
+
+func TestSuggestTagsExactTokenMatch(t *testing.T) {
+	tags := SuggestTags("bugfix", "ci pipeline fix", "the ci job was failing due to missing env")
+	tagSet := make(map[string]bool)
+	for _, tag := range tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["ci"] {
+		t.Errorf("expected 'ci' tag when 'ci' appears as a whole word, got: %v", tags)
+	}
+}
