@@ -4015,3 +4015,420 @@ func TestMigrateProjectIdempotent(t *testing.T) {
 		t.Fatal("second migration should be a no-op")
 	}
 }
+
+
+// ─── Tags ────────────────────────────────────────────────────────────────────
+
+func newTestSession(t *testing.T, s *Store, id, project string) {
+	t.Helper()
+	if err := s.CreateSession(id, project, ""); err != nil {
+		t.Fatalf("CreateSession(%q): %v", id, err)
+	}
+}
+
+func TestAddObservationWithTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-tags-1", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-tags-1",
+		Type:      "decision",
+		Title:     "use sqlite for storage",
+		Content:   "decided to use sqlite because it is embedded and requires no external process",
+		Project:   "mnemo",
+		Tags:      []string{"database", "architecture", "sqlite"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	if len(obs.Tags) != 3 {
+		t.Fatalf("expected 3 tags, got %d: %v", len(obs.Tags), obs.Tags)
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range obs.Tags {
+		tagSet[tag] = true
+	}
+	for _, want := range []string{"database", "architecture", "sqlite"} {
+		if !tagSet[want] {
+			t.Errorf("missing tag %q, got: %v", want, obs.Tags)
+		}
+	}
+}
+
+func TestAddObservationTagNormalization(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-norm", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-norm",
+		Type:      "decision",
+		Title:     "normalization test",
+		Content:   "tags should be normalized to lowercase with hyphens",
+		Project:   "mnemo",
+		Tags:      []string{"  Auth  ", "BACKEND", "some thing"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	tagSet := make(map[string]bool)
+	for _, tag := range obs.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["auth"] {
+		t.Errorf("expected normalized tag 'auth', got: %v", obs.Tags)
+	}
+	if !tagSet["backend"] {
+		t.Errorf("expected normalized tag 'backend', got: %v", obs.Tags)
+	}
+	if !tagSet["some-thing"] {
+		t.Errorf("expected normalized tag 'some-thing', got: %v", obs.Tags)
+	}
+}
+
+func TestUpdateObservationReplaceTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-update-tags", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-update-tags",
+		Type:      "decision",
+		Title:     "original tags",
+		Content:   "content with original tags",
+		Project:   "mnemo",
+		Tags:      []string{"alpha", "beta"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	newTags := []string{"gamma", "delta"}
+	_, err = s.UpdateObservation(id, UpdateObservationParams{
+		Tags: &newTags,
+	})
+	if err != nil {
+		t.Fatalf("UpdateObservation: %v", err)
+	}
+
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	if len(obs.Tags) != 2 {
+		t.Fatalf("expected 2 tags after update, got %d: %v", len(obs.Tags), obs.Tags)
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range obs.Tags {
+		tagSet[tag] = true
+	}
+	if tagSet["alpha"] || tagSet["beta"] {
+		t.Error("old tags should have been replaced")
+	}
+	if !tagSet["gamma"] || !tagSet["delta"] {
+		t.Errorf("new tags missing, got: %v", obs.Tags)
+	}
+}
+
+func TestUpdateObservationClearTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-clear-tags", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-clear-tags",
+		Type:      "decision",
+		Title:     "tags to be cleared",
+		Content:   "will have tags removed after update",
+		Project:   "mnemo",
+		Tags:      []string{"remove-me"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	empty := []string{}
+	_, err = s.UpdateObservation(id, UpdateObservationParams{
+		Tags: &empty,
+	})
+	if err != nil {
+		t.Fatalf("UpdateObservation: %v", err)
+	}
+
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	if len(obs.Tags) != 0 {
+		t.Errorf("expected no tags after clear, got: %v", obs.Tags)
+	}
+}
+
+func TestUpdateObservationOmittedTagsPreserved(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-preserve-tags", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-preserve-tags",
+		Type:      "decision",
+		Title:     "preserve tags",
+		Content:   "tags should not change when Tags field is nil",
+		Project:   "mnemo",
+		Tags:      []string{"keep-me"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	newTitle := "updated title"
+	_, err = s.UpdateObservation(id, UpdateObservationParams{
+		Title: &newTitle,
+		// Tags is nil — should not touch tags
+	})
+	if err != nil {
+		t.Fatalf("UpdateObservation: %v", err)
+	}
+
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	if len(obs.Tags) != 1 || obs.Tags[0] != "keep-me" {
+		t.Errorf("expected tags to be preserved, got: %v", obs.Tags)
+	}
+}
+
+func TestSearchFilterByTags(t *testing.T) {
+	s := newTestStore(t)
+	sessID := "sess-search-tags"
+	newTestSession(t, s, sessID, "mnemo")
+
+	_, err := s.AddObservation(AddObservationParams{
+		SessionID: sessID,
+		Type:      "decision",
+		Title:     "jwt authentication middleware",
+		Content:   "jwt middleware implemented for authenticated routes",
+		Project:   "mnemo",
+		Tags:      []string{"auth", "backend"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation auth: %v", err)
+	}
+
+	_, err = s.AddObservation(AddObservationParams{
+		SessionID: sessID,
+		Type:      "decision",
+		Title:     "sqlite schema migrations",
+		Content:   "sqlite schema migration system applied",
+		Project:   "mnemo",
+		Tags:      []string{"database", "backend"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation db: %v", err)
+	}
+
+	// "auth" tag present only in first observation
+	results, err := s.Search("jwt", SearchOptions{Tags: []string{"auth"}})
+	if err != nil {
+		t.Fatalf("Search with auth tag: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result with tag 'auth', got %d", len(results))
+	}
+	if results[0].Title != "jwt authentication middleware" {
+		t.Errorf("unexpected result title: %q", results[0].Title)
+	}
+
+	// "backend" tag present in both
+	results, err = s.Search("decision", SearchOptions{Tags: []string{"backend"}})
+	if err != nil {
+		t.Fatalf("Search with backend tag: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results with tag 'backend', got %d", len(results))
+	}
+}
+
+func TestSearchResultsHaveTags(t *testing.T) {
+	s := newTestStore(t)
+	sessID := "sess-search-tags-load"
+	newTestSession(t, s, sessID, "mnemo")
+
+	_, err := s.AddObservation(AddObservationParams{
+		SessionID: sessID,
+		Type:      "decision",
+		Title:     "tagged memory observation",
+		Content:   "observation with tags for search result verification purpose",
+		Project:   "mnemo",
+		Tags:      []string{"verify", "search"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	results, err := s.Search("tagged memory", SearchOptions{})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("expected at least one result")
+	}
+	if len(results[0].Tags) == 0 {
+		t.Error("search results should have tags loaded")
+	}
+}
+
+func TestRecentObservationsFilterByTags(t *testing.T) {
+	s := newTestStore(t)
+	sessID := "sess-recent-tags"
+	newTestSession(t, s, sessID, "mnemo")
+
+	_, err := s.AddObservation(AddObservationParams{
+		SessionID: sessID,
+		Type:      "decision",
+		Title:     "auth decision",
+		Content:   "auth content details",
+		Project:   "mnemo",
+		Tags:      []string{"auth"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation auth: %v", err)
+	}
+
+	_, err = s.AddObservation(AddObservationParams{
+		SessionID: sessID,
+		Type:      "decision",
+		Title:     "perf decision",
+		Content:   "performance content details",
+		Project:   "mnemo",
+		Tags:      []string{"performance"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation perf: %v", err)
+	}
+
+	obs, err := s.RecentObservations("mnemo", "project", 10, "auth")
+	if err != nil {
+		t.Fatalf("RecentObservations: %v", err)
+	}
+	if len(obs) != 1 {
+		t.Fatalf("expected 1 observation with tag 'auth', got %d", len(obs))
+	}
+	if obs[0].Title != "auth decision" {
+		t.Errorf("unexpected observation: %q", obs[0].Title)
+	}
+}
+
+func TestSuggestTags(t *testing.T) {
+	cases := []struct {
+		typ     string
+		title   string
+		content string
+		wantTag string
+	}{
+		{"bugfix", "fix auth crash", "nil pointer in auth handler", "bug"},
+		{"architecture", "database design", "chose sqlite over postgres", "architecture"},
+		{"decision", "api versioning", "decided to use semver for api", "decision"},
+		{"config", "ci pipeline", "set up github actions for ci", "config"},
+		{"", "some observation", "general content without matching keywords", "topic"},
+	}
+
+	for _, tc := range cases {
+		tags := SuggestTags(tc.typ, tc.title, tc.content)
+		if len(tags) == 0 {
+			t.Errorf("SuggestTags(%q, %q, ...) returned no tags", tc.typ, tc.title)
+			continue
+		}
+		found := false
+		for _, tag := range tags {
+			if tag == tc.wantTag {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("SuggestTags(%q, %q, ...) = %v, want tag %q", tc.typ, tc.title, tags, tc.wantTag)
+		}
+	}
+}
+
+func TestNormalizeTag(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"auth", "auth"},
+		{"  Auth  ", "auth"},
+		{"BACKEND", "backend"},
+		{"some thing", "some-thing"},
+		{"foo--bar", "foo-bar"},
+		{"", ""},
+		{"   ", ""},
+		{"-leading", "leading"},
+		{"trailing-", "trailing"},
+	}
+	for _, tc := range cases {
+		got := normalizeTag(tc.input)
+		if got != tc.want {
+			t.Errorf("normalizeTag(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestTopicKeyUpsertPreservesTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-topic-tags", "mnemo")
+
+	// First save with topic key and tags
+	_, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-topic-tags",
+		Type:      "architecture",
+		Title:     "auth model",
+		Content:   "initial auth design details",
+		Project:   "mnemo",
+		TopicKey:  "architecture/auth-model",
+		Tags:      []string{"auth", "architecture"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation first: %v", err)
+	}
+
+	// Upsert via topic key with different tags
+	id2, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-topic-tags",
+		Type:      "architecture",
+		Title:     "auth model updated",
+		Content:   "revised auth design with jwt token",
+		Project:   "mnemo",
+		TopicKey:  "architecture/auth-model",
+		Tags:      []string{"auth", "jwt"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation upsert: %v", err)
+	}
+
+	obs, err := s.GetObservation(id2)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	tagSet := make(map[string]bool)
+	for _, tag := range obs.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["auth"] || !tagSet["jwt"] {
+		t.Errorf("expected tags [auth, jwt] after upsert, got: %v", obs.Tags)
+	}
+}

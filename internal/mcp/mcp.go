@@ -23,6 +23,24 @@ import (
 )
 
 var suggestTopicKey = store.SuggestTopicKey
+var suggestTags = store.SuggestTags
+
+// parseTags splits a comma-separated tag string and returns individual values.
+// Empty strings and blank tokens are dropped.
+func parseTags(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
 
 var loadMCPStats = func(s *store.Store) (*store.Stats, error) {
 	return s.Stats()
@@ -152,6 +170,9 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 				mcp.WithNumber("limit",
 					mcp.Description("Max results (default: 10, max: 20)"),
 				),
+				mcp.WithString("tags",
+					mcp.Description("Comma-separated tags to filter by (e.g. \"auth,backend\"). Only observations with ALL listed tags are returned."),
+				),
 			),
 			handleSearch(s),
 		)
@@ -215,6 +236,9 @@ Examples:
 				mcp.WithString("topic_key",
 					mcp.Description("Optional topic identifier for upserts (e.g. architecture/auth-model). Reuses and updates the latest observation in same project+scope."),
 				),
+				mcp.WithString("tags",
+					mcp.Description("Comma-separated tags to attach (e.g. \"auth,backend,decision\")."),
+				),
 			),
 			handleSave(s),
 		)
@@ -252,6 +276,9 @@ Examples:
 				),
 				mcp.WithString("topic_key",
 					mcp.Description("New topic key (normalized internally)"),
+				),
+				mcp.WithString("tags",
+					mcp.Description("Comma-separated replacement tags. Empty string removes all tags. Omitting this field leaves tags unchanged."),
 				),
 			),
 			handleUpdate(s),
@@ -350,6 +377,9 @@ Examples:
 				),
 				mcp.WithNumber("limit",
 					mcp.Description("Number of observations to retrieve (default: 20)"),
+				),
+				mcp.WithString("tags",
+					mcp.Description("Comma-separated tags to filter observations (e.g. \"auth,backend\"). Only observations with ALL listed tags are included."),
 				),
 			),
 			handleContext(s),
@@ -566,11 +596,13 @@ func handleSearch(s *store.Store) server.ToolHandlerFunc {
 		project, _ := req.GetArguments()["project"].(string)
 		scope, _ := req.GetArguments()["scope"].(string)
 		limit := intArg(req, "limit", 10)
+		tagsRaw, _ := req.GetArguments()["tags"].(string)
 
 		results, err := s.Search(query, store.SearchOptions{
 			Type:    typ,
 			Project: project,
 			Scope:   scope,
+			Tags:    parseTags(tagsRaw),
 			Limit:   limit,
 		})
 		if err != nil {
@@ -616,6 +648,8 @@ func handleSave(s *store.Store) server.ToolHandlerFunc {
 		project, _ := req.GetArguments()["project"].(string)
 		scope, _ := req.GetArguments()["scope"].(string)
 		topicKey, _ := req.GetArguments()["topic_key"].(string)
+		tagsRaw, _ := req.GetArguments()["tags"].(string)
+		tags := parseTags(tagsRaw)
 
 		if typ == "" {
 			typ = "manual"
@@ -639,6 +673,7 @@ func handleSave(s *store.Store) server.ToolHandlerFunc {
 			Project:   project,
 			Scope:     scope,
 			TopicKey:  topicKey,
+			Tags:      tags,
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to save: " + err.Error()), nil
@@ -647,6 +682,11 @@ func handleSave(s *store.Store) server.ToolHandlerFunc {
 		msg := fmt.Sprintf("Memory saved: %q (%s)", title, typ)
 		if topicKey == "" && suggestedTopicKey != "" {
 			msg += fmt.Sprintf("\nSuggested topic_key: %s", suggestedTopicKey)
+		}
+		if len(tags) == 0 {
+			if suggested := suggestTags(typ, title, content); len(suggested) > 0 {
+				msg += fmt.Sprintf("\nSuggested tags: %s", strings.Join(suggested, ", "))
+			}
 		}
 		if truncated {
 			msg += fmt.Sprintf("\n⚠ WARNING: Content was truncated from %d to %d chars. Consider splitting into smaller observations.", len(content), s.MaxObservationLength())
@@ -670,7 +710,11 @@ func handleSuggestTopicKey() server.ToolHandlerFunc {
 			return mcp.NewToolResultError("could not suggest topic_key from input"), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Suggested topic_key: %s", topicKey)), nil
+		msg := fmt.Sprintf("Suggested topic_key: %s", topicKey)
+		if tags := suggestTags(typ, title, content); len(tags) > 0 {
+			msg += fmt.Sprintf("\nSuggested tags: %s", strings.Join(tags, ", "))
+		}
+		return mcp.NewToolResultText(msg), nil
 	}
 }
 
@@ -700,8 +744,12 @@ func handleUpdate(s *store.Store) server.ToolHandlerFunc {
 		if v, ok := req.GetArguments()["topic_key"].(string); ok {
 			update.TopicKey = &v
 		}
+		if v, ok := req.GetArguments()["tags"].(string); ok {
+			tags := parseTags(v)
+			update.Tags = &tags
+		}
 
-		if update.Title == nil && update.Content == nil && update.Type == nil && update.Project == nil && update.Scope == nil && update.TopicKey == nil {
+		if update.Title == nil && update.Content == nil && update.Type == nil && update.Project == nil && update.Scope == nil && update.TopicKey == nil && update.Tags == nil {
 			return mcp.NewToolResultError("provide at least one field to update"), nil
 		}
 
@@ -774,8 +822,9 @@ func handleContext(s *store.Store) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		project, _ := req.GetArguments()["project"].(string)
 		scope, _ := req.GetArguments()["scope"].(string)
+		tagsRaw, _ := req.GetArguments()["tags"].(string)
 
-		ctx2, err := s.FormatContext(project, scope)
+		ctx2, err := s.FormatContext(project, scope, parseTags(tagsRaw)...)
 		if err != nil {
 			return mcp.NewToolResultError("Failed to get context: " + err.Error()), nil
 		}
@@ -993,10 +1042,14 @@ func handleCapturePassive(s *store.Store) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("Passive capture failed: " + err.Error()), nil
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf(
+		msg := fmt.Sprintf(
 			"Passive capture complete: extracted=%d saved=%d duplicates=%d",
 			result.Extracted, result.Saved, result.Duplicates,
-		)), nil
+		)
+		if len(result.SuggestedTags) > 0 {
+			msg += fmt.Sprintf("\nSuggested tags: %s", strings.Join(result.SuggestedTags, ", "))
+		}
+		return mcp.NewToolResultText(msg), nil
 	}
 }
 
