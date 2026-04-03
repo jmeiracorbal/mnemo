@@ -28,12 +28,13 @@ var openDB = sql.Open
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type Session struct {
-	ID        string  `json:"id"`
-	Project   string  `json:"project"`
-	Directory string  `json:"directory"`
-	StartedAt string  `json:"started_at"`
-	EndedAt   *string `json:"ended_at,omitempty"`
-	Summary   *string `json:"summary,omitempty"`
+	ID        string   `json:"id"`
+	Project   string   `json:"project"`
+	Directory string   `json:"directory"`
+	StartedAt string   `json:"started_at"`
+	EndedAt   *string  `json:"ended_at,omitempty"`
+	Summary   *string  `json:"summary,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
 }
 
 type Observation struct {
@@ -203,11 +204,12 @@ type EnrolledProject struct {
 }
 
 type syncSessionPayload struct {
-	ID        string  `json:"id"`
-	Project   string  `json:"project"`
-	Directory string  `json:"directory"`
-	EndedAt   *string `json:"ended_at,omitempty"`
-	Summary   *string `json:"summary,omitempty"`
+	ID        string    `json:"id"`
+	Project   string    `json:"project"`
+	Directory string    `json:"directory"`
+	EndedAt   *string   `json:"ended_at,omitempty"`
+	Summary   *string   `json:"summary,omitempty"`
+	Tags      *[]string `json:"tags,omitempty"`
 }
 
 type syncObservationPayload struct {
@@ -779,6 +781,7 @@ func (s *Store) GetSession(id string) (*Session, error) {
 	if err := row.Scan(&sess.ID, &sess.Project, &sess.Directory, &sess.StartedAt, &sess.EndedAt, &sess.Summary); err != nil {
 		return nil, err
 	}
+	s.loadTagsForSession(&sess)
 	return &sess, nil
 }
 
@@ -1633,6 +1636,7 @@ func (s *Store) Export() (*ExportData, error) {
 		if err := rows.Scan(&sess.ID, &sess.Project, &sess.Directory, &sess.StartedAt, &sess.EndedAt, &sess.Summary); err != nil {
 			return nil, err
 		}
+		s.loadTagsForSession(&sess)
 		data.Sessions = append(data.Sessions, sess)
 	}
 	if err := rows.Err(); err != nil {
@@ -1707,6 +1711,11 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 			return nil, fmt.Errorf("import session %s: %w", sess.ID, err)
 		}
 		n, _ := res.RowsAffected()
+		if n > 0 && sess.Tags != nil {
+			if err := s.setTagsForSessionTx(tx, sess.ID, sess.Tags); err != nil {
+				return nil, fmt.Errorf("import session %s: tags: %w", sess.ID, err)
+			}
+		}
 		result.SessionsImported += int(n)
 	}
 
@@ -2368,6 +2377,14 @@ func (s *Store) backfillSessionSyncMutationsTx(tx *sql.Tx, project string) error
 		if err := rows.Scan(&payload.ID, &payload.Project, &payload.Directory, &payload.EndedAt, &payload.Summary); err != nil {
 			return err
 		}
+		var sess Session
+		sess.ID = payload.ID
+		s.loadTagsForSession(&sess)
+		tags := sess.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+		payload.Tags = &tags
 		if err := s.enqueueSyncMutationTx(tx, SyncEntitySession, payload.ID, SyncOpUpsert, payload); err != nil {
 			return err
 		}
@@ -2584,7 +2601,7 @@ func observationPayloadFromObservation(obs *Observation) syncObservationPayload 
 }
 
 func (s *Store) applySessionPayloadTx(tx *sql.Tx, payload syncSessionPayload) error {
-	_, err := s.execHook(tx,
+	if _, err := s.execHook(tx,
 		`INSERT INTO sessions (id, project, directory, ended_at, summary)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
@@ -2593,8 +2610,15 @@ func (s *Store) applySessionPayloadTx(tx *sql.Tx, payload syncSessionPayload) er
 		   ended_at = COALESCE(excluded.ended_at, sessions.ended_at),
 		   summary = COALESCE(excluded.summary, sessions.summary)`,
 		payload.ID, payload.Project, payload.Directory, payload.EndedAt, payload.Summary,
-	)
-	return err
+	); err != nil {
+		return err
+	}
+	if payload.Tags != nil {
+		if err := s.setTagsForSessionTx(tx, payload.ID, *payload.Tags); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) applyObservationUpsertTx(tx *sql.Tx, payload syncObservationPayload) error {
@@ -2942,6 +2966,12 @@ func SuggestTags(typ, title, content string) []string {
 	}
 
 	text := strings.ToLower(title + " " + content)
+	tokens := make(map[string]struct{})
+	for _, tok := range strings.FieldsFunc(text, func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	}) {
+		tokens[tok] = struct{}{}
+	}
 	candidates := []string{
 		"auth", "authentication", "authorization",
 		"database", "sql", "sqlite", "postgres", "mysql",
@@ -2960,7 +2990,10 @@ func SuggestTags(typ, title, content string) []string {
 		"error", "panic",
 	}
 	for _, kw := range candidates {
-		if !seen[kw] && strings.Contains(text, kw) {
+		if !seen[kw] {
+			if _, ok := tokens[kw]; !ok {
+				continue
+			}
 			tags = append(tags, kw)
 			seen[kw] = true
 			if len(tags) >= 5 {
@@ -3145,6 +3178,67 @@ func (s *Store) loadTagsForObservation(o *Observation) {
 			o.Tags = append(o.Tags, tag)
 		}
 	}
+}
+
+func (s *Store) setTagsForSessionTx(tx *sql.Tx, sessionID string, tags []string) error {
+	if _, err := s.execHook(tx, "DELETE FROM session_tags WHERE session_id = ?", sessionID); err != nil {
+		return err
+	}
+	for _, raw := range tags {
+		tag := normalizeTag(raw)
+		if tag == "" {
+			continue
+		}
+		if _, err := s.execHook(tx, "INSERT OR IGNORE INTO session_tags (session_id, tag) VALUES (?, ?)", sessionID, tag); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) loadTagsForSession(sess *Session) {
+	rows, err := s.queryItHook(s.db,
+		"SELECT tag FROM session_tags WHERE session_id = ? ORDER BY tag", sess.ID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tag string
+		if rows.Scan(&tag) == nil {
+			sess.Tags = append(sess.Tags, tag)
+		}
+	}
+}
+
+// SetSessionTags replaces the tag set for a session and enqueues a sync mutation.
+func (s *Store) SetSessionTags(id string, tags []string) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		if err := s.setTagsForSessionTx(tx, id, tags); err != nil {
+			return err
+		}
+		var project, directory string
+		var endedAt, summary *string
+		if err := tx.QueryRow(
+			`SELECT project, directory, ended_at, summary FROM sessions WHERE id = ?`, id,
+		).Scan(&project, &directory, &endedAt, &summary); err != nil {
+			return err
+		}
+		normalizedTags := make([]string, 0, len(tags))
+		for _, raw := range tags {
+			if t := normalizeTag(raw); t != "" {
+				normalizedTags = append(normalizedTags, t)
+			}
+		}
+		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
+			ID:        id,
+			Project:   project,
+			Directory: directory,
+			EndedAt:   endedAt,
+			Summary:   summary,
+			Tags:      &normalizedTags,
+		})
+	})
 }
 
 // loadTagsForSearchResults is the SearchResult equivalent of loadTagsForObservations.

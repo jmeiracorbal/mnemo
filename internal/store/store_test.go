@@ -4720,3 +4720,138 @@ func TestApplyPulledMutationClearsTagsOnUpdate(t *testing.T) {
 		t.Errorf("expected no tags after clear via sync, got: %v", dstObs[0].Tags)
 	}
 }
+
+func TestSetSessionTagsPersistsAndLoads(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-tag-session", "mnemo")
+
+	if err := s.SetSessionTags("sess-tag-session", []string{"backend", "AUTH", "back-end"}); err != nil {
+		t.Fatalf("SetSessionTags: %v", err)
+	}
+
+	sess, err := s.GetSession("sess-tag-session")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range sess.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["backend"] {
+		t.Errorf("expected tag 'backend', got: %v", sess.Tags)
+	}
+	if !tagSet["auth"] {
+		t.Errorf("expected tag 'auth' (normalized from 'AUTH'), got: %v", sess.Tags)
+	}
+	// "back-end" normalizes to "back-end" but "backend" is already in the set —
+	// both should be present since they normalize differently.
+	if !tagSet["back-end"] {
+		t.Errorf("expected tag 'back-end', got: %v", sess.Tags)
+	}
+}
+
+func TestSessionTagsExportImportRoundTrip(t *testing.T) {
+	src := newTestStore(t)
+	newTestSession(t, src, "sess-export-tags", "mnemo")
+
+	if err := src.SetSessionTags("sess-export-tags", []string{"feature", "sync"}); err != nil {
+		t.Fatalf("SetSessionTags: %v", err)
+	}
+
+	data, err := src.Export()
+	if err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+
+	var exported *Session
+	for i := range data.Sessions {
+		if data.Sessions[i].ID == "sess-export-tags" {
+			exported = &data.Sessions[i]
+			break
+		}
+	}
+	if exported == nil {
+		t.Fatal("session not found in export")
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range exported.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["feature"] || !tagSet["sync"] {
+		t.Errorf("expected tags [feature, sync] in export, got: %v", exported.Tags)
+	}
+
+	dst := newTestStore(t)
+	if _, err := dst.Import(data); err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	sess, err := dst.GetSession("sess-export-tags")
+	if err != nil {
+		t.Fatalf("GetSession after import: %v", err)
+	}
+	tagSet2 := make(map[string]bool)
+	for _, tag := range sess.Tags {
+		tagSet2[tag] = true
+	}
+	if !tagSet2["feature"] || !tagSet2["sync"] {
+		t.Errorf("expected tags [feature, sync] after import, got: %v", sess.Tags)
+	}
+}
+
+func TestSessionTagsSyncPayloadIncludesTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-sync-session-tags", "mnemo")
+
+	if err := s.SetSessionTags("sess-sync-session-tags", []string{"api", "refactor"}); err != nil {
+		t.Fatalf("SetSessionTags: %v", err)
+	}
+
+	mutations := enrollAndList(t, s, "mnemo")
+
+	var sessionMutation *SyncMutation
+	for i := range mutations {
+		if mutations[i].Entity == SyncEntitySession && mutations[i].EntityKey == "sess-sync-session-tags" {
+			sessionMutation = &mutations[i]
+		}
+	}
+	if sessionMutation == nil {
+		t.Fatal("no session mutation found")
+	}
+
+	var payload syncSessionPayload
+	if err := decodeSyncPayload([]byte(sessionMutation.Payload), &payload); err != nil {
+		t.Fatalf("decodeSyncPayload: %v", err)
+	}
+	if payload.Tags == nil {
+		t.Fatal("payload.Tags is nil — session tags not included in sync payload")
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range *payload.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["api"] || !tagSet["refactor"] {
+		t.Errorf("expected tags [api, refactor] in session payload, got: %v", *payload.Tags)
+	}
+}
+
+func TestSuggestTagsNoSubstringMatch(t *testing.T) {
+	// "decision" as type should not suggest "ci" (substring of "decision")
+	tags := SuggestTags("decision", "some decision about architecture", "we decided to use X")
+	for _, tag := range tags {
+		if tag == "ci" {
+			t.Errorf("SuggestTags incorrectly suggested 'ci' from 'decision' via substring match")
+		}
+	}
+}
+
+func TestSuggestTagsExactTokenMatch(t *testing.T) {
+	tags := SuggestTags("bugfix", "ci pipeline fix", "the ci job was failing due to missing env")
+	tagSet := make(map[string]bool)
+	for _, tag := range tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["ci"] {
+		t.Errorf("expected 'ci' tag when 'ci' appears as a whole word, got: %v", tags)
+	}
+}
