@@ -1663,6 +1663,7 @@ func (s *Store) Export() (*ExportData, error) {
 	if err := obsRows.Err(); err != nil {
 		return nil, err
 	}
+	s.loadTagsForObservations(data.Observations)
 
 	// Prompts
 	promptRows, err := s.queryItHook(s.db,
@@ -1721,7 +1722,7 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 		if exists > 0 {
 			continue
 		}
-		_, err := s.execHook(tx,
+		res, err := s.execHook(tx,
 			`INSERT INTO observations (sync_id, session_id, type, title, content, tool_name, project, scope, topic_key, normalized_hash, revision_count, duplicate_count, last_seen_at, created_at, updated_at, deleted_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			normalizeExistingSyncID(obs.SyncID, "obs"),
@@ -1743,6 +1744,15 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 		)
 		if err != nil {
 			return nil, fmt.Errorf("import observation %d: %w", obs.ID, err)
+		}
+		if len(obs.Tags) > 0 {
+			newID, err := res.LastInsertId()
+			if err != nil {
+				return nil, fmt.Errorf("import observation %d: last insert id: %w", obs.ID, err)
+			}
+			if err := s.setTagsForObservationTx(tx, newID, obs.Tags); err != nil {
+				return nil, fmt.Errorf("import observation %d: tags: %w", obs.ID, err)
+			}
 		}
 		result.ObservationsImported++
 	}
