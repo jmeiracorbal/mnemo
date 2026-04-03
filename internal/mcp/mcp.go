@@ -548,6 +548,9 @@ GUIDELINES:
 				mcp.WithString("summary",
 					mcp.Description("Summary of what was accomplished"),
 				),
+				mcp.WithString("tags",
+					mcp.Description("Comma-separated tags for this session (e.g. 'feature,auth,backend')"),
+				),
 			),
 			handleSessionEnd(s),
 		)
@@ -1003,9 +1006,16 @@ func handleSessionEnd(s *store.Store) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, _ := req.GetArguments()["id"].(string)
 		summary, _ := req.GetArguments()["summary"].(string)
+		tagsRaw, _ := req.GetArguments()["tags"].(string)
 
 		if err := s.EndSession(id, summary); err != nil {
 			return mcp.NewToolResultError("Failed to end session: " + err.Error()), nil
+		}
+
+		if tags := parseTags(tagsRaw); len(tags) > 0 {
+			if err := s.SetSessionTags(id, tags); err != nil {
+				return mcp.NewToolResultError("Failed to set session tags: " + err.Error()), nil
+			}
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Session %q completed", id)), nil
