@@ -37,22 +37,23 @@ type Session struct {
 }
 
 type Observation struct {
-	ID             int64   `json:"id"`
-	SyncID         string  `json:"sync_id"`
-	SessionID      string  `json:"session_id"`
-	Type           string  `json:"type"`
-	Title          string  `json:"title"`
-	Content        string  `json:"content"`
-	ToolName       *string `json:"tool_name,omitempty"`
-	Project        *string `json:"project,omitempty"`
-	Scope          string  `json:"scope"`
-	TopicKey       *string `json:"topic_key,omitempty"`
-	RevisionCount  int     `json:"revision_count"`
-	DuplicateCount int     `json:"duplicate_count"`
-	LastSeenAt     *string `json:"last_seen_at,omitempty"`
-	CreatedAt      string  `json:"created_at"`
-	UpdatedAt      string  `json:"updated_at"`
-	DeletedAt      *string `json:"deleted_at,omitempty"`
+	ID             int64    `json:"id"`
+	SyncID         string   `json:"sync_id"`
+	SessionID      string   `json:"session_id"`
+	Type           string   `json:"type"`
+	Title          string   `json:"title"`
+	Content        string   `json:"content"`
+	ToolName       *string  `json:"tool_name,omitempty"`
+	Project        *string  `json:"project,omitempty"`
+	Scope          string   `json:"scope"`
+	TopicKey       *string  `json:"topic_key,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+	RevisionCount  int      `json:"revision_count"`
+	DuplicateCount int      `json:"duplicate_count"`
+	LastSeenAt     *string  `json:"last_seen_at,omitempty"`
+	CreatedAt      string   `json:"created_at"`
+	UpdatedAt      string   `json:"updated_at"`
+	DeletedAt      *string  `json:"deleted_at,omitempty"`
 }
 
 type SearchResult struct {
@@ -104,30 +105,33 @@ type TimelineResult struct {
 }
 
 type SearchOptions struct {
-	Type    string `json:"type,omitempty"`
-	Project string `json:"project,omitempty"`
-	Scope   string `json:"scope,omitempty"`
-	Limit   int    `json:"limit,omitempty"`
+	Type    string   `json:"type,omitempty"`
+	Project string   `json:"project,omitempty"`
+	Scope   string   `json:"scope,omitempty"`
+	Tags    []string `json:"tags,omitempty"`
+	Limit   int      `json:"limit,omitempty"`
 }
 
 type AddObservationParams struct {
-	SessionID string `json:"session_id"`
-	Type      string `json:"type"`
-	Title     string `json:"title"`
-	Content   string `json:"content"`
-	ToolName  string `json:"tool_name,omitempty"`
-	Project   string `json:"project,omitempty"`
-	Scope     string `json:"scope,omitempty"`
-	TopicKey  string `json:"topic_key,omitempty"`
+	SessionID string   `json:"session_id"`
+	Type      string   `json:"type"`
+	Title     string   `json:"title"`
+	Content   string   `json:"content"`
+	ToolName  string   `json:"tool_name,omitempty"`
+	Project   string   `json:"project,omitempty"`
+	Scope     string   `json:"scope,omitempty"`
+	TopicKey  string   `json:"topic_key,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
 }
 
 type UpdateObservationParams struct {
-	Type     *string `json:"type,omitempty"`
-	Title    *string `json:"title,omitempty"`
-	Content  *string `json:"content,omitempty"`
-	Project  *string `json:"project,omitempty"`
-	Scope    *string `json:"scope,omitempty"`
-	TopicKey *string `json:"topic_key,omitempty"`
+	Type     *string   `json:"type,omitempty"`
+	Title    *string   `json:"title,omitempty"`
+	Content  *string   `json:"content,omitempty"`
+	Project  *string   `json:"project,omitempty"`
+	Scope    *string   `json:"scope,omitempty"`
+	TopicKey *string   `json:"topic_key,omitempty"`
+	Tags     *[]string `json:"tags,omitempty"`
 }
 
 type Prompt struct {
@@ -207,18 +211,19 @@ type syncSessionPayload struct {
 }
 
 type syncObservationPayload struct {
-	SyncID     string  `json:"sync_id"`
-	SessionID  string  `json:"session_id"`
-	Type       string  `json:"type"`
-	Title      string  `json:"title"`
-	Content    string  `json:"content"`
-	ToolName   *string `json:"tool_name,omitempty"`
-	Project    *string `json:"project,omitempty"`
-	Scope      string  `json:"scope"`
-	TopicKey   *string `json:"topic_key,omitempty"`
-	Deleted    bool    `json:"deleted,omitempty"`
-	DeletedAt  *string `json:"deleted_at,omitempty"`
-	HardDelete bool    `json:"hard_delete,omitempty"`
+	SyncID     string   `json:"sync_id"`
+	SessionID  string   `json:"session_id"`
+	Type       string   `json:"type"`
+	Title      string   `json:"title"`
+	Content    string   `json:"content"`
+	ToolName   *string  `json:"tool_name,omitempty"`
+	Project    *string  `json:"project,omitempty"`
+	Scope      string   `json:"scope"`
+	TopicKey   *string  `json:"topic_key,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
+	Deleted    bool     `json:"deleted,omitempty"`
+	DeletedAt  *string  `json:"deleted_at,omitempty"`
+	HardDelete bool     `json:"hard_delete,omitempty"`
 }
 
 type syncPromptPayload struct {
@@ -604,6 +609,24 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	if _, err := s.execHook(s.db, `
+		CREATE TABLE IF NOT EXISTS observation_tags (
+			observation_id INTEGER NOT NULL REFERENCES observations(id) ON DELETE CASCADE,
+			tag            TEXT    NOT NULL,
+			PRIMARY KEY (observation_id, tag)
+		);
+		CREATE TABLE IF NOT EXISTS session_tags (
+			session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+			tag        TEXT NOT NULL,
+			PRIMARY KEY (session_id, tag)
+		);
+		CREATE INDEX IF NOT EXISTS idx_obs_tags_obs ON observation_tags(observation_id);
+		CREATE INDEX IF NOT EXISTS idx_obs_tags_tag ON observation_tags(tag);
+		CREATE INDEX IF NOT EXISTS idx_ses_tags_ses ON session_tags(session_id);
+	`); err != nil {
+		return err
+	}
+
 	if _, err := s.execHook(s.db, `UPDATE observations SET scope = 'project' WHERE scope IS NULL OR scope = ''`); err != nil {
 		return err
 	}
@@ -848,7 +871,8 @@ func (s *Store) AllSessions(project string, limit int) ([]SessionSummary, error)
 }
 
 // AllObservations returns recent observations ordered by most recent first (for TUI browsing).
-func (s *Store) AllObservations(project, scope string, limit int) ([]Observation, error) {
+// Optional tags parameter filters to observations that have ALL specified tags.
+func (s *Store) AllObservations(project, scope string, limit int, tags ...string) ([]Observation, error) {
 	if limit <= 0 {
 		limit = s.cfg.MaxContextResults
 	}
@@ -868,6 +892,12 @@ func (s *Store) AllObservations(project, scope string, limit int) ([]Observation
 	if scope != "" {
 		query += " AND o.scope = ?"
 		args = append(args, normalizeScope(scope))
+	}
+	for _, tag := range tags {
+		if norm := normalizeTag(tag); norm != "" {
+			query += " AND o.id IN (SELECT observation_id FROM observation_tags WHERE tag = ?)"
+			args = append(args, norm)
+		}
 	}
 
 	query += " ORDER BY o.created_at DESC LIMIT ?"
@@ -950,6 +980,11 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 					return err
 				}
 				observationID = existingID
+				if len(p.Tags) > 0 {
+					if err := s.setTagsForObservationTx(tx, existingID, p.Tags); err != nil {
+						return err
+					}
+				}
 				return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpUpsert, observationPayloadFromObservation(obs))
 			}
 			if err != sql.ErrNoRows {
@@ -1012,6 +1047,11 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 		if err != nil {
 			return err
 		}
+		if len(p.Tags) > 0 {
+			if err := s.setTagsForObservationTx(tx, observationID, p.Tags); err != nil {
+				return err
+			}
+		}
 		return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpUpsert, observationPayloadFromObservation(obs))
 	})
 	if err != nil {
@@ -1020,7 +1060,9 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 	return observationID, nil
 }
 
-func (s *Store) RecentObservations(project, scope string, limit int) ([]Observation, error) {
+// RecentObservations returns recent observations for context retrieval.
+// Optional tags parameter filters to observations that have ALL specified tags.
+func (s *Store) RecentObservations(project, scope string, limit int, tags ...string) ([]Observation, error) {
 	if limit <= 0 {
 		limit = s.cfg.MaxContextResults
 	}
@@ -1040,6 +1082,12 @@ func (s *Store) RecentObservations(project, scope string, limit int) ([]Observat
 	if scope != "" {
 		query += " AND o.scope = ?"
 		args = append(args, normalizeScope(scope))
+	}
+	for _, tag := range tags {
+		if norm := normalizeTag(tag); norm != "" {
+			query += " AND o.id IN (SELECT observation_id FROM observation_tags WHERE tag = ?)"
+			args = append(args, norm)
+		}
 	}
 
 	query += " ORDER BY o.created_at DESC LIMIT ?"
@@ -1172,6 +1220,7 @@ func (s *Store) GetObservation(id int64) (*Observation, error) {
 	); err != nil {
 		return nil, err
 	}
+	s.loadTagsForObservation(&o)
 	return &o, nil
 }
 
@@ -1240,11 +1289,17 @@ func (s *Store) UpdateObservation(id int64, p UpdateObservationParams) (*Observa
 		if err != nil {
 			return err
 		}
+		if p.Tags != nil {
+			if err := s.setTagsForObservationTx(tx, id, *p.Tags); err != nil {
+				return err
+			}
+		}
 		return s.enqueueSyncMutationTx(tx, SyncEntityObservation, updated.SyncID, SyncOpUpsert, observationPayloadFromObservation(updated))
 	})
 	if err != nil {
 		return nil, err
 	}
+	s.loadTagsForObservation(updated)
 	return updated, nil
 }
 
@@ -1435,6 +1490,13 @@ func (s *Store) Search(query string, opts SearchOptions) ([]SearchResult, error)
 		args = append(args, normalizeScope(opts.Scope))
 	}
 
+	for _, tag := range opts.Tags {
+		if norm := normalizeTag(tag); norm != "" {
+			sql += " AND o.id IN (SELECT observation_id FROM observation_tags WHERE tag = ?)"
+			args = append(args, norm)
+		}
+	}
+
 	sql += " ORDER BY fts.rank LIMIT ?"
 	args = append(args, limit)
 
@@ -1457,7 +1519,11 @@ func (s *Store) Search(query string, opts SearchOptions) ([]SearchResult, error)
 		}
 		results = append(results, sr)
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	s.loadTagsForSearchResults(results)
+	return results, nil
 }
 
 // ─── Stats ───────────────────────────────────────────────────────────────────
@@ -1488,13 +1554,15 @@ func (s *Store) Stats() (*Stats, error) {
 
 // ─── Context Formatting ─────────────────────────────────────────────────────
 
-func (s *Store) FormatContext(project, scope string) (string, error) {
+// FormatContext returns a formatted context string for agent consumption.
+// Optional tags parameter filters the observations included in the context.
+func (s *Store) FormatContext(project, scope string, tags ...string) (string, error) {
 	sessions, err := s.RecentSessions(project, 5)
 	if err != nil {
 		return "", err
 	}
 
-	observations, err := s.RecentObservations(project, scope, s.cfg.MaxContextResults)
+	observations, err := s.RecentObservations(project, scope, s.cfg.MaxContextResults, tags...)
 	if err != nil {
 		return "", err
 	}
@@ -2485,6 +2553,7 @@ func observationPayloadFromObservation(obs *Observation) syncObservationPayload 
 		Project:   obs.Project,
 		Scope:     obs.Scope,
 		TopicKey:  obs.TopicKey,
+		Tags:      obs.Tags,
 	}
 }
 
@@ -2587,7 +2656,11 @@ func (s *Store) queryObservations(query string, args ...any) ([]Observation, err
 		}
 		results = append(results, o)
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	s.loadTagsForObservations(results)
+	return results, nil
 }
 
 func (s *Store) addColumnIfNotExists(tableName, columnName, definition string) error {
@@ -2806,6 +2879,52 @@ func SuggestTopicKey(typ, title, content string) string {
 	return family + "/" + segment
 }
 
+// SuggestTags generates tag suggestions from type/title/content.
+// It always includes the topic family as a tag, adds the normalized type when
+// it differs, and scans the text for common technical keywords.
+func SuggestTags(typ, title, content string) []string {
+	family := inferTopicFamily(typ, title, content)
+	if family == "" {
+		family = "topic"
+	}
+	seen := map[string]bool{family: true}
+	tags := []string{family}
+
+	if normTyp := normalizeTag(typ); normTyp != "" && !seen[normTyp] {
+		tags = append(tags, normTyp)
+		seen[normTyp] = true
+	}
+
+	text := strings.ToLower(title + " " + content)
+	candidates := []string{
+		"auth", "authentication", "authorization",
+		"database", "sql", "sqlite", "postgres", "mysql",
+		"api", "rest", "http", "grpc",
+		"test", "testing",
+		"cache", "redis",
+		"config", "configuration",
+		"deploy", "deployment", "ci",
+		"security", "crypto",
+		"performance", "latency",
+		"refactor",
+		"migration",
+		"sync",
+		"session",
+		"memory",
+		"error", "panic",
+	}
+	for _, kw := range candidates {
+		if !seen[kw] && strings.Contains(text, kw) {
+			tags = append(tags, kw)
+			seen[kw] = true
+			if len(tags) >= 5 {
+				break
+			}
+		}
+	}
+	return tags
+}
+
 func inferTopicFamily(typ, title, content string) string {
 	t := strings.TrimSpace(strings.ToLower(typ))
 	switch t {
@@ -2878,6 +2997,126 @@ func normalizeTopicSegment(s string) string {
 		v = v[:100]
 	}
 	return v
+}
+
+// normalizeTag lowercases, trims, and replaces any non-alphanumeric character
+// (except hyphens) with a hyphen. Consecutive hyphens are collapsed. Leading
+// and trailing hyphens are stripped.
+func normalizeTag(s string) string {
+	v := strings.TrimSpace(strings.ToLower(s))
+	if v == "" {
+		return ""
+	}
+	re := regexp.MustCompile(`[^a-z0-9]+`)
+	v = re.ReplaceAllString(v, "-")
+	v = strings.Trim(v, "-")
+	if len(v) > 50 {
+		v = v[:50]
+	}
+	return v
+}
+
+// setTagsForObservationTx replaces all tags for an observation within a
+// transaction. An empty slice removes all tags.
+func (s *Store) setTagsForObservationTx(tx *sql.Tx, obsID int64, tags []string) error {
+	if _, err := s.execHook(tx, `DELETE FROM observation_tags WHERE observation_id = ?`, obsID); err != nil {
+		return err
+	}
+	for _, tag := range tags {
+		norm := normalizeTag(tag)
+		if norm == "" {
+			continue
+		}
+		if _, err := s.execHook(tx, `INSERT OR IGNORE INTO observation_tags (observation_id, tag) VALUES (?, ?)`, obsID, norm); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// loadTagsForObservations batch-loads tags for a slice of observations and
+// assigns them in-place. Errors are silently ignored to keep reads non-fatal.
+func (s *Store) loadTagsForObservations(obs []Observation) {
+	if len(obs) == 0 {
+		return
+	}
+	placeholders := strings.Repeat("?,", len(obs))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(obs))
+	for i := range obs {
+		args[i] = obs[i].ID
+	}
+	rows, err := s.queryItHook(s.db,
+		fmt.Sprintf("SELECT observation_id, tag FROM observation_tags WHERE observation_id IN (%s) ORDER BY observation_id, tag", placeholders),
+		args...,
+	)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	tagMap := make(map[int64][]string)
+	for rows.Next() {
+		var obsID int64
+		var tag string
+		if rows.Scan(&obsID, &tag) == nil {
+			tagMap[obsID] = append(tagMap[obsID], tag)
+		}
+	}
+	for i := range obs {
+		if tags, ok := tagMap[obs[i].ID]; ok {
+			obs[i].Tags = tags
+		}
+	}
+}
+
+// loadTagsForObservation loads tags for a single observation in-place.
+func (s *Store) loadTagsForObservation(o *Observation) {
+	rows, err := s.queryItHook(s.db,
+		"SELECT tag FROM observation_tags WHERE observation_id = ? ORDER BY tag", o.ID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tag string
+		if rows.Scan(&tag) == nil {
+			o.Tags = append(o.Tags, tag)
+		}
+	}
+}
+
+// loadTagsForSearchResults is the SearchResult equivalent of loadTagsForObservations.
+func (s *Store) loadTagsForSearchResults(results []SearchResult) {
+	if len(results) == 0 {
+		return
+	}
+	placeholders := strings.Repeat("?,", len(results))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(results))
+	for i := range results {
+		args[i] = results[i].ID
+	}
+	rows, err := s.queryItHook(s.db,
+		fmt.Sprintf("SELECT observation_id, tag FROM observation_tags WHERE observation_id IN (%s) ORDER BY observation_id, tag", placeholders),
+		args...,
+	)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	tagMap := make(map[int64][]string)
+	for rows.Next() {
+		var obsID int64
+		var tag string
+		if rows.Scan(&obsID, &tag) == nil {
+			tagMap[obsID] = append(tagMap[obsID], tag)
+		}
+	}
+	for i := range results {
+		if tags, ok := tagMap[results[i].ID]; ok {
+			results[i].Tags = tags
+		}
+	}
 }
 
 func normalizeTopicKey(topic string) string {
@@ -2983,9 +3222,10 @@ type PassiveCaptureParams struct {
 
 // PassiveCaptureResult holds the output of passive memory capture.
 type PassiveCaptureResult struct {
-	Extracted  int `json:"extracted"`  // Total learnings found in text
-	Saved      int `json:"saved"`      // New observations created
-	Duplicates int `json:"duplicates"` // Skipped because already existed
+	Extracted     int      `json:"extracted"`      // Total learnings found in text
+	Saved         int      `json:"saved"`          // New observations created
+	Duplicates    int      `json:"duplicates"`     // Skipped because already existed
+	SuggestedTags []string `json:"suggested_tags"` // Tag suggestions derived from the content
 }
 
 // learningHeaderPattern matches section headers for learnings in both English and Spanish.
@@ -3068,6 +3308,16 @@ func (s *Store) PassiveCapture(p PassiveCaptureParams) (*PassiveCaptureResult, e
 
 	if len(learnings) == 0 {
 		return result, nil
+	}
+
+	seenTags := make(map[string]bool)
+	for _, learning := range learnings {
+		for _, tag := range SuggestTags("passive", learning, learning) {
+			if !seenTags[tag] {
+				result.SuggestedTags = append(result.SuggestedTags, tag)
+				seenTags[tag] = true
+			}
+		}
 	}
 
 	for _, learning := range learnings {
