@@ -4531,3 +4531,192 @@ func TestExportImportRoundTripPreservesTags(t *testing.T) {
 		t.Errorf("observation without tags should have none after import, got: %v", tagMap["exported without tags"])
 	}
 }
+
+// ─── Sync + Tags ─────────────────────────────────────────────────────────────
+
+
+// ─── Sync + Tags ─────────────────────────────────────────────────────────────
+
+// enrollAndList enrolls project and returns pending mutations.
+func enrollAndList(t *testing.T, s *Store, project string) []SyncMutation {
+	t.Helper()
+	if err := s.EnrollProject(project); err != nil {
+		t.Fatalf("EnrollProject: %v", err)
+	}
+	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 50)
+	if err != nil {
+		t.Fatalf("ListPendingSyncMutations: %v", err)
+	}
+	return mutations
+}
+
+func findObsMutation(t *testing.T, mutations []SyncMutation, syncID string) SyncMutation {
+	t.Helper()
+	for _, m := range mutations {
+		if m.Entity != SyncEntityObservation {
+			continue
+		}
+		if syncID == "" {
+			return m
+		}
+		var p syncObservationPayload
+		if err := decodeSyncPayload([]byte(m.Payload), &p); err == nil && p.SyncID == syncID {
+			return m
+		}
+	}
+	t.Fatalf("observation mutation not found (syncID=%q)", syncID)
+	return SyncMutation{}
+}
+
+func TestSyncPayloadIncludesTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-sync-tags", "mnemo")
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-sync-tags",
+		Type:      "decision",
+		Title:     "sync payload tags test",
+		Content:   "verifies that tags are serialized into the sync mutation payload",
+		Project:   "mnemo",
+		Tags:      []string{"auth", "backend"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	m := findObsMutation(t, enrollAndList(t, s, "mnemo"), "")
+
+	var payload syncObservationPayload
+	if err := decodeSyncPayload([]byte(m.Payload), &payload); err != nil {
+		t.Fatalf("decodeSyncPayload: %v", err)
+	}
+	if payload.Tags == nil {
+		t.Fatal("payload.Tags is nil — tags were not included in sync payload")
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range *payload.Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["auth"] || !tagSet["backend"] {
+		t.Errorf("expected tags [auth, backend] in payload, got: %v", *payload.Tags)
+	}
+}
+
+func TestSyncPayloadEmptyTagsForUntaggedObservation(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-sync-notags", "mnemo")
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-sync-notags",
+		Type:      "decision",
+		Title:     "no tags observation",
+		Content:   "this observation has no tags at all anywhere",
+		Project:   "mnemo",
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	m := findObsMutation(t, enrollAndList(t, s, "mnemo"), "")
+
+	var payload syncObservationPayload
+	if err := decodeSyncPayload([]byte(m.Payload), &payload); err != nil {
+		t.Fatalf("decodeSyncPayload: %v", err)
+	}
+	if payload.Tags == nil {
+		t.Fatal("payload.Tags should be a non-nil empty slice, not nil")
+	}
+	if len(*payload.Tags) != 0 {
+		t.Errorf("expected empty tags, got: %v", *payload.Tags)
+	}
+}
+
+func TestApplyPulledMutationWithTagsPersistsTags(t *testing.T) {
+	src := newTestStore(t)
+	newTestSession(t, src, "sess-apply-tags", "mnemo")
+
+	if _, err := src.AddObservation(AddObservationParams{
+		SessionID: "sess-apply-tags",
+		Type:      "decision",
+		Title:     "observation to sync",
+		Content:   "content that will travel through sync with tags attached to it",
+		Project:   "mnemo",
+		Tags:      []string{"sync", "test"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	mutations := enrollAndList(t, src, "mnemo")
+
+	dst := newTestStore(t)
+	for _, m := range mutations {
+		if err := dst.ApplyPulledMutation(DefaultSyncTargetKey, m); err != nil {
+			t.Fatalf("ApplyPulledMutation: %v", err)
+		}
+	}
+
+	obs, err := dst.AllObservations("mnemo", "project", 10)
+	if err != nil {
+		t.Fatalf("AllObservations: %v", err)
+	}
+	if len(obs) == 0 {
+		t.Fatal("no observations in destination store after apply")
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range obs[0].Tags {
+		tagSet[tag] = true
+	}
+	if !tagSet["sync"] || !tagSet["test"] {
+		t.Errorf("expected tags [sync, test] after apply, got: %v", obs[0].Tags)
+	}
+}
+
+func TestApplyPulledMutationClearsTagsOnUpdate(t *testing.T) {
+	src := newTestStore(t)
+	newTestSession(t, src, "sess-clear-sync", "mnemo")
+
+	id, err := src.AddObservation(AddObservationParams{
+		SessionID: "sess-clear-sync",
+		Type:      "decision",
+		Title:     "will lose tags via sync update",
+		Content:   "initial content with tags that will be removed on next update",
+		Project:   "mnemo",
+		Tags:      []string{"old-tag"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	origObs, err := src.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+
+	emptyTags := []string{}
+	if _, err := src.UpdateObservation(id, UpdateObservationParams{Tags: &emptyTags}); err != nil {
+		t.Fatalf("UpdateObservation: %v", err)
+	}
+
+	mutations := enrollAndList(t, src, "mnemo")
+
+	// Find the last mutation for this observation (the update)
+	updateMutation := findObsMutation(t, mutations[len(mutations)-1:], origObs.SyncID)
+
+	dst := newTestStore(t)
+	// Apply all mutations in order (session + insert + update)
+	for _, m := range mutations {
+		if err := dst.ApplyPulledMutation(DefaultSyncTargetKey, m); err != nil {
+			t.Fatalf("ApplyPulledMutation (seq=%d): %v", m.Seq, err)
+		}
+	}
+	_ = updateMutation
+
+	dstObs, err := dst.AllObservations("mnemo", "project", 10)
+	if err != nil {
+		t.Fatalf("AllObservations: %v", err)
+	}
+	if len(dstObs) == 0 {
+		t.Fatal("no observations after apply")
+	}
+	if len(dstObs[0].Tags) != 0 {
+		t.Errorf("expected no tags after clear via sync, got: %v", dstObs[0].Tags)
+	}
+}

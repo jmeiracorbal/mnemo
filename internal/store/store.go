@@ -211,19 +211,19 @@ type syncSessionPayload struct {
 }
 
 type syncObservationPayload struct {
-	SyncID     string   `json:"sync_id"`
-	SessionID  string   `json:"session_id"`
-	Type       string   `json:"type"`
-	Title      string   `json:"title"`
-	Content    string   `json:"content"`
-	ToolName   *string  `json:"tool_name,omitempty"`
-	Project    *string  `json:"project,omitempty"`
-	Scope      string   `json:"scope"`
-	TopicKey   *string  `json:"topic_key,omitempty"`
-	Tags       []string `json:"tags,omitempty"`
-	Deleted    bool     `json:"deleted,omitempty"`
-	DeletedAt  *string  `json:"deleted_at,omitempty"`
-	HardDelete bool     `json:"hard_delete,omitempty"`
+	SyncID     string    `json:"sync_id"`
+	SessionID  string    `json:"session_id"`
+	Type       string    `json:"type"`
+	Title      string    `json:"title"`
+	Content    string    `json:"content"`
+	ToolName   *string   `json:"tool_name,omitempty"`
+	Project    *string   `json:"project,omitempty"`
+	Scope      string    `json:"scope"`
+	TopicKey   *string   `json:"topic_key,omitempty"`
+	Tags       *[]string `json:"tags,omitempty"`
+	Deleted    bool      `json:"deleted,omitempty"`
+	DeletedAt  *string   `json:"deleted_at,omitempty"`
+	HardDelete bool      `json:"hard_delete,omitempty"`
 }
 
 type syncPromptPayload struct {
@@ -975,15 +975,15 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 				); err != nil {
 					return err
 				}
-				obs, err = s.getObservationTx(tx, existingID)
-				if err != nil {
-					return err
-				}
 				observationID = existingID
 				if len(p.Tags) > 0 {
 					if err := s.setTagsForObservationTx(tx, existingID, p.Tags); err != nil {
 						return err
 					}
+				}
+				obs, err = s.getObservationTx(tx, existingID)
+				if err != nil {
+					return err
 				}
 				return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpUpsert, observationPayloadFromObservation(obs))
 			}
@@ -1043,14 +1043,14 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 		if err != nil {
 			return err
 		}
-		obs, err = s.getObservationTx(tx, observationID)
-		if err != nil {
-			return err
-		}
 		if len(p.Tags) > 0 {
 			if err := s.setTagsForObservationTx(tx, observationID, p.Tags); err != nil {
 				return err
 			}
+		}
+		obs, err = s.getObservationTx(tx, observationID)
+		if err != nil {
+			return err
 		}
 		return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpUpsert, observationPayloadFromObservation(obs))
 	})
@@ -1285,14 +1285,14 @@ func (s *Store) UpdateObservation(id int64, p UpdateObservationParams) (*Observa
 			return err
 		}
 
-		updated, err = s.getObservationTx(tx, id)
-		if err != nil {
-			return err
-		}
 		if p.Tags != nil {
 			if err := s.setTagsForObservationTx(tx, id, *p.Tags); err != nil {
 				return err
 			}
+		}
+		updated, err = s.getObservationTx(tx, id)
+		if err != nil {
+			return err
 		}
 		return s.enqueueSyncMutationTx(tx, SyncEntityObservation, updated.SyncID, SyncOpUpsert, observationPayloadFromObservation(updated))
 	})
@@ -1745,7 +1745,7 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("import observation %d: %w", obs.ID, err)
 		}
-		if len(obs.Tags) > 0 {
+		if obs.Tags != nil {
 			newID, err := res.LastInsertId()
 			if err != nil {
 				return nil, fmt.Errorf("import observation %d: last insert id: %w", obs.ID, err)
@@ -2377,7 +2377,7 @@ func (s *Store) backfillSessionSyncMutationsTx(tx *sql.Tx, project string) error
 
 func (s *Store) backfillObservationSyncMutationsTx(tx *sql.Tx, project string) error {
 	rows, err := s.queryItHook(tx, `
-		SELECT sync_id, session_id, type, title, content, tool_name, project, scope, topic_key
+		SELECT id, sync_id, session_id, type, title, content, tool_name, project, scope, topic_key
 		FROM observations
 		WHERE ifnull(project, '') = ?
 		  AND deleted_at IS NULL
@@ -2398,10 +2398,19 @@ func (s *Store) backfillObservationSyncMutationsTx(tx *sql.Tx, project string) e
 	defer rows.Close()
 
 	for rows.Next() {
+		var obsID int64
 		var payload syncObservationPayload
-		if err := rows.Scan(&payload.SyncID, &payload.SessionID, &payload.Type, &payload.Title, &payload.Content, &payload.ToolName, &payload.Project, &payload.Scope, &payload.TopicKey); err != nil {
+		if err := rows.Scan(&obsID, &payload.SyncID, &payload.SessionID, &payload.Type, &payload.Title, &payload.Content, &payload.ToolName, &payload.Project, &payload.Scope, &payload.TopicKey); err != nil {
 			return err
 		}
+		var o Observation
+		o.ID = obsID
+		s.loadTagsForObservationTx(tx, &o)
+		tags := o.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+		payload.Tags = &tags
 		if err := s.enqueueSyncMutationTx(tx, SyncEntityObservation, payload.SyncID, SyncOpUpsert, payload); err != nil {
 			return err
 		}
@@ -2533,6 +2542,7 @@ func (s *Store) getObservationTx(tx *sql.Tx, id int64) (*Observation, error) {
 	if err := row.Scan(&o.ID, &o.SyncID, &o.SessionID, &o.Type, &o.Title, &o.Content, &o.ToolName, &o.Project, &o.Scope, &o.TopicKey, &o.RevisionCount, &o.DuplicateCount, &o.LastSeenAt, &o.CreatedAt, &o.UpdatedAt, &o.DeletedAt); err != nil {
 		return nil, err
 	}
+	s.loadTagsForObservationTx(tx, &o)
 	return &o, nil
 }
 
@@ -2553,6 +2563,12 @@ func (s *Store) getObservationBySyncIDTx(tx *sql.Tx, syncID string, includeDelet
 }
 
 func observationPayloadFromObservation(obs *Observation) syncObservationPayload {
+	// Always include a non-nil Tags pointer so receivers can distinguish
+	// "no tags" (replace with empty) from "unknown" (nil = don't touch).
+	tags := obs.Tags
+	if tags == nil {
+		tags = []string{}
+	}
 	return syncObservationPayload{
 		SyncID:    obs.SyncID,
 		SessionID: obs.SessionID,
@@ -2563,7 +2579,7 @@ func observationPayloadFromObservation(obs *Observation) syncObservationPayload 
 		Project:   obs.Project,
 		Scope:     obs.Scope,
 		TopicKey:  obs.TopicKey,
-		Tags:      obs.Tags,
+		Tags:      &tags,
 	}
 }
 
@@ -2584,12 +2600,24 @@ func (s *Store) applySessionPayloadTx(tx *sql.Tx, payload syncSessionPayload) er
 func (s *Store) applyObservationUpsertTx(tx *sql.Tx, payload syncObservationPayload) error {
 	existing, err := s.getObservationBySyncIDTx(tx, payload.SyncID, true)
 	if err == sql.ErrNoRows {
-		_, err = s.execHook(tx,
+		res, err := s.execHook(tx,
 			`INSERT INTO observations (sync_id, session_id, type, title, content, tool_name, project, scope, topic_key, normalized_hash, revision_count, duplicate_count, updated_at, deleted_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), NULL)`,
 			payload.SyncID, payload.SessionID, payload.Type, payload.Title, payload.Content, payload.ToolName, payload.Project, normalizeScope(payload.Scope), payload.TopicKey, hashNormalized(payload.Content),
 		)
-		return err
+		if err != nil {
+			return err
+		}
+		if payload.Tags != nil {
+			newID, err := res.LastInsertId()
+			if err != nil {
+				return err
+			}
+			if err := s.setTagsForObservationTx(tx, newID, *payload.Tags); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	if err != nil {
 		return err
@@ -2600,7 +2628,15 @@ func (s *Store) applyObservationUpsertTx(tx *sql.Tx, payload syncObservationPayl
 		 WHERE id = ?`,
 		payload.SessionID, payload.Type, payload.Title, payload.Content, payload.ToolName, payload.Project, normalizeScope(payload.Scope), payload.TopicKey, hashNormalized(payload.Content), existing.ID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if payload.Tags != nil {
+		if err := s.setTagsForObservationTx(tx, existing.ID, *payload.Tags); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) applyObservationDeleteTx(tx *sql.Tx, payload syncObservationPayload) error {
@@ -3075,6 +3111,22 @@ func (s *Store) loadTagsForObservations(obs []Observation) {
 	for i := range obs {
 		if tags, ok := tagMap[obs[i].ID]; ok {
 			obs[i].Tags = tags
+		}
+	}
+}
+
+// loadTagsForObservationTx loads tags for a single observation within a transaction.
+func (s *Store) loadTagsForObservationTx(tx *sql.Tx, o *Observation) {
+	rows, err := tx.Query(
+		"SELECT tag FROM observation_tags WHERE observation_id = ? ORDER BY tag", o.ID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tag string
+		if rows.Scan(&tag) == nil {
+			o.Tags = append(o.Tags, tag)
 		}
 	}
 }
