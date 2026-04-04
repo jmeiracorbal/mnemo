@@ -4055,7 +4055,8 @@ func TestAddObservationWithTags(t *testing.T) {
 	for _, tag := range obs.Tags {
 		tagSet[tag] = true
 	}
-	for _, want := range []string{"database", "architecture", "sqlite"} {
+	// "database" is an alias for "db", so the stored tag is "db".
+	for _, want := range []string{"db", "architecture", "sqlite"} {
 		if !tagSet[want] {
 			t.Errorf("missing tag %q, got: %v", want, obs.Tags)
 		}
@@ -4343,7 +4344,6 @@ func TestSuggestTags(t *testing.T) {
 		{"architecture", "database design", "chose sqlite over postgres", "architecture"},
 		{"decision", "api versioning", "decided to use semver for api", "decision"},
 		{"config", "ci pipeline", "set up github actions for ci", "config"},
-		{"", "some observation", "general content without matching keywords", "topic"},
 	}
 
 	for _, tc := range cases {
@@ -4365,6 +4365,16 @@ func TestSuggestTags(t *testing.T) {
 	}
 }
 
+func TestSuggestTagsNoBlockedTags(t *testing.T) {
+	// Generic fallback ("topic") must not appear in suggestions.
+	tags := SuggestTags("", "some observation", "general content without matching keywords")
+	for _, tag := range tags {
+		if isBlockedTag(tag) {
+			t.Errorf("SuggestTags returned blocked tag %q: %v", tag, tags)
+		}
+	}
+}
+
 func TestNormalizeTag(t *testing.T) {
 	cases := []struct {
 		input string
@@ -4379,12 +4389,163 @@ func TestNormalizeTag(t *testing.T) {
 		{"   ", ""},
 		{"-leading", "leading"},
 		{"trailing-", "trailing"},
+		// single-char tags are dropped
+		{"a", ""},
+		// alias resolution
+		{"authentication", "auth"},
+		{"AUTHORIZATION", "auth"},
+		{"database", "db"},
+		{"testing", "test"},
+		{"deployment", "deploy"},
+		{"configuration", "config"},
 	}
 	for _, tc := range cases {
 		got := normalizeTag(tc.input)
 		if got != tc.want {
 			t.Errorf("normalizeTag(%q) = %q, want %q", tc.input, got, tc.want)
 		}
+	}
+}
+
+func TestObservationTagLimit(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-tag-limit", "mnemo")
+
+	many := make([]string, 20)
+	for i := range many {
+		many[i] = fmt.Sprintf("tag%02d", i)
+	}
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-tag-limit",
+		Type:      "decision",
+		Title:     "tag limit test",
+		Content:   "test",
+		Project:   "mnemo",
+		Tags:      many,
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+	if len(obs.Tags) > maxTagsPerObservation {
+		t.Errorf("stored %d tags, want at most %d", len(obs.Tags), maxTagsPerObservation)
+	}
+}
+
+func TestSessionTagLimit(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-stag-limit", "mnemo")
+
+	many := make([]string, 15)
+	for i := range many {
+		many[i] = fmt.Sprintf("stag%02d", i)
+	}
+	if err := s.SetSessionTags("sess-stag-limit", many); err != nil {
+		t.Fatalf("SetSessionTags: %v", err)
+	}
+	sess, err := s.GetSession("sess-stag-limit")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if len(sess.Tags) > maxTagsPerSession {
+		t.Errorf("stored %d session tags, want at most %d", len(sess.Tags), maxTagsPerSession)
+	}
+}
+
+func TestBlockedTagsNotStored(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-blocked", "mnemo")
+
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-blocked",
+		Type:      "decision",
+		Title:     "blocked tag test",
+		Content:   "test",
+		Project:   "mnemo",
+		Tags:      []string{"auth", "topic", "general", "backend"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	obs, err := s.GetObservation(id)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+	tagSet := make(map[string]bool)
+	for _, tag := range obs.Tags {
+		tagSet[tag] = true
+	}
+	if tagSet["topic"] {
+		t.Error("blocked tag 'topic' was stored")
+	}
+	if tagSet["general"] {
+		t.Error("blocked tag 'general' was stored")
+	}
+	if !tagSet["auth"] {
+		t.Error("valid tag 'auth' was not stored")
+	}
+	if !tagSet["backend"] {
+		t.Error("valid tag 'backend' was not stored")
+	}
+}
+
+func TestMergeTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-merge", "mnemo")
+
+	id1, _ := s.AddObservation(AddObservationParams{
+		SessionID: "sess-merge",
+		Type:      "decision",
+		Title:     "obs with authentication tag",
+		Content:   "test",
+		Project:   "mnemo",
+		Tags:      []string{"backend", "auth"},
+	})
+	id2, _ := s.AddObservation(AddObservationParams{
+		SessionID: "sess-merge",
+		Type:      "decision",
+		Title:     "obs with backend tag only",
+		Content:   "test",
+		Project:   "mnemo",
+		Tags:      []string{"backend"},
+	})
+
+	obsCount, sessCount, err := s.MergeTags("backend", "infra")
+	if err != nil {
+		t.Fatalf("MergeTags: %v", err)
+	}
+	if obsCount != 2 {
+		t.Errorf("MergeTags obsCount = %d, want 2", obsCount)
+	}
+	if sessCount != 0 {
+		t.Errorf("MergeTags sessCount = %d, want 0", sessCount)
+	}
+
+	obs1, _ := s.GetObservation(id1)
+	obs2, _ := s.GetObservation(id2)
+
+	for _, obs := range []*Observation{obs1, obs2} {
+		tagSet := make(map[string]bool)
+		for _, tag := range obs.Tags {
+			tagSet[tag] = true
+		}
+		if tagSet["backend"] {
+			t.Errorf("obs %d still has old tag 'backend' after merge", obs.ID)
+		}
+		if !tagSet["infra"] {
+			t.Errorf("obs %d missing new tag 'infra' after merge", obs.ID)
+		}
+	}
+}
+
+func TestMergeTagsBlockedTarget(t *testing.T) {
+	s := newTestStore(t)
+	_, _, err := s.MergeTags("auth", "topic")
+	if err == nil {
+		t.Error("expected error merging into blocked tag 'topic', got nil")
 	}
 }
 
@@ -4513,7 +4674,8 @@ func TestExportImportRoundTripPreservesTags(t *testing.T) {
 		tagMap[o.Title] = o.Tags
 	}
 
-	wantTags := []string{"auth", "backend", "database"}
+	// "database" is an alias for "db"; canonical form is stored.
+	wantTags := []string{"auth", "backend", "db"}
 	gotTags := tagMap["exported with tags"]
 	if len(gotTags) != len(wantTags) {
 		t.Fatalf("after import: expected tags %v, got %v", wantTags, gotTags)
@@ -5119,6 +5281,7 @@ func TestListTagsReturnsFrequency(t *testing.T) {
 	}
 
 	add("obs 1", []string{"auth", "backend"})
+	// "database" is an alias for "db"; the stored canonical tag is "db".
 	add("obs 2", []string{"auth", "database"})
 	add("obs 3", []string{"auth"})
 
@@ -5138,8 +5301,8 @@ func TestListTagsReturnsFrequency(t *testing.T) {
 	if byTag["backend"].Count != 1 {
 		t.Errorf("expected backend count=1, got %d", byTag["backend"].Count)
 	}
-	if byTag["database"].Count != 1 {
-		t.Errorf("expected database count=1, got %d", byTag["database"].Count)
+	if byTag["db"].Count != 1 {
+		t.Errorf("expected db count=1, got %d", byTag["db"].Count)
 	}
 	if tags[0].Tag != "auth" {
 		t.Errorf("expected auth first by frequency, got %q", tags[0].Tag)

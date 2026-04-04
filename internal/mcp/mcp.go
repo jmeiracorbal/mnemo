@@ -62,6 +62,7 @@ var ProfileAgent = map[string]bool{
 	"mem_save_prompt":       true,
 	"mem_update":            true,
 	"mem_list_tags":         true,
+	"mem_merge_tags":        true,
 }
 
 // ProfileAdmin contains tools for CLI curation and dashboards.
@@ -413,6 +414,29 @@ Examples:
 				),
 			),
 			handleListTags(s),
+		)
+	}
+
+	// ─── mem_merge_tags ─────────────────────────────────────────────────
+	if shouldRegister("mem_merge_tags", allowlist) {
+		srv.AddTool(
+			mcp.NewTool("mem_merge_tags",
+				mcp.WithDescription("Merge all occurrences of one tag into another. Use to consolidate aliases or plural/canonical variants (e.g. 'authentication' → 'auth'). The source tag is removed after merging."),
+				mcp.WithTitleAnnotation("Merge Tags"),
+				mcp.WithReadOnlyHintAnnotation(false),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
+				mcp.WithString("from",
+					mcp.Required(),
+					mcp.Description("Tag to merge away (source). Will be removed after merging."),
+				),
+				mcp.WithString("to",
+					mcp.Required(),
+					mcp.Description("Target canonical tag. Must not be a blocked/generic tag."),
+				),
+			),
+			handleMergeTags(s),
 		)
 	}
 
@@ -921,6 +945,22 @@ func handleListTags(s *store.Store) server.ToolHandlerFunc {
 			fmt.Fprintf(&b, "  %-30s %d uses  (last: %s)\n", ti.Tag, ti.Count, ti.LastUsedAt)
 		}
 		return mcp.NewToolResultText(b.String()), nil
+	}
+}
+
+func handleMergeTags(s *store.Store) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		from, _ := req.GetArguments()["from"].(string)
+		to, _ := req.GetArguments()["to"].(string)
+		if strings.TrimSpace(from) == "" || strings.TrimSpace(to) == "" {
+			return mcp.NewToolResultError("both 'from' and 'to' are required"), nil
+		}
+		obsCount, sessCount, err := s.MergeTags(from, to)
+		if err != nil {
+			return mcp.NewToolResultError("merge failed: " + err.Error()), nil
+		}
+		msg := fmt.Sprintf("Merged %q → %q: %d observation(s), %d session(s) updated.", from, to, obsCount, sessCount)
+		return mcp.NewToolResultText(msg), nil
 	}
 }
 

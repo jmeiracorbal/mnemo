@@ -1704,6 +1704,57 @@ func (s *Store) ListTags(project string) ([]TagInfo, error) {
 	return tags, rows.Err()
 }
 
+// MergeTags renames every occurrence of fromTag to toTag across all observations
+// and sessions. fromTag and toTag are normalized before use. Returns the number
+// of observations and sessions updated.
+func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, err error) {
+	from := normalizeTag(fromTag)
+	to := normalizeTag(toTag)
+	if from == "" || to == "" {
+		return 0, 0, fmt.Errorf("both from and to tags must be non-empty after normalization")
+	}
+	if from == to {
+		return 0, 0, fmt.Errorf("from and to tags are identical after normalization: %q", to)
+	}
+	if isBlockedTag(to) {
+		return 0, 0, fmt.Errorf("target tag %q is blocked (too generic)", to)
+	}
+
+	err = s.withTx(func(tx *sql.Tx) error {
+		// Promote fromTag → toTag in observations (dedup via INSERT OR IGNORE).
+		if _, err := s.execHook(tx,
+			`INSERT OR IGNORE INTO observation_tags (observation_id, tag)
+			 SELECT observation_id, ? FROM observation_tags WHERE tag = ?`,
+			to, from,
+		); err != nil {
+			return fmt.Errorf("merge observation_tags insert: %w", err)
+		}
+		res, err := s.execHook(tx, `DELETE FROM observation_tags WHERE tag = ?`, from)
+		if err != nil {
+			return fmt.Errorf("merge observation_tags delete: %w", err)
+		}
+		n, _ := res.RowsAffected()
+		obsCount = int(n)
+
+		// Promote fromTag → toTag in sessions.
+		if _, err := s.execHook(tx,
+			`INSERT OR IGNORE INTO session_tags (session_id, tag)
+			 SELECT session_id, ? FROM session_tags WHERE tag = ?`,
+			to, from,
+		); err != nil {
+			return fmt.Errorf("merge session_tags insert: %w", err)
+		}
+		res, err = s.execHook(tx, `DELETE FROM session_tags WHERE tag = ?`, from)
+		if err != nil {
+			return fmt.Errorf("merge session_tags delete: %w", err)
+		}
+		n, _ = res.RowsAffected()
+		sessCount = int(n)
+		return nil
+	})
+	return obsCount, sessCount, err
+}
+
 // ─── Stats ───────────────────────────────────────────────────────────────────
 
 func (s *Store) Stats() (*Stats, error) {
@@ -3134,13 +3185,15 @@ func SuggestTopicKey(typ, title, content string) string {
 // it differs, and scans the text for common technical keywords.
 func SuggestTags(typ, title, content string) []string {
 	family := inferTopicFamily(typ, title, content)
-	if family == "" {
-		family = "topic"
-	}
-	seen := map[string]bool{family: true}
-	tags := []string{family}
+	seen := make(map[string]bool)
+	var tags []string
 
-	if normTyp := normalizeTag(typ); normTyp != "" && !seen[normTyp] {
+	if family != "" && !isBlockedTag(family) {
+		seen[family] = true
+		tags = append(tags, family)
+	}
+
+	if normTyp := normalizeTag(typ); normTyp != "" && !isBlockedTag(normTyp) && !seen[normTyp] {
 		tags = append(tags, normTyp)
 		seen[normTyp] = true
 	}
@@ -3258,9 +3311,73 @@ func normalizeTopicSegment(s string) string {
 	return v
 }
 
+// tagAliases maps non-canonical tag forms to their canonical equivalents.
+// Applied after normalization, so keys must already be lowercase/hyphenated.
+var tagAliases = map[string]string{
+	"authentication": "auth",
+	"authorization":  "auth",
+	"database":       "db",
+	"databases":      "db",
+	"configuration":  "config",
+	"configurations": "config",
+	"deployment":     "deploy",
+	"deployments":    "deploy",
+	"testing":        "test",
+	"tests":          "test",
+	"errors":         "error",
+	"panics":         "panic",
+	"sessions":       "session",
+	"memories":       "memory",
+	"migrations":     "migration",
+	"caching":        "cache",
+	"caches":         "cache",
+	"performances":   "performance",
+	"securities":     "security",
+	"refactoring":    "refactor",
+	"syncing":        "sync",
+	"bugs":           "bug",
+	"fixes":          "bug",
+	"fix":            "bug",
+	"apis":           "api",
+	"configs":        "config",
+	"incidents":      "incident",
+	"patterns":       "pattern",
+	"decisions":      "decision",
+}
+
+// blockedTags contains tags that are too generic to be useful.
+// They are filtered out at storage time and never suggested.
+var blockedTags = map[string]bool{
+	"topic":  true,
+	"general": true,
+	"other":  true,
+	"misc":   true,
+	"stuff":  true,
+	"thing":  true,
+	"things": true,
+	"item":   true,
+	"items":  true,
+	"note":   true,
+	"notes":  true,
+	"update": true,
+	"change": true,
+}
+
+const (
+	// maxTagsPerObservation limits how many tags one observation can hold.
+	maxTagsPerObservation = 10
+	// maxTagsPerSession limits how many tags one session can hold.
+	maxTagsPerSession = 5
+)
+
+// isBlockedTag reports whether a (normalized) tag is too generic to store.
+func isBlockedTag(tag string) bool {
+	return blockedTags[tag]
+}
+
 // normalizeTag lowercases, trims, and replaces any non-alphanumeric character
 // (except hyphens) with a hyphen. Consecutive hyphens are collapsed. Leading
-// and trailing hyphens are stripped.
+// and trailing hyphens are stripped. Alias resolution is applied last.
 func normalizeTag(s string) string {
 	v := strings.TrimSpace(strings.ToLower(s))
 	if v == "" {
@@ -3269,8 +3386,14 @@ func normalizeTag(s string) string {
 	re := regexp.MustCompile(`[^a-z0-9]+`)
 	v = re.ReplaceAllString(v, "-")
 	v = strings.Trim(v, "-")
+	if len(v) < 2 {
+		return ""
+	}
 	if len(v) > 50 {
 		v = v[:50]
+	}
+	if canonical, ok := tagAliases[v]; ok {
+		return canonical
 	}
 	return v
 }
@@ -3281,11 +3404,18 @@ func (s *Store) setTagsForObservationTx(tx *sql.Tx, obsID int64, tags []string) 
 	if _, err := s.execHook(tx, `DELETE FROM observation_tags WHERE observation_id = ?`, obsID); err != nil {
 		return err
 	}
+	seen := make(map[string]bool)
+	count := 0
 	for _, tag := range tags {
 		norm := normalizeTag(tag)
-		if norm == "" {
+		if norm == "" || isBlockedTag(norm) || seen[norm] {
 			continue
 		}
+		if count >= maxTagsPerObservation {
+			break
+		}
+		seen[norm] = true
+		count++
 		if _, err := s.execHook(tx, `INSERT OR IGNORE INTO observation_tags (observation_id, tag) VALUES (?, ?)`, obsID, norm); err != nil {
 			return err
 		}
@@ -3364,11 +3494,18 @@ func (s *Store) setTagsForSessionTx(tx *sql.Tx, sessionID string, tags []string)
 	if _, err := s.execHook(tx, "DELETE FROM session_tags WHERE session_id = ?", sessionID); err != nil {
 		return err
 	}
+	seen := make(map[string]bool)
+	count := 0
 	for _, raw := range tags {
 		tag := normalizeTag(raw)
-		if tag == "" {
+		if tag == "" || isBlockedTag(tag) || seen[tag] {
 			continue
 		}
+		if count >= maxTagsPerSession {
+			break
+		}
+		seen[tag] = true
+		count++
 		if _, err := s.execHook(tx, "INSERT OR IGNORE INTO session_tags (session_id, tag) VALUES (?, ?)", sessionID, tag); err != nil {
 			return err
 		}
