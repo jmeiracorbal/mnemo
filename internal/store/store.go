@@ -1143,10 +1143,10 @@ func (s *Store) recentObservations(project, scope string, limit int, opts Contex
 			}
 		}
 		boostExpr := strings.Join(parts, " + ")
-		query += fmt.Sprintf(" ORDER BY (%s) DESC, o.created_at DESC LIMIT ?", boostExpr)
+		query += fmt.Sprintf(" ORDER BY (%s) DESC, o.created_at DESC, o.id DESC LIMIT ?", boostExpr)
 		args = append(args, boostArgs...)
 	} else {
-		query += " ORDER BY o.created_at DESC LIMIT ?"
+		query += " ORDER BY o.created_at DESC, o.id DESC LIMIT ?"
 	}
 	args = append(args, limit)
 
@@ -1555,7 +1555,7 @@ func (s *Store) searchByFilter(opts SearchOptions, limit int) ([]SearchResult, e
 	args := append([]any{}, boostArgs...)
 
 	q, args = applyObservationFilters(q, args, opts)
-	q += " ORDER BY rank DESC, o.created_at DESC LIMIT ?"
+	q += " ORDER BY rank DESC, o.created_at DESC, o.id DESC LIMIT ?"
 	args = append(args, limit)
 
 	return s.runSearchQuery(q, args)

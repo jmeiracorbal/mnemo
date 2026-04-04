@@ -4877,6 +4877,7 @@ func TestSearchEmptyQueryByTag(t *testing.T) {
 		}
 	}
 
+	// Inserted in order: oldest first. id DESC tiebreaker means last inserted appears first.
 	addObs("auth middleware", "JWT implementation", []string{"auth", "backend"})
 	addObs("cache layer", "Redis setup", []string{"cache", "backend"})
 	addObs("database schema", "migrations", []string{"database"})
@@ -4898,6 +4899,13 @@ func TestSearchEmptyQueryByTag(t *testing.T) {
 		if !found {
 			t.Errorf("result %q missing expected tag 'backend'", r.Title)
 		}
+	}
+	// Verify ordering: most recently inserted (highest id) first.
+	if results[0].Title != "cache layer" {
+		t.Errorf("expected 'cache layer' first (most recent), got: %q", results[0].Title)
+	}
+	if results[1].Title != "auth middleware" {
+		t.Errorf("expected 'auth middleware' second, got: %q", results[1].Title)
 	}
 }
 
@@ -4947,15 +4955,8 @@ func TestSearchBoostTagsRankFirst(t *testing.T) {
 	s := newTestStore(t)
 	newTestSession(t, s, "sess-boost", "mnemo")
 
-	if _, err := s.AddObservation(AddObservationParams{
-		SessionID: "sess-boost",
-		Type:      "decision",
-		Title:     "general decision",
-		Content:   "some architecture note about the system design",
-		Project:   "mnemo",
-	}); err != nil {
-		t.Fatalf("AddObservation: %v", err)
-	}
+	// Tagged obs is inserted first (lower id = older). Without boost it would appear
+	// last (id DESC tiebreaker). With boost it must appear first.
 	if _, err := s.AddObservation(AddObservationParams{
 		SessionID: "sess-boost",
 		Type:      "decision",
@@ -4966,7 +4967,29 @@ func TestSearchBoostTagsRankFirst(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AddObservation: %v", err)
 	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-boost",
+		Type:      "decision",
+		Title:     "general decision",
+		Content:   "some architecture note about the system design",
+		Project:   "mnemo",
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
 
+	// Baseline: without boost, untagged (newer) should appear first.
+	baseline, err := s.Search("architecture note", SearchOptions{Project: "mnemo"})
+	if err != nil {
+		t.Fatalf("Search (baseline): %v", err)
+	}
+	if len(baseline) < 2 {
+		t.Fatalf("baseline: expected at least 2 results, got %d", len(baseline))
+	}
+	if baseline[0].Title != "general decision" {
+		t.Errorf("baseline: expected 'general decision' first (newer), got: %q", baseline[0].Title)
+	}
+
+	// With boost: tagged (older) must appear first.
 	results, err := s.Search("architecture note", SearchOptions{
 		Project:   "mnemo",
 		BoostTags: []string{"auth"},
@@ -4978,7 +5001,7 @@ func TestSearchBoostTagsRankFirst(t *testing.T) {
 		t.Fatalf("expected at least 2 results, got %d", len(results))
 	}
 	if results[0].Title != "auth decision" {
-		t.Errorf("expected auth-tagged observation first, got: %q", results[0].Title)
+		t.Errorf("expected auth-tagged observation first with boost, got: %q", results[0].Title)
 	}
 }
 
@@ -4986,15 +5009,7 @@ func TestRecentObservationsBoostTagsRankFirst(t *testing.T) {
 	s := newTestStore(t)
 	newTestSession(t, s, "sess-ctx-boost", "mnemo")
 
-	if _, err := s.AddObservation(AddObservationParams{
-		SessionID: "sess-ctx-boost",
-		Type:      "decision",
-		Title:     "untagged recent",
-		Content:   "no tags",
-		Project:   "mnemo",
-	}); err != nil {
-		t.Fatalf("AddObservation: %v", err)
-	}
+	// Tagged obs inserted first (lower id = older). Without boost it appears last.
 	if _, err := s.AddObservation(AddObservationParams{
 		SessionID: "sess-ctx-boost",
 		Type:      "decision",
@@ -5005,7 +5020,29 @@ func TestRecentObservationsBoostTagsRankFirst(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("AddObservation: %v", err)
 	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-ctx-boost",
+		Type:      "decision",
+		Title:     "untagged newer",
+		Content:   "no tags",
+		Project:   "mnemo",
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
 
+	// Baseline: without boost, untagged (newer) appears first.
+	baseline, err := s.RecentObservationsOpts("mnemo", "project", 10, ContextOptions{})
+	if err != nil {
+		t.Fatalf("RecentObservationsOpts (baseline): %v", err)
+	}
+	if len(baseline) < 2 {
+		t.Fatalf("baseline: expected 2 observations, got %d", len(baseline))
+	}
+	if baseline[0].Title != "untagged newer" {
+		t.Errorf("baseline: expected 'untagged newer' first, got: %q", baseline[0].Title)
+	}
+
+	// With boost: tagged (older) must appear first.
 	obs, err := s.RecentObservationsOpts("mnemo", "project", 10, ContextOptions{
 		BoostTags: []string{"auth"},
 	})
@@ -5016,7 +5053,7 @@ func TestRecentObservationsBoostTagsRankFirst(t *testing.T) {
 		t.Fatalf("expected 2 observations, got %d", len(obs))
 	}
 	if obs[0].Title != "tagged older" {
-		t.Errorf("expected auth-tagged observation first, got: %q", obs[0].Title)
+		t.Errorf("expected auth-tagged observation first with boost, got: %q", obs[0].Title)
 	}
 }
 
