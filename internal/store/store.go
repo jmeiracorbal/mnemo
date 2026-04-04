@@ -57,6 +57,12 @@ type Observation struct {
 	DeletedAt      *string  `json:"deleted_at,omitempty"`
 }
 
+type TagInfo struct {
+	Tag        string `json:"tag"`
+	Count      int    `json:"count"`
+	LastUsedAt string `json:"last_used_at"`
+}
+
 type SearchResult struct {
 	Observation
 	Rank float64 `json:"rank"`
@@ -106,11 +112,23 @@ type TimelineResult struct {
 }
 
 type SearchOptions struct {
-	Type    string   `json:"type,omitempty"`
-	Project string   `json:"project,omitempty"`
-	Scope   string   `json:"scope,omitempty"`
-	Tags    []string `json:"tags,omitempty"`
-	Limit   int      `json:"limit,omitempty"`
+	Type      string   `json:"type,omitempty"`
+	Project   string   `json:"project,omitempty"`
+	Scope     string   `json:"scope,omitempty"`
+	TopicKey  string   `json:"topic_key,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
+	PreferTags []string `json:"prefer_tags,omitempty"`
+	Limit     int      `json:"limit,omitempty"`
+}
+
+// ContextOptions controls retrieval behaviour in RecentObservations / FormatContext.
+type ContextOptions struct {
+	// Tags is a hard filter: only observations with ALL listed tags are included.
+	Tags []string
+	// PreferTags is a soft signal: observations matching more of these tags rank higher.
+	PreferTags []string
+	// TopicKey boosts observations that share this topic_key without excluding others.
+	TopicKey string
 }
 
 type AddObservationParams struct {
@@ -1066,6 +1084,15 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 // RecentObservations returns recent observations for context retrieval.
 // Optional tags parameter filters to observations that have ALL specified tags.
 func (s *Store) RecentObservations(project, scope string, limit int, tags ...string) ([]Observation, error) {
+	return s.recentObservations(project, scope, limit, ContextOptions{Tags: tags})
+}
+
+// RecentObservationsOpts is like RecentObservations but accepts full ContextOptions.
+func (s *Store) RecentObservationsOpts(project, scope string, limit int, opts ContextOptions) ([]Observation, error) {
+	return s.recentObservations(project, scope, limit, opts)
+}
+
+func (s *Store) recentObservations(project, scope string, limit int, opts ContextOptions) ([]Observation, error) {
 	if limit <= 0 {
 		limit = s.cfg.MaxContextResults
 	}
@@ -1074,10 +1101,10 @@ func (s *Store) RecentObservations(project, scope string, limit int, tags ...str
 		SELECT o.id, ifnull(o.sync_id, '') as sync_id, o.session_id, o.type, o.title, o.content, o.tool_name, o.project,
 		       o.scope, o.topic_key, o.revision_count, o.duplicate_count, o.last_seen_at, o.created_at, o.updated_at, o.deleted_at
 		FROM observations o
-		WHERE o.deleted_at IS NULL
-	`
-	args := []any{}
+		WHERE o.deleted_at IS NULL`
+	var args []any
 
+	// Hard filters (WHERE clause) — args must come before boost args.
 	if project != "" {
 		query += " AND o.project = ?"
 		args = append(args, project)
@@ -1086,14 +1113,41 @@ func (s *Store) RecentObservations(project, scope string, limit int, tags ...str
 		query += " AND o.scope = ?"
 		args = append(args, normalizeScope(scope))
 	}
-	for _, tag := range tags {
+	for _, tag := range opts.Tags {
 		if norm := normalizeTag(tag); norm != "" {
 			query += " AND o.id IN (SELECT observation_id FROM observation_tags WHERE tag = ?)"
 			args = append(args, norm)
 		}
 	}
 
-	query += " ORDER BY o.created_at DESC LIMIT ?"
+	// Soft boost (ORDER BY expression) — args must come after WHERE args.
+	boostTags := normalizeTagList(opts.PreferTags)
+	topicKey := strings.TrimSpace(opts.TopicKey)
+
+	if topicKey != "" || len(boostTags) > 0 {
+		var parts []string
+		var boostArgs []any
+		if topicKey != "" {
+			parts = append(parts, "(CASE WHEN o.topic_key = ? THEN 1 ELSE 0 END)")
+			boostArgs = append(boostArgs, topicKey)
+		}
+		if len(boostTags) > 0 {
+			placeholders := strings.Repeat("?,", len(boostTags))
+			placeholders = placeholders[:len(placeholders)-1]
+			parts = append(parts, fmt.Sprintf(
+				"(SELECT COUNT(*) FROM observation_tags bt WHERE bt.observation_id = o.id AND bt.tag IN (%s))",
+				placeholders,
+			))
+			for _, t := range boostTags {
+				boostArgs = append(boostArgs, t)
+			}
+		}
+		boostExpr := strings.Join(parts, " + ")
+		query += fmt.Sprintf(" ORDER BY (%s) DESC, o.created_at DESC, o.id DESC LIMIT ?", boostExpr)
+		args = append(args, boostArgs...)
+	} else {
+		query += " ORDER BY o.created_at DESC, o.id DESC LIMIT ?"
+	}
 	args = append(args, limit)
 
 	return s.queryObservations(query, args...)
@@ -1465,45 +1519,117 @@ func (s *Store) Search(query string, opts SearchOptions) ([]SearchResult, error)
 		limit = s.cfg.MaxSearchResults
 	}
 
-	// Sanitize query for FTS5 — wrap each term in quotes to avoid syntax errors
-	ftsQuery := sanitizeFTS(query)
+	if strings.TrimSpace(query) == "" {
+		return s.searchByFilter(opts, limit)
+	}
+	return s.searchFTS(query, opts, limit)
+}
 
-	sql := `
+// searchByFilter handles Search when query is empty — no FTS, direct table scan.
+// Orders by PreferTags overlap (desc) then created_at (desc).
+func (s *Store) searchByFilter(opts SearchOptions, limit int) ([]SearchResult, error) {
+	boostTags := normalizeTagList(opts.PreferTags)
+
+	var boostExpr string
+	var boostArgs []any
+	if len(boostTags) > 0 {
+		placeholders := strings.Repeat("?,", len(boostTags))
+		placeholders = placeholders[:len(placeholders)-1]
+		boostExpr = fmt.Sprintf(
+			"(SELECT COUNT(*) FROM observation_tags bt WHERE bt.observation_id = o.id AND bt.tag IN (%s))",
+			placeholders,
+		)
+		for _, t := range boostTags {
+			boostArgs = append(boostArgs, t)
+		}
+	} else {
+		boostExpr = "0"
+	}
+
+	q := fmt.Sprintf(`
 		SELECT o.id, ifnull(o.sync_id, '') as sync_id, o.session_id, o.type, o.title, o.content, o.tool_name, o.project,
 		       o.scope, o.topic_key, o.revision_count, o.duplicate_count, o.last_seen_at, o.created_at, o.updated_at, o.deleted_at,
-		       fts.rank
+		       CAST(%s AS REAL) as rank
+		FROM observations o
+		WHERE o.deleted_at IS NULL`, boostExpr)
+	args := append([]any{}, boostArgs...)
+
+	q, args = applyObservationFilters(q, args, opts)
+	q += " ORDER BY rank DESC, o.created_at DESC, o.id DESC LIMIT ?"
+	args = append(args, limit)
+
+	return s.runSearchQuery(q, args)
+}
+
+// searchFTS handles Search when a text query is provided.
+// Tag hard-filter and TopicKey filter are applied as WHERE clauses.
+// PreferTags add a secondary sort by overlap count after FTS rank.
+func (s *Store) searchFTS(query string, opts SearchOptions, limit int) ([]SearchResult, error) {
+	ftsQuery := sanitizeFTS(query)
+	boostTags := normalizeTagList(opts.PreferTags)
+
+	var boostExpr string
+	var boostArgs []any
+	if len(boostTags) > 0 {
+		placeholders := strings.Repeat("?,", len(boostTags))
+		placeholders = placeholders[:len(placeholders)-1]
+		boostExpr = fmt.Sprintf(
+			"(SELECT COUNT(*) FROM observation_tags bt WHERE bt.observation_id = o.id AND bt.tag IN (%s))",
+			placeholders,
+		)
+		for _, t := range boostTags {
+			boostArgs = append(boostArgs, t)
+		}
+	} else {
+		boostExpr = "0"
+	}
+
+	q := fmt.Sprintf(`
+		SELECT o.id, ifnull(o.sync_id, '') as sync_id, o.session_id, o.type, o.title, o.content, o.tool_name, o.project,
+		       o.scope, o.topic_key, o.revision_count, o.duplicate_count, o.last_seen_at, o.created_at, o.updated_at, o.deleted_at,
+		       fts.rank - CAST(%s AS REAL) * 0.5 as rank
 		FROM observations_fts fts
 		JOIN observations o ON o.id = fts.rowid
-		WHERE observations_fts MATCH ? AND o.deleted_at IS NULL
-	`
-	args := []any{ftsQuery}
+		WHERE observations_fts MATCH ? AND o.deleted_at IS NULL`, boostExpr)
+	args := append([]any{}, boostArgs...)
+	args = append(args, ftsQuery)
 
+	q, args = applyObservationFilters(q, args, opts)
+	q += " ORDER BY rank LIMIT ?"
+	args = append(args, limit)
+
+	return s.runSearchQuery(q, args)
+}
+
+// applyObservationFilters appends WHERE clauses for Type, Project, Scope, TopicKey and Tags.
+func applyObservationFilters(q string, args []any, opts SearchOptions) (string, []any) {
 	if opts.Type != "" {
-		sql += " AND o.type = ?"
+		q += " AND o.type = ?"
 		args = append(args, opts.Type)
 	}
-
 	if opts.Project != "" {
-		sql += " AND o.project = ?"
+		q += " AND o.project = ?"
 		args = append(args, opts.Project)
 	}
-
 	if opts.Scope != "" {
-		sql += " AND o.scope = ?"
+		q += " AND o.scope = ?"
 		args = append(args, normalizeScope(opts.Scope))
 	}
-
+	if opts.TopicKey != "" {
+		q += " AND o.topic_key = ?"
+		args = append(args, opts.TopicKey)
+	}
 	for _, tag := range opts.Tags {
 		if norm := normalizeTag(tag); norm != "" {
-			sql += " AND o.id IN (SELECT observation_id FROM observation_tags WHERE tag = ?)"
+			q += " AND o.id IN (SELECT observation_id FROM observation_tags WHERE tag = ?)"
 			args = append(args, norm)
 		}
 	}
+	return q, args
+}
 
-	sql += " ORDER BY fts.rank LIMIT ?"
-	args = append(args, limit)
-
-	rows, err := s.queryItHook(s.db, sql, args...)
+func (s *Store) runSearchQuery(q string, args []any) ([]SearchResult, error) {
+	rows, err := s.queryItHook(s.db, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
@@ -1527,6 +1653,55 @@ func (s *Store) Search(query string, opts SearchOptions) ([]SearchResult, error)
 	}
 	s.loadTagsForSearchResults(results)
 	return results, nil
+}
+
+// normalizeTagList normalizes and deduplicates a slice of raw tag strings.
+func normalizeTagList(raw []string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, r := range raw {
+		if n := normalizeTag(r); n != "" && !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// ─── Tags ────────────────────────────────────────────────────────────────────
+
+// ListTags returns the tags in use for a project, ordered by frequency.
+// Includes last_used_at derived from the most recent observation with that tag.
+func (s *Store) ListTags(project string) ([]TagInfo, error) {
+	q := `
+		SELECT ot.tag,
+		       COUNT(*) AS count,
+		       MAX(o.created_at) AS last_used_at
+		FROM observation_tags ot
+		JOIN observations o ON o.id = ot.observation_id
+		WHERE o.deleted_at IS NULL`
+	var args []any
+	if project != "" {
+		q += " AND o.project = ?"
+		args = append(args, project)
+	}
+	q += " GROUP BY ot.tag ORDER BY count DESC, ot.tag ASC"
+
+	rows, err := s.queryItHook(s.db, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list tags: %w", err)
+	}
+	defer rows.Close()
+
+	var tags []TagInfo
+	for rows.Next() {
+		var ti TagInfo
+		if err := rows.Scan(&ti.Tag, &ti.Count, &ti.LastUsedAt); err != nil {
+			return nil, err
+		}
+		tags = append(tags, ti)
+	}
+	return tags, rows.Err()
 }
 
 // ─── Stats ───────────────────────────────────────────────────────────────────
@@ -1560,12 +1735,17 @@ func (s *Store) Stats() (*Stats, error) {
 // FormatContext returns a formatted context string for agent consumption.
 // Optional tags parameter filters the observations included in the context.
 func (s *Store) FormatContext(project, scope string, tags ...string) (string, error) {
+	return s.FormatContextOpts(project, scope, ContextOptions{Tags: tags})
+}
+
+// FormatContextOpts is like FormatContext but accepts full ContextOptions.
+func (s *Store) FormatContextOpts(project, scope string, opts ContextOptions) (string, error) {
 	sessions, err := s.RecentSessions(project, 5)
 	if err != nil {
 		return "", err
 	}
 
-	observations, err := s.RecentObservations(project, scope, s.cfg.MaxContextResults, tags...)
+	observations, err := s.recentObservations(project, scope, s.cfg.MaxContextResults, opts)
 	if err != nil {
 		return "", err
 	}

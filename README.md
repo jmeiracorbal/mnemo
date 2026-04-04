@@ -47,7 +47,7 @@ Only after this step proceed with agent setup.
 ## Features
 
 - **Session hooks:** Automatically starts/ends sessions and injects memory context at the beginning of every conversation
-- **14 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_session_summary`, and more, available directly inside your editor
+- **15 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_session_summary`, `mem_list_tags`, and more, available directly inside your editor
 - **Passive capture:** Extracts learnings from conversation transcripts automatically at session end
 - **Full CLI:** Save, search, export, import, and inspect memories from the terminal
 - **Own storage:** Isolated `~/.mnemo/memory.db`, created automatically on first run
@@ -194,25 +194,41 @@ On session start, mnemo detects the project from the git root directory name and
 
 Tools available inside your editor via the `mcp__mnemo__*` namespace:
 
-### Agent profile (default, 11 tools)
+### Agent profile (default, 12 tools)
 
 | Tool | Description |
 |---|---|
-| `mem_save` | Save a memory with title, content, type, and optional topic key |
-| `mem_search` | Full-text search across all memories |
+| `mem_save` | Save a memory with title, content, type, tags, and optional topic key |
+| `mem_search` | Search memories — by text, tags, topic key, or any combination |
 | `mem_context` | Retrieve formatted context from previous sessions |
 | `mem_session_summary` | Save an end-of-session summary with goal, discoveries, next steps |
 | `mem_session_start` | Register a new session |
-| `mem_session_end` | Mark a session as completed |
+| `mem_session_end` | Mark a session as completed, optionally with tags |
 | `mem_get_observation` | Retrieve full content of a memory by ID |
 | `mem_suggest_topic_key` | Suggest a topic key for deduplication |
 | `mem_capture_passive` | Extract and save learnings from free-form text |
 | `mem_save_prompt` | Save a prompt template |
-| `mem_update` | Update an existing memory |
+| `mem_update` | Update an existing memory, including tags |
+| `mem_list_tags` | List all tags in use for a project, ordered by frequency |
 
 ### Admin profile (3 tools)
 
 Available with `--tools=admin`: `mem_delete`, `mem_stats`, `mem_timeline`.
+
+### Search modes
+
+`mem_search` supports several independent intents. They compose:
+
+| Parameter | Type | Semantics |
+|---|---|---|
+| `query` | text, optional | Full-text search via FTS5. Omit to browse by other filters. |
+| `tags` | comma list | Hard filter. Only observations that have **all** listed tags are returned. |
+| `prefer_tags` | comma list | Soft signal. Observations matching more of these tags rank higher. Non-matching results are still returned. |
+| `topic_key` | string | Hard filter. Only observations with this exact topic key. |
+| `type` | string | Hard filter by observation type (e.g. `decision`, `bugfix`). |
+| `project` | string | Scope to a project. |
+
+`mem_context` accepts `tags`, `prefer_tags`, and `topic_key` with the same semantics, applied to recent observation retrieval.
 
 ```bash
 claude mcp add -s user mnemo-admin -- ~/.local/bin/mnemo mcp --tools=admin
