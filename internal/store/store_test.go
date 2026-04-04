@@ -4949,9 +4949,9 @@ func TestSearchEmptyQueryByTopicKey(t *testing.T) {
 	}
 }
 
-// ─── Issue #6 + #7: BoostTags y TopicKey boost ───────────────────────────────
+// ─── Issue #6 + #7: PreferTags y TopicKey boost ───────────────────────────────
 
-func TestSearchBoostTagsRankFirst(t *testing.T) {
+func TestSearchPreferTagsRankFirst(t *testing.T) {
 	s := newTestStore(t)
 	newTestSession(t, s, "sess-boost", "mnemo")
 
@@ -4992,7 +4992,7 @@ func TestSearchBoostTagsRankFirst(t *testing.T) {
 	// With boost: tagged (older) must appear first.
 	results, err := s.Search("architecture note", SearchOptions{
 		Project:   "mnemo",
-		BoostTags: []string{"auth"},
+		PreferTags: []string{"auth"},
 	})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
@@ -5005,7 +5005,7 @@ func TestSearchBoostTagsRankFirst(t *testing.T) {
 	}
 }
 
-func TestRecentObservationsBoostTagsRankFirst(t *testing.T) {
+func TestRecentObservationsPreferTagsRankFirst(t *testing.T) {
 	s := newTestStore(t)
 	newTestSession(t, s, "sess-ctx-boost", "mnemo")
 
@@ -5044,7 +5044,7 @@ func TestRecentObservationsBoostTagsRankFirst(t *testing.T) {
 
 	// With boost: tagged (older) must appear first.
 	obs, err := s.RecentObservationsOpts("mnemo", "project", 10, ContextOptions{
-		BoostTags: []string{"auth"},
+		PreferTags: []string{"auth"},
 	})
 	if err != nil {
 		t.Fatalf("RecentObservationsOpts: %v", err)

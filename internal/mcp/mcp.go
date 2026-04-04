@@ -173,7 +173,7 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 				mcp.WithString("tags",
 					mcp.Description("Comma-separated tags to filter by (e.g. \"auth,backend\"). Only observations with ALL listed tags are returned."),
 				),
-				mcp.WithString("boost_tags",
+				mcp.WithString("prefer_tags",
 					mcp.Description("Comma-separated tags for soft ranking (e.g. \"auth,backend\"). Observations matching more of these tags rank higher; non-matching observations are still included."),
 				),
 				mcp.WithString("topic_key",
@@ -387,7 +387,7 @@ Examples:
 				mcp.WithString("tags",
 					mcp.Description("Comma-separated tags to filter observations (e.g. \"auth,backend\"). Only observations with ALL listed tags are included."),
 				),
-				mcp.WithString("boost_tags",
+				mcp.WithString("prefer_tags",
 					mcp.Description("Comma-separated tags for soft ranking. Observations matching more of these tags are surfaced first."),
 				),
 				mcp.WithString("topic_key",
@@ -631,7 +631,7 @@ func handleSearch(s *store.Store) server.ToolHandlerFunc {
 		topicKey, _ := req.GetArguments()["topic_key"].(string)
 		limit := intArg(req, "limit", 10)
 		tagsRaw, _ := req.GetArguments()["tags"].(string)
-		boostTagsRaw, _ := req.GetArguments()["boost_tags"].(string)
+		boostTagsRaw, _ := req.GetArguments()["prefer_tags"].(string)
 
 		results, err := s.Search(query, store.SearchOptions{
 			Type:      typ,
@@ -639,7 +639,7 @@ func handleSearch(s *store.Store) server.ToolHandlerFunc {
 			Scope:     scope,
 			TopicKey:  topicKey,
 			Tags:      parseTags(tagsRaw),
-			BoostTags: parseTags(boostTagsRaw),
+			PreferTags: parseTags(boostTagsRaw),
 			Limit:     limit,
 		})
 		if err != nil {
@@ -864,11 +864,11 @@ func handleContext(s *store.Store) server.ToolHandlerFunc {
 		scope, _ := req.GetArguments()["scope"].(string)
 		topicKey, _ := req.GetArguments()["topic_key"].(string)
 		tagsRaw, _ := req.GetArguments()["tags"].(string)
-		boostTagsRaw, _ := req.GetArguments()["boost_tags"].(string)
+		boostTagsRaw, _ := req.GetArguments()["prefer_tags"].(string)
 
 		ctx2, err := s.FormatContextOpts(project, scope, store.ContextOptions{
 			Tags:      parseTags(tagsRaw),
-			BoostTags: parseTags(boostTagsRaw),
+			PreferTags: parseTags(boostTagsRaw),
 			TopicKey:  topicKey,
 		})
 		if err != nil {

@@ -117,7 +117,7 @@ type SearchOptions struct {
 	Scope     string   `json:"scope,omitempty"`
 	TopicKey  string   `json:"topic_key,omitempty"`
 	Tags      []string `json:"tags,omitempty"`
-	BoostTags []string `json:"boost_tags,omitempty"`
+	PreferTags []string `json:"prefer_tags,omitempty"`
 	Limit     int      `json:"limit,omitempty"`
 }
 
@@ -125,8 +125,8 @@ type SearchOptions struct {
 type ContextOptions struct {
 	// Tags is a hard filter: only observations with ALL listed tags are included.
 	Tags []string
-	// BoostTags is a soft signal: observations matching more of these tags rank higher.
-	BoostTags []string
+	// PreferTags is a soft signal: observations matching more of these tags rank higher.
+	PreferTags []string
 	// TopicKey boosts observations that share this topic_key without excluding others.
 	TopicKey string
 }
@@ -1121,7 +1121,7 @@ func (s *Store) recentObservations(project, scope string, limit int, opts Contex
 	}
 
 	// Soft boost (ORDER BY expression) — args must come after WHERE args.
-	boostTags := normalizeTagList(opts.BoostTags)
+	boostTags := normalizeTagList(opts.PreferTags)
 	topicKey := strings.TrimSpace(opts.TopicKey)
 
 	if topicKey != "" || len(boostTags) > 0 {
@@ -1526,9 +1526,9 @@ func (s *Store) Search(query string, opts SearchOptions) ([]SearchResult, error)
 }
 
 // searchByFilter handles Search when query is empty — no FTS, direct table scan.
-// Orders by BoostTags overlap (desc) then created_at (desc).
+// Orders by PreferTags overlap (desc) then created_at (desc).
 func (s *Store) searchByFilter(opts SearchOptions, limit int) ([]SearchResult, error) {
-	boostTags := normalizeTagList(opts.BoostTags)
+	boostTags := normalizeTagList(opts.PreferTags)
 
 	var boostExpr string
 	var boostArgs []any
@@ -1563,10 +1563,10 @@ func (s *Store) searchByFilter(opts SearchOptions, limit int) ([]SearchResult, e
 
 // searchFTS handles Search when a text query is provided.
 // Tag hard-filter and TopicKey filter are applied as WHERE clauses.
-// BoostTags add a secondary sort by overlap count after FTS rank.
+// PreferTags add a secondary sort by overlap count after FTS rank.
 func (s *Store) searchFTS(query string, opts SearchOptions, limit int) ([]SearchResult, error) {
 	ftsQuery := sanitizeFTS(query)
-	boostTags := normalizeTagList(opts.BoostTags)
+	boostTags := normalizeTagList(opts.PreferTags)
 
 	var boostExpr string
 	var boostArgs []any
