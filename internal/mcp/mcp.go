@@ -61,6 +61,7 @@ var ProfileAgent = map[string]bool{
 	"mem_capture_passive":   true,
 	"mem_save_prompt":       true,
 	"mem_update":            true,
+	"mem_list_tags":         true,
 }
 
 // ProfileAdmin contains tools for CLI curation and dashboards.
@@ -155,8 +156,7 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 				mcp.WithIdempotentHintAnnotation(true),
 				mcp.WithOpenWorldHintAnnotation(false),
 				mcp.WithString("query",
-					mcp.Required(),
-					mcp.Description("Search query — natural language or keywords"),
+					mcp.Description("Search query — natural language or keywords. Optional: omit to browse by tags, topic_key, or other filters."),
 				),
 				mcp.WithString("type",
 					mcp.Description("Filter by type: tool_use, file_change, command, file_read, search, manual, decision, architecture, bugfix, pattern"),
@@ -172,6 +172,12 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 				),
 				mcp.WithString("tags",
 					mcp.Description("Comma-separated tags to filter by (e.g. \"auth,backend\"). Only observations with ALL listed tags are returned."),
+				),
+				mcp.WithString("boost_tags",
+					mcp.Description("Comma-separated tags for soft ranking (e.g. \"auth,backend\"). Observations matching more of these tags rank higher; non-matching observations are still included."),
+				),
+				mcp.WithString("topic_key",
+					mcp.Description("Filter by topic key (e.g. \"auth/jwt-middleware\"). Only observations with this exact topic_key are returned."),
 				),
 			),
 			handleSearch(s),
@@ -381,8 +387,32 @@ Examples:
 				mcp.WithString("tags",
 					mcp.Description("Comma-separated tags to filter observations (e.g. \"auth,backend\"). Only observations with ALL listed tags are included."),
 				),
+				mcp.WithString("boost_tags",
+					mcp.Description("Comma-separated tags for soft ranking. Observations matching more of these tags are surfaced first."),
+				),
+				mcp.WithString("topic_key",
+					mcp.Description("Topic key to prioritize (e.g. \"auth/jwt-middleware\"). Observations with this topic_key are ranked first; others are still included."),
+				),
 			),
 			handleContext(s),
+		)
+	}
+
+	// ─── mem_list_tags ───────────────────────────────────────────────────
+	if shouldRegister("mem_list_tags", allowlist) {
+		srv.AddTool(
+			mcp.NewTool("mem_list_tags",
+				mcp.WithDescription("List all tags in use for a project, ordered by frequency. Use this to discover the tag vocabulary before filtering or searching."),
+				mcp.WithTitleAnnotation("List Tags"),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
+				mcp.WithString("project",
+					mcp.Description("Project name (omit for all projects)"),
+				),
+			),
+			handleListTags(s),
 		)
 	}
 
@@ -598,21 +628,28 @@ func handleSearch(s *store.Store) server.ToolHandlerFunc {
 		typ, _ := req.GetArguments()["type"].(string)
 		project, _ := req.GetArguments()["project"].(string)
 		scope, _ := req.GetArguments()["scope"].(string)
+		topicKey, _ := req.GetArguments()["topic_key"].(string)
 		limit := intArg(req, "limit", 10)
 		tagsRaw, _ := req.GetArguments()["tags"].(string)
+		boostTagsRaw, _ := req.GetArguments()["boost_tags"].(string)
 
 		results, err := s.Search(query, store.SearchOptions{
-			Type:    typ,
-			Project: project,
-			Scope:   scope,
-			Tags:    parseTags(tagsRaw),
-			Limit:   limit,
+			Type:      typ,
+			Project:   project,
+			Scope:     scope,
+			TopicKey:  topicKey,
+			Tags:      parseTags(tagsRaw),
+			BoostTags: parseTags(boostTagsRaw),
+			Limit:     limit,
 		})
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Search error: %s. Try simpler keywords.", err)), nil
 		}
 
 		if len(results) == 0 {
+			if query == "" {
+				return mcp.NewToolResultText("No memories found matching the specified filters."), nil
+			}
 			return mcp.NewToolResultText(fmt.Sprintf("No memories found for: %q", query)), nil
 		}
 
@@ -825,9 +862,15 @@ func handleContext(s *store.Store) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		project, _ := req.GetArguments()["project"].(string)
 		scope, _ := req.GetArguments()["scope"].(string)
+		topicKey, _ := req.GetArguments()["topic_key"].(string)
 		tagsRaw, _ := req.GetArguments()["tags"].(string)
+		boostTagsRaw, _ := req.GetArguments()["boost_tags"].(string)
 
-		ctx2, err := s.FormatContext(project, scope, parseTags(tagsRaw)...)
+		ctx2, err := s.FormatContextOpts(project, scope, store.ContextOptions{
+			Tags:      parseTags(tagsRaw),
+			BoostTags: parseTags(boostTagsRaw),
+			TopicKey:  topicKey,
+		})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to get context: " + err.Error()), nil
 		}
@@ -848,6 +891,36 @@ func handleContext(s *store.Store) server.ToolHandlerFunc {
 			ctx2, stats.TotalSessions, stats.TotalObservations, projects)
 
 		return mcp.NewToolResultText(result), nil
+	}
+}
+
+func handleListTags(s *store.Store) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		project, _ := req.GetArguments()["project"].(string)
+
+		tags, err := s.ListTags(project)
+		if err != nil {
+			return mcp.NewToolResultError("Failed to list tags: " + err.Error()), nil
+		}
+
+		if len(tags) == 0 {
+			msg := "No tags found"
+			if project != "" {
+				msg += " for project " + project
+			}
+			return mcp.NewToolResultText(msg + "."), nil
+		}
+
+		var b strings.Builder
+		if project != "" {
+			fmt.Fprintf(&b, "Tags for project %q (%d total):\n\n", project, len(tags))
+		} else {
+			fmt.Fprintf(&b, "Tags across all projects (%d total):\n\n", len(tags))
+		}
+		for _, ti := range tags {
+			fmt.Fprintf(&b, "  %-30s %d uses  (last: %s)\n", ti.Tag, ti.Count, ti.LastUsedAt)
+		}
+		return mcp.NewToolResultText(b.String()), nil
 	}
 }
 

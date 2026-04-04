@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -4853,5 +4854,306 @@ func TestSuggestTagsExactTokenMatch(t *testing.T) {
 	}
 	if !tagSet["ci"] {
 		t.Errorf("expected 'ci' tag when 'ci' appears as a whole word, got: %v", tags)
+	}
+}
+
+// ─── Issue #5: query-optional Search ─────────────────────────────────────────
+
+func TestSearchEmptyQueryByTag(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-browse", "mnemo")
+
+	addObs := func(title, content string, tags []string) {
+		t.Helper()
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-browse",
+			Type:      "decision",
+			Title:     title,
+			Content:   content,
+			Project:   "mnemo",
+			Tags:      tags,
+		}); err != nil {
+			t.Fatalf("AddObservation(%q): %v", title, err)
+		}
+	}
+
+	addObs("auth middleware", "JWT implementation", []string{"auth", "backend"})
+	addObs("cache layer", "Redis setup", []string{"cache", "backend"})
+	addObs("database schema", "migrations", []string{"database"})
+
+	results, err := s.Search("", SearchOptions{Project: "mnemo", Tags: []string{"backend"}})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results for tag 'backend', got %d", len(results))
+	}
+	for _, r := range results {
+		found := false
+		for _, tag := range r.Tags {
+			if tag == "backend" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("result %q missing expected tag 'backend'", r.Title)
+		}
+	}
+}
+
+func TestSearchEmptyQueryByTopicKey(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-topickey", "mnemo")
+
+	// Note: AddObservation upserts by topic_key — each unique key gets one observation.
+	for i, tk := range []string{"auth/jwt", "auth/session", "cache/redis"} {
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-topickey",
+			Type:      "decision",
+			Title:     fmt.Sprintf("obs %d", i),
+			Content:   fmt.Sprintf("unique content for topic %s", tk),
+			Project:   "mnemo",
+			TopicKey:  tk,
+		}); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+
+	// Filter by exact topic_key — should return exactly 1
+	results, err := s.Search("", SearchOptions{Project: "mnemo", TopicKey: "auth/jwt"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result for topic_key 'auth/jwt', got %d", len(results))
+	}
+	if derefString(results[0].TopicKey) != "auth/jwt" {
+		t.Errorf("result has wrong topic_key: %v", results[0].TopicKey)
+	}
+
+	// Non-matching topic_key — should return 0
+	results2, err := s.Search("", SearchOptions{Project: "mnemo", TopicKey: "auth"})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results2) != 0 {
+		t.Fatalf("expected 0 results for non-matching topic_key 'auth', got %d", len(results2))
+	}
+}
+
+// ─── Issue #6 + #7: BoostTags y TopicKey boost ───────────────────────────────
+
+func TestSearchBoostTagsRankFirst(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-boost", "mnemo")
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-boost",
+		Type:      "decision",
+		Title:     "general decision",
+		Content:   "some architecture note about the system design",
+		Project:   "mnemo",
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-boost",
+		Type:      "decision",
+		Title:     "auth decision",
+		Content:   "some architecture note about auth and security concerns",
+		Project:   "mnemo",
+		Tags:      []string{"auth"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	results, err := s.Search("architecture note", SearchOptions{
+		Project:   "mnemo",
+		BoostTags: []string{"auth"},
+	})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) < 2 {
+		t.Fatalf("expected at least 2 results, got %d", len(results))
+	}
+	if results[0].Title != "auth decision" {
+		t.Errorf("expected auth-tagged observation first, got: %q", results[0].Title)
+	}
+}
+
+func TestRecentObservationsBoostTagsRankFirst(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-ctx-boost", "mnemo")
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-ctx-boost",
+		Type:      "decision",
+		Title:     "untagged recent",
+		Content:   "no tags",
+		Project:   "mnemo",
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-ctx-boost",
+		Type:      "decision",
+		Title:     "tagged older",
+		Content:   "has auth tag",
+		Project:   "mnemo",
+		Tags:      []string{"auth"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	obs, err := s.RecentObservationsOpts("mnemo", "project", 10, ContextOptions{
+		BoostTags: []string{"auth"},
+	})
+	if err != nil {
+		t.Fatalf("RecentObservationsOpts: %v", err)
+	}
+	if len(obs) < 2 {
+		t.Fatalf("expected 2 observations, got %d", len(obs))
+	}
+	if obs[0].Title != "tagged older" {
+		t.Errorf("expected auth-tagged observation first, got: %q", obs[0].Title)
+	}
+}
+
+func TestRecentObservationsTopicKeyBoost(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-tk-boost", "mnemo")
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-tk-boost",
+		Type:      "decision",
+		Title:     "unrelated",
+		Content:   "no topic key",
+		Project:   "mnemo",
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-tk-boost",
+		Type:      "decision",
+		Title:     "auth jwt observation",
+		Content:   "has topic key",
+		Project:   "mnemo",
+		TopicKey:  "auth/jwt",
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	obs, err := s.RecentObservationsOpts("mnemo", "project", 10, ContextOptions{
+		TopicKey: "auth/jwt",
+	})
+	if err != nil {
+		t.Fatalf("RecentObservationsOpts: %v", err)
+	}
+	if len(obs) < 2 {
+		t.Fatalf("expected 2 observations, got %d", len(obs))
+	}
+	if obs[0].Title != "auth jwt observation" {
+		t.Errorf("expected topic_key observation first, got: %q", obs[0].Title)
+	}
+	if obs[1].Title != "unrelated" {
+		t.Errorf("expected unrelated observation second, got: %q", obs[1].Title)
+	}
+}
+
+// ─── Issue #8: ListTags ───────────────────────────────────────────────────────
+
+func TestListTagsReturnsFrequency(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-listtags", "mnemo")
+
+	add := func(title string, tags []string) {
+		t.Helper()
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-listtags",
+			Type:      "decision",
+			Title:     title,
+			Content:   "content",
+			Project:   "mnemo",
+			Tags:      tags,
+		}); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+
+	add("obs 1", []string{"auth", "backend"})
+	add("obs 2", []string{"auth", "database"})
+	add("obs 3", []string{"auth"})
+
+	tags, err := s.ListTags("mnemo")
+	if err != nil {
+		t.Fatalf("ListTags: %v", err)
+	}
+
+	byTag := make(map[string]TagInfo)
+	for _, ti := range tags {
+		byTag[ti.Tag] = ti
+	}
+
+	if byTag["auth"].Count != 3 {
+		t.Errorf("expected auth count=3, got %d", byTag["auth"].Count)
+	}
+	if byTag["backend"].Count != 1 {
+		t.Errorf("expected backend count=1, got %d", byTag["backend"].Count)
+	}
+	if byTag["database"].Count != 1 {
+		t.Errorf("expected database count=1, got %d", byTag["database"].Count)
+	}
+	if tags[0].Tag != "auth" {
+		t.Errorf("expected auth first by frequency, got %q", tags[0].Tag)
+	}
+	if byTag["auth"].LastUsedAt == "" {
+		t.Error("expected non-empty last_used_at for auth")
+	}
+}
+
+func TestListTagsFiltersByProject(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-lt-proj", "proj-a")
+	newTestSession(t, s, "sess-lt-other", "proj-b")
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-lt-proj",
+		Type:      "decision",
+		Title:     "proj-a obs",
+		Content:   "content",
+		Project:   "proj-a",
+		Tags:      []string{"exclusive-tag"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-lt-other",
+		Type:      "decision",
+		Title:     "proj-b obs",
+		Content:   "content",
+		Project:   "proj-b",
+		Tags:      []string{"other-tag"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	tags, err := s.ListTags("proj-a")
+	if err != nil {
+		t.Fatalf("ListTags: %v", err)
+	}
+	for _, ti := range tags {
+		if ti.Tag == "other-tag" {
+			t.Errorf("ListTags(proj-a) returned tag from proj-b: %q", ti.Tag)
+		}
+	}
+	found := false
+	for _, ti := range tags {
+		if ti.Tag == "exclusive-tag" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected 'exclusive-tag' in ListTags(proj-a)")
 	}
 }
