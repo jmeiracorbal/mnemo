@@ -5505,12 +5505,20 @@ func TestTagStatsUnusedSince(t *testing.T) {
 		return id
 	}
 
-	add("obs1", []string{"fresh"})
+	freshID := add("obs1", []string{"fresh"})
 	staleID := add("obs2", []string{"stale-tag"})
 
-	// Backdate the stale observation to 2025.
+	// Pin both timestamps so the test does not depend on the current clock.
 	cutoff := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	fresh := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
 	past := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := s.db.Exec(
+		"UPDATE observations SET created_at = ? WHERE id = ?",
+		fresh.UTC().Format(time.RFC3339),
+		freshID,
+	); err != nil {
+		t.Fatalf("set fresh observation time: %v", err)
+	}
 	if _, err := s.db.Exec(
 		"UPDATE observations SET created_at = ? WHERE id = ?",
 		past.UTC().Format(time.RFC3339),
@@ -5693,5 +5701,34 @@ func TestTagWeightsBasic(t *testing.T) {
 	// backend is in the middle → 0 < score < 1.
 	if byTag["backend"].RecencyScore <= 0 || byTag["backend"].RecencyScore >= 1 {
 		t.Errorf("backend RecencyScore should be between 0 and 1, got %f", byTag["backend"].RecencyScore)
+	}
+}
+
+func TestTagStatsSortByAlpha(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-ts-alpha", "proj-alpha")
+
+	for _, tag := range []string{"zeta", "alpha", "mango"} {
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-ts-alpha",
+			Type:      "decision",
+			Title:     tag,
+			Content:   "content",
+			Project:   "proj-alpha",
+			Tags:      []string{tag},
+		}); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+
+	tags, err := s.TagStats("proj-alpha", TagStatsOptions{SortBy: "alpha"})
+	if err != nil {
+		t.Fatalf("TagStats: %v", err)
+	}
+	if len(tags) != 3 {
+		t.Fatalf("expected 3 tags, got %d", len(tags))
+	}
+	if tags[0].Tag != "alpha" || tags[1].Tag != "mango" || tags[2].Tag != "zeta" {
+		t.Fatalf("unexpected alpha ordering: %v %v %v", tags[0].Tag, tags[1].Tag, tags[2].Tag)
 	}
 }

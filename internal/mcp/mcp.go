@@ -986,13 +986,31 @@ func handleListTags(s *store.Store) server.ToolHandlerFunc {
 func handleTagStats(s *store.Store) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		project, _ := req.GetArguments()["project"].(string)
-		sortBy, _ := req.GetArguments()["sort_by"].(string)
 		unusedSinceStr, _ := req.GetArguments()["unused_since"].(string)
 
+		sortBy, _ := req.GetArguments()["sort_by"].(string)
+		validSortKeys := map[string]bool{"": true, "freq": true, "stale": true, "alpha": true}
+		if !validSortKeys[sortBy] {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid sort_by %q: accepted values are 'freq', 'stale', 'alpha'", sortBy)), nil
+		}
+
+		minCount := intArg(req, "min_count", 0)
+		maxCount := intArg(req, "max_count", 0)
+		limit := intArg(req, "limit", 20)
+		if minCount < 0 {
+			return mcp.NewToolResultError("min_count must be >= 0"), nil
+		}
+		if maxCount < 0 {
+			return mcp.NewToolResultError("max_count must be >= 0"), nil
+		}
+		if limit < 0 {
+			return mcp.NewToolResultError("limit must be >= 0"), nil
+		}
+
 		opts := store.TagStatsOptions{
-			MinCount: intArg(req, "min_count", 0),
-			MaxCount: intArg(req, "max_count", 0),
-			Limit:    intArg(req, "limit", 20),
+			MinCount: minCount,
+			MaxCount: maxCount,
+			Limit:    limit,
 			SortBy:   sortBy,
 		}
 		if unusedSinceStr != "" {

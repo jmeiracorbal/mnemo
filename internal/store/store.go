@@ -1735,7 +1735,7 @@ func (s *Store) TagStats(project string, opts TagStatsOptions) ([]TagInfo, error
 	q := `
 		SELECT ot.tag,
 		       COUNT(*) AS cnt,
-		       MAX(o.created_at) AS last_used_at
+		       MAX(datetime(o.created_at)) AS last_used_at
 		FROM observation_tags ot
 		JOIN observations o ON o.id = ot.observation_id
 		WHERE o.deleted_at IS NULL`
@@ -1757,7 +1757,7 @@ func (s *Store) TagStats(project string, opts TagStatsOptions) ([]TagInfo, error
 		args = append(args, opts.MaxCount)
 	}
 	if !opts.UnusedSince.IsZero() {
-		having = append(having, "MAX(o.created_at) < ?")
+		having = append(having, "datetime(MAX(o.created_at)) < datetime(?)")
 		args = append(args, opts.UnusedSince.UTC().Format(time.RFC3339))
 	}
 	if len(having) > 0 {
@@ -1799,18 +1799,33 @@ func (s *Store) TagStats(project string, opts TagStatsOptions) ([]TagInfo, error
 // topN controls the IsDominant threshold: the top N tags by frequency are marked dominant.
 // RecencyScore is normalised to [0.0, 1.0] within the provided set.
 // Not yet used in retrieval — prepared for a future weighting phase.
+// parseTagTimestamp parses a tag's LastUsedAt field, trying RFC3339 first and
+// then the SQLite default datetime layout as a fallback.
+func parseTagTimestamp(s string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	return time.ParseInLocation("2006-01-02 15:04:05", s, time.UTC)
+}
+
 func tagWeights(tags []TagInfo, topN int, now time.Time) []TagWeight {
 	if len(tags) == 0 {
 		return nil
+	}
+
+	// Clamp topN to avoid a negative map capacity.
+	n := topN
+	if n < 0 {
+		n = 0
 	}
 
 	// Determine dominant tags by frequency (independent of input order).
 	sorted := make([]TagInfo, len(tags))
 	copy(sorted, tags)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Count > sorted[j].Count })
-	dominant := make(map[string]bool, topN)
+	dominant := make(map[string]bool, n)
 	for i, ti := range sorted {
-		if i >= topN {
+		if i >= n {
 			break
 		}
 		dominant[ti.Tag] = true
@@ -1819,7 +1834,7 @@ func tagWeights(tags []TagInfo, topN int, now time.Time) []TagWeight {
 	// Find timestamp range for RecencyScore normalisation.
 	var oldest, newest time.Time
 	for _, ti := range tags {
-		t, err := time.Parse(time.RFC3339, ti.LastUsedAt)
+		t, err := parseTagTimestamp(ti.LastUsedAt)
 		if err != nil {
 			continue
 		}
@@ -1839,7 +1854,7 @@ func tagWeights(tags []TagInfo, topN int, now time.Time) []TagWeight {
 			Frequency:  ti.Count,
 			IsDominant: dominant[ti.Tag],
 		}
-		t, err := time.Parse(time.RFC3339, ti.LastUsedAt)
+		t, err := parseTagTimestamp(ti.LastUsedAt)
 		if err == nil {
 			if span > 0 {
 				w.RecencyScore = t.Sub(oldest).Seconds() / span
