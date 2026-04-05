@@ -1750,6 +1750,9 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 			}
 			obsList = append(obsList, r)
 		}
+		if err := obsRows.Err(); err != nil {
+			return fmt.Errorf("merge: iterate observations: %w", err)
+		}
 		obsRows.Close()
 
 		// Collect affected sessions before modifying tags.
@@ -1774,6 +1777,9 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 				return fmt.Errorf("merge: scan session: %w", err)
 			}
 			sessList = append(sessList, r)
+		}
+		if err := sessRows.Err(); err != nil {
+			return fmt.Errorf("merge: iterate sessions: %w", err)
 		}
 		sessRows.Close()
 
