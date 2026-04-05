@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -61,6 +62,30 @@ type TagInfo struct {
 	Tag        string `json:"tag"`
 	Count      int    `json:"count"`
 	LastUsedAt string `json:"last_used_at"`
+}
+
+// TagStatsOptions controls filtering and ordering in TagStats.
+type TagStatsOptions struct {
+	// MinCount includes only tags used at least this many times. Zero means no lower bound.
+	MinCount int
+	// MaxCount includes only tags used at most this many times. Zero means no upper bound.
+	MaxCount int
+	// UnusedSince includes only tags whose last use predates this time. Zero means no filter.
+	UnusedSince time.Time
+	// Limit caps the number of results. Zero means no limit.
+	Limit int
+	// SortBy controls result ordering: "freq" (default, highest first),
+	// "stale" (oldest last_used_at first), or "alpha" (alphabetical).
+	SortBy string
+}
+
+// TagWeight holds observability signals for a single tag.
+// Prepared for use in future retrieval weighting — not yet wired into any ranking path.
+type TagWeight struct {
+	Tag          string
+	Frequency    int
+	RecencyScore float64 // 0.0 (oldest) to 1.0 (most recent), relative to the set
+	IsDominant   bool    // true if this tag is within the top N by frequency
 }
 
 type SearchResult struct {
@@ -1702,6 +1727,144 @@ func (s *Store) ListTags(project string) ([]TagInfo, error) {
 		tags = append(tags, ti)
 	}
 	return tags, rows.Err()
+}
+
+// TagStats returns tags for a project filtered and ordered according to opts.
+// It does not modify ListTags behaviour — both coexist independently.
+func (s *Store) TagStats(project string, opts TagStatsOptions) ([]TagInfo, error) {
+	q := `
+		SELECT ot.tag,
+		       COUNT(*) AS cnt,
+		       MAX(datetime(o.created_at)) AS last_used_at
+		FROM observation_tags ot
+		JOIN observations o ON o.id = ot.observation_id
+		WHERE o.deleted_at IS NULL`
+
+	var args []any
+	if project != "" {
+		q += " AND o.project = ?"
+		args = append(args, project)
+	}
+	q += " GROUP BY ot.tag"
+
+	var having []string
+	if opts.MinCount > 0 {
+		having = append(having, "COUNT(*) >= ?")
+		args = append(args, opts.MinCount)
+	}
+	if opts.MaxCount > 0 {
+		having = append(having, "COUNT(*) <= ?")
+		args = append(args, opts.MaxCount)
+	}
+	if !opts.UnusedSince.IsZero() {
+		having = append(having, "MAX(datetime(o.created_at)) < datetime(?)")
+		args = append(args, opts.UnusedSince.UTC().Format(time.RFC3339))
+	}
+	if len(having) > 0 {
+		q += " HAVING " + strings.Join(having, " AND ")
+	}
+
+	switch opts.SortBy {
+	case "stale":
+		q += " ORDER BY last_used_at ASC, ot.tag ASC"
+	case "alpha":
+		q += " ORDER BY ot.tag ASC"
+	default:
+		q += " ORDER BY cnt DESC, ot.tag ASC"
+	}
+
+	if opts.Limit > 0 {
+		q += " LIMIT ?"
+		args = append(args, opts.Limit)
+	}
+
+	rows, err := s.queryItHook(s.db, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("tag stats: %w", err)
+	}
+	defer rows.Close()
+
+	var tags []TagInfo
+	for rows.Next() {
+		var ti TagInfo
+		if err := rows.Scan(&ti.Tag, &ti.Count, &ti.LastUsedAt); err != nil {
+			return nil, err
+		}
+		tags = append(tags, ti)
+	}
+	return tags, rows.Err()
+}
+
+// tagWeights computes observability signals for a slice of TagInfo.
+// topN controls the IsDominant threshold: the top N tags by frequency are marked dominant.
+// RecencyScore is normalised to [0.0, 1.0] within the provided set.
+// Not yet used in retrieval — prepared for a future weighting phase.
+// parseTagTimestamp parses a tag's LastUsedAt field, trying RFC3339 first and
+// then the SQLite default datetime layout as a fallback.
+func parseTagTimestamp(s string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	return time.ParseInLocation("2006-01-02 15:04:05", s, time.UTC)
+}
+
+func tagWeights(tags []TagInfo, topN int) []TagWeight {
+	if len(tags) == 0 {
+		return nil
+	}
+
+	// Clamp topN to avoid a negative map capacity.
+	n := topN
+	if n < 0 {
+		n = 0
+	}
+
+	// Determine dominant tags by frequency (independent of input order).
+	sorted := make([]TagInfo, len(tags))
+	copy(sorted, tags)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Count > sorted[j].Count })
+	dominant := make(map[string]bool, n)
+	for i, ti := range sorted {
+		if i >= n {
+			break
+		}
+		dominant[ti.Tag] = true
+	}
+
+	// Find timestamp range for RecencyScore normalisation.
+	var oldest, newest time.Time
+	for _, ti := range tags {
+		t, err := parseTagTimestamp(ti.LastUsedAt)
+		if err != nil {
+			continue
+		}
+		if oldest.IsZero() || t.Before(oldest) {
+			oldest = t
+		}
+		if newest.IsZero() || t.After(newest) {
+			newest = t
+		}
+	}
+	span := newest.Sub(oldest).Seconds()
+
+	out := make([]TagWeight, len(tags))
+	for i, ti := range tags {
+		w := TagWeight{
+			Tag:        ti.Tag,
+			Frequency:  ti.Count,
+			IsDominant: dominant[ti.Tag],
+		}
+		t, err := parseTagTimestamp(ti.LastUsedAt)
+		if err == nil {
+			if span > 0 {
+				w.RecencyScore = t.Sub(oldest).Seconds() / span
+			} else {
+				w.RecencyScore = 1.0
+			}
+		}
+		out[i] = w
+	}
+	return out
 }
 
 // MergeTags renames every occurrence of fromTag to toTag across all observations

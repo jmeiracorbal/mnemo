@@ -16,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -63,6 +64,7 @@ var ProfileAgent = map[string]bool{
 	"mem_update":            true,
 	"mem_list_tags":         true,
 	"mem_merge_tags":        true,
+	"mem_tag_stats":         true,
 }
 
 // ProfileAdmin contains tools for CLI curation and dashboards.
@@ -437,6 +439,39 @@ Examples:
 				),
 			),
 			handleMergeTags(s),
+		)
+	}
+
+	// ─── mem_tag_stats ──────────────────────────────────────────────────
+	if shouldRegister("mem_tag_stats", allowlist) {
+		srv.AddTool(
+			mcp.NewTool("mem_tag_stats",
+				mcp.WithDescription("Query tag observability for a project: top tags, low-frequency tags, or stale tags not used recently. Use min_count/max_count/unused_since as hard filters and sort_by to control ordering."),
+				mcp.WithTitleAnnotation("Tag Stats"),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
+				mcp.WithString("project",
+					mcp.Description("Project name (omit for all projects)"),
+				),
+				mcp.WithNumber("min_count",
+					mcp.Description("Only include tags used at least this many times (hard filter, 0 = no lower bound)"),
+				),
+				mcp.WithNumber("max_count",
+					mcp.Description("Only include tags used at most this many times — use to surface low-frequency tags (0 = no upper bound)"),
+				),
+				mcp.WithString("unused_since",
+					mcp.Description("ISO8601 date. Only include tags not used since this date — use to surface stale tags (e.g. '2026-01-01T00:00:00Z')"),
+				),
+				mcp.WithNumber("limit",
+					mcp.Description("Max results to return (default: 20, 0 = no limit)"),
+				),
+				mcp.WithString("sort_by",
+					mcp.Description("Result ordering: 'freq' (highest frequency first, default), 'stale' (oldest last-used first), 'alpha' (alphabetical)"),
+				),
+			),
+			handleTagStats(s),
 		)
 	}
 
@@ -943,6 +978,76 @@ func handleListTags(s *store.Store) server.ToolHandlerFunc {
 		}
 		for _, ti := range tags {
 			fmt.Fprintf(&b, "  %-30s %d uses  (last: %s)\n", ti.Tag, ti.Count, ti.LastUsedAt)
+		}
+		return mcp.NewToolResultText(b.String()), nil
+	}
+}
+
+func handleTagStats(s *store.Store) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		project, _ := req.GetArguments()["project"].(string)
+		unusedSinceStr, _ := req.GetArguments()["unused_since"].(string)
+
+		sortBy, _ := req.GetArguments()["sort_by"].(string)
+		validSortKeys := map[string]bool{"": true, "freq": true, "stale": true, "alpha": true}
+		if !validSortKeys[sortBy] {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid sort_by %q: accepted values are 'freq', 'stale', 'alpha'", sortBy)), nil
+		}
+
+		minCount := intArg(req, "min_count", 0)
+		maxCount := intArg(req, "max_count", 0)
+		limit := intArg(req, "limit", 20)
+		if minCount < 0 {
+			return mcp.NewToolResultError("min_count must be >= 0"), nil
+		}
+		if maxCount < 0 {
+			return mcp.NewToolResultError("max_count must be >= 0"), nil
+		}
+		if limit < 0 {
+			return mcp.NewToolResultError("limit must be >= 0"), nil
+		}
+
+		opts := store.TagStatsOptions{
+			MinCount: minCount,
+			MaxCount: maxCount,
+			Limit:    limit,
+			SortBy:   sortBy,
+		}
+		if unusedSinceStr != "" {
+			t, err := time.Parse(time.RFC3339, unusedSinceStr)
+			if err != nil {
+				// Try date-only format as a convenience.
+				t, err = time.Parse("2006-01-02", unusedSinceStr)
+				if err != nil {
+					return mcp.NewToolResultError("invalid unused_since format: use ISO8601 (e.g. '2026-01-01T00:00:00Z' or '2026-01-01')"), nil
+				}
+			}
+			opts.UnusedSince = t
+		}
+
+		tags, err := s.TagStats(project, opts)
+		if err != nil {
+			return mcp.NewToolResultError("Failed to get tag stats: " + err.Error()), nil
+		}
+
+		if len(tags) == 0 {
+			msg := "No tags match the given filters"
+			if project != "" {
+				msg += " for project " + project
+			}
+			return mcp.NewToolResultText(msg + "."), nil
+		}
+
+		var b strings.Builder
+		label := "all projects"
+		if project != "" {
+			label = fmt.Sprintf("project %q", project)
+		}
+		fmt.Fprintf(&b, "Tag stats for %s (%d tags):\n\n", label, len(tags))
+		fmt.Fprintf(&b, "  %-30s %6s   %s\n", "Tag", "Count", "Last used")
+		fmt.Fprintf(&b, "  %-30s %6s   %s\n", strings.Repeat("-", 30), "------", "---------")
+		for _, ti := range tags {
+			fmt.Fprintf(&b, "  %-30s %6d   %s\n", ti.Tag, ti.Count, ti.LastUsedAt)
 		}
 		return mcp.NewToolResultText(b.String()), nil
 	}
