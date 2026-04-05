@@ -3395,8 +3395,7 @@ func normalizeTopicSegment(s string) string {
 	if v == "" {
 		return ""
 	}
-	re := regexp.MustCompile(`[^a-z0-9]+`)
-	v = re.ReplaceAllString(v, " ")
+	v = nonAlnumRe.ReplaceAllString(v, " ")
 	v = strings.Join(strings.Fields(v), "-")
 	if len(v) > 100 {
 		v = v[:100]
@@ -3475,8 +3474,7 @@ func normalizeTagBase(s string) string {
 	if v == "" {
 		return ""
 	}
-	re := regexp.MustCompile(`[^a-z0-9]+`)
-	v = re.ReplaceAllString(v, "-")
+	v = nonAlnumRe.ReplaceAllString(v, "-")
 	v = strings.Trim(v, "-")
 	if len(v) < 2 {
 		return ""
@@ -3775,6 +3773,10 @@ func normalizeExistingSyncID(existing, prefix string) string {
 	}
 	return newSyncID(prefix)
 }
+
+// nonAlnumRe matches one or more non-alphanumeric characters. Used by
+// normalizeTagBase and normalizeTopicSegment; compiled once at package level.
+var nonAlnumRe = regexp.MustCompile(`[^a-z0-9]+`)
 
 // privateTagRegex matches <private>...</private> tags and their contents.
 // Supports multiline and nested content. Case-insensitive.
