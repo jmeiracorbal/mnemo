@@ -15,11 +15,11 @@ Persistent memory for AI coding agents. mnemo stores decisions, bugs, convention
 
 ## Prerequisite: binary in PATH
 
-**The `mnemo` binary must be installed and accessible in your `PATH` before any agent integration will work.** This applies to all agents — Claude Code, Cursor, and Windsurf — regardless of how the integration is installed (plugin or setup command).
+The `mnemo` binary must be in your `PATH` before any agent integration will work. This applies to Claude Code, Cursor, and Windsurf regardless of how the integration is installed.
 
 The hooks that fire on session start, session end, and passive capture all call `mnemo` directly. The MCP server is also the `mnemo` binary. Without it in PATH, hooks fail silently and the MCP server cannot start.
 
-Install the binary first:
+Install the binary:
 
 ```bash
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
@@ -40,18 +40,17 @@ Verify:
 mnemo --version
 ```
 
-Only after this step proceed with agent setup.
-
 ---
 
 ## Features
 
-- **Session hooks:** Automatically starts/ends sessions and injects memory context at the beginning of every conversation
-- **15 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_session_summary`, `mem_list_tags`, and more, available directly inside your editor
-- **Passive capture:** Extracts learnings from conversation transcripts automatically at session end
-- **Full CLI:** Save, search, export, import, and inspect memories from the terminal
-- **Own storage:** Isolated `~/.mnemo/memory.db`, created automatically on first run
-- **Claude Code + Cursor + Windsurf:** Native integration for all three editors via their respective hook systems
+- **Session hooks:** starts/ends sessions and injects memory context at the beginning of every conversation
+- **17 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_tag_stats`, and more, available directly inside your editor
+- **Passive capture:** extracts learnings from conversation transcripts automatically at session end
+- **Full CLI:** save, search, export, import, and inspect memories from the terminal
+- **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
+- **Claude Code + Cursor + Windsurf:** native integration for all three editors via their respective hook systems
+
 ---
 
 ## Agent setup
@@ -88,14 +87,7 @@ Restart Claude Code after updating.
 mnemo setup
 ```
 
-This command:
-
-1. Writes hook scripts to `~/.claude/hooks/`
-2. Registers the MCP server via `claude mcp add -s user mnemo`
-3. Injects hooks into `~/.claude/settings.json`
-4. Adds all `mcp__mnemo__*` tools to `permissions.allow`
-5. Writes `~/.claude/mnemo.md` (memory protocol)
-6. Appends `@mnemo.md` to `~/.claude/CLAUDE.md`
+This writes hook scripts to `~/.claude/hooks/`, registers the MCP server via `claude mcp add -s user mnemo`, injects hooks into `~/.claude/settings.json`, adds all `mcp__mnemo__*` tools to `permissions.allow`, writes `~/.claude/mnemo.md`, and appends `@mnemo.md` to `~/.claude/CLAUDE.md`.
 
 ```bash
 mnemo setup --dry-run   # preview without changes
@@ -107,15 +99,10 @@ mnemo setup --dry-run   # preview without changes
 mnemo setup --cursor
 ```
 
-This command:
-
-1. Writes hook scripts to `~/.cursor/hooks/`
-2. Registers the MCP server in `~/.cursor/mcp.json`
-3. Adds hooks to `~/.cursor/hooks.json` (beforeSubmitPrompt, stop)
-4. Writes `~/.cursor/rules/mnemo.mdc` (memory protocol, `alwaysApply: true`)
+This writes hook scripts to `~/.cursor/hooks/`, registers the MCP server in `~/.cursor/mcp.json`, adds hooks to `~/.cursor/hooks.json` (beforeSubmitPrompt, stop), and writes `~/.cursor/rules/mnemo.mdc` (memory protocol, `alwaysApply: true`).
 
 ```bash
-mnemo setup --cursor --dry-run   # preview without changes
+mnemo setup --cursor --dry-run
 ```
 
 Restart Cursor after setup.
@@ -126,15 +113,10 @@ Restart Cursor after setup.
 mnemo setup --windsurf
 ```
 
-This command:
-
-1. Writes hook scripts to `~/.codeium/windsurf/hooks/`
-2. Registers the MCP server in `~/.codeium/windsurf/mcp_config.json`
-3. Adds hooks to `~/.codeium/windsurf/hooks.json` (pre_user_prompt, post_cascade_response_with_transcript)
-4. Appends the memory protocol to `~/.codeium/windsurf/memories/global_rules.md`
+This writes hook scripts to `~/.codeium/windsurf/hooks/`, registers the MCP server in `~/.codeium/windsurf/mcp_config.json`, adds hooks to `~/.codeium/windsurf/hooks.json` (pre_user_prompt, post_cascade_response_with_transcript), and appends the memory protocol to `~/.codeium/windsurf/memories/global_rules.md`.
 
 ```bash
-mnemo setup --windsurf --dry-run   # preview without changes
+mnemo setup --windsurf --dry-run
 ```
 
 Restart Windsurf after setup.
@@ -143,28 +125,41 @@ Restart Windsurf after setup.
 
 ## Verification checklist
 
-Run this checklist after every installation or update. All points must pass before considering the setup complete.
+Run this after every installation or update.
+
+Check that the binary is accessible:
 
 ```bash
-# 1. Binary accessible
 mnemo --version
+```
 
-# 2. Dry-runs show expected output (no errors)
+Verify dry-runs produce no errors:
+
+```bash
 mnemo setup --dry-run
 mnemo setup --cursor --dry-run
 mnemo setup --windsurf --dry-run
+```
 
-# 3. Plugin validation (Claude Code plugin path)
+Validate the plugin (Claude Code):
+
+```bash
 claude plugin validate plugin/claude-code
+```
 
-# 4. Protocol files exist with correct content
+Check that protocol files exist with the right content:
+
+```bash
 cat ~/.claude/CLAUDE.md                          # must contain: @mnemo.md
 head -1 ~/.claude/mnemo.md                      # must be: ## mnemo — Persistent Memory Protocol
 head -3 ~/.cursor/rules/mnemo.mdc               # must have: alwaysApply: true
 grep "mnemo — Persistent Memory Protocol" \
   ~/.codeium/windsurf/memories/global_rules.md  # must match
+```
 
-# 5. Idempotency: running setup again must report "already up to date"
+Check idempotency — running setup again must report "already up to date":
+
+```bash
 mnemo setup --cursor
 mnemo setup --windsurf
 ```
@@ -205,12 +200,12 @@ On session start, mnemo detects the project from the git root directory name and
 
 Tools available inside your editor via the `mcp__mnemo__*` namespace:
 
-### Agent profile (default, 12 tools)
+### Agent profile (default, 14 tools)
 
 | Tool | Description |
 |---|---|
 | `mem_save` | Save a memory with title, content, type, tags, and optional topic key |
-| `mem_search` | Search memories — by text, tags, topic key, or any combination |
+| `mem_search` | Search memories by text, tags, topic key, or any combination |
 | `mem_context` | Retrieve formatted context from previous sessions |
 | `mem_session_summary` | Save an end-of-session summary with goal, discoveries, next steps |
 | `mem_session_start` | Register a new session |
@@ -221,6 +216,8 @@ Tools available inside your editor via the `mcp__mnemo__*` namespace:
 | `mem_save_prompt` | Save a prompt template |
 | `mem_update` | Update an existing memory, including tags |
 | `mem_list_tags` | List all tags in use for a project, ordered by frequency |
+| `mem_merge_tags` | Merge all occurrences of one tag into another |
+| `mem_tag_stats` | Query tag observability: top tags, low-frequency tags, stale tags |
 
 ### Admin profile (3 tools)
 
@@ -228,7 +225,7 @@ Available with `--tools=admin`: `mem_delete`, `mem_stats`, `mem_timeline`.
 
 ### Search modes
 
-`mem_search` supports several independent intents. They compose:
+`mem_search` supports several independent intents that compose:
 
 | Parameter | Type | Semantics |
 |---|---|---|
@@ -240,6 +237,8 @@ Available with `--tools=admin`: `mem_delete`, `mem_stats`, `mem_timeline`.
 | `project` | string | Scope to a project. |
 
 `mem_context` accepts `tags`, `prefer_tags`, and `topic_key` with the same semantics, applied to recent observation retrieval.
+
+To add the admin profile as a separate MCP server:
 
 ```bash
 claude mcp add -s user mnemo-admin -- ~/.local/bin/mnemo mcp --tools=admin
@@ -272,17 +271,27 @@ mnemo version                        Show version
 
 ### Examples
 
+Save a decision manually:
+
 ```bash
-# Save a decision manually
 mnemo save "Use FTS5 for search" "Chose SQLite FTS5 over external search" --type decision --project myapp
+```
 
-# Search memories
+Search memories:
+
+```bash
 mnemo search "authentication" --project myapp --limit 5
+```
 
-# Show what was remembered from previous sessions
+Show context from previous sessions:
+
+```bash
 mnemo context myapp
+```
 
-# Export everything to JSON
+Export everything to JSON:
+
+```bash
 mnemo export backup.json
 ```
 
@@ -290,10 +299,10 @@ mnemo export backup.json
 
 ## Storage
 
-mnemo uses `~/.mnemo/memory.db`, created automatically on first run. The directory and database are created during startup, no manual setup required. The schema uses SQLite with FTS5 for full-text search.
+mnemo uses `~/.mnemo/memory.db`, created automatically on first run. The schema uses SQLite with FTS5 for full-text search.
 
 ---
 
 ## License
 
-[Apache 2.0](LICENSE): You may use, modify, and distribute freely, but must retain the copyright notice and include the [NOTICE](NOTICE) file in all distributions.
+[Apache 2.0](LICENSE): you may use, modify, and distribute freely, but must retain the copyright notice and include the [NOTICE](NOTICE) file in all distributions.
