@@ -5404,3 +5404,294 @@ func TestListTagsFiltersByProject(t *testing.T) {
 		t.Error("expected 'exclusive-tag' in ListTags(proj-a)")
 	}
 }
+
+// ─── TagStats ─────────────────────────────────────────────────────────────────
+
+func TestTagStatsMinCount(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-ts-min", "proj-min")
+
+	add := func(title string, tags []string) {
+		t.Helper()
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-ts-min",
+			Type:      "decision",
+			Title:     title,
+			Content:   "content",
+			Project:   "proj-min",
+			Tags:      tags,
+		}); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+
+	// "common" appears 4 times, "rare" appears once.
+	add("obs1", []string{"common"})
+	add("obs2", []string{"common"})
+	add("obs3", []string{"common"})
+	add("obs4", []string{"common", "rare"})
+
+	// min_count=3 must return only "common".
+	tags, err := s.TagStats("proj-min", TagStatsOptions{MinCount: 3})
+	if err != nil {
+		t.Fatalf("TagStats: %v", err)
+	}
+	if len(tags) != 1 {
+		t.Fatalf("expected 1 tag with MinCount=3, got %d: %v", len(tags), tags)
+	}
+	if tags[0].Tag != "common" {
+		t.Errorf("expected 'common', got %q", tags[0].Tag)
+	}
+	if tags[0].Count != 4 {
+		t.Errorf("expected count=4, got %d", tags[0].Count)
+	}
+}
+
+func TestTagStatsMaxCount(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-ts-max", "proj-max")
+
+	add := func(title string, tags []string) {
+		t.Helper()
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-ts-max",
+			Type:      "decision",
+			Title:     title,
+			Content:   "content",
+			Project:   "proj-max",
+			Tags:      tags,
+		}); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+
+	// "noisy" appears 5 times, "low" appears once.
+	add("obs1", []string{"noisy"})
+	add("obs2", []string{"noisy"})
+	add("obs3", []string{"noisy"})
+	add("obs4", []string{"noisy"})
+	add("obs5", []string{"noisy", "low"})
+
+	// max_count=2 must return only "low".
+	tags, err := s.TagStats("proj-max", TagStatsOptions{MaxCount: 2})
+	if err != nil {
+		t.Fatalf("TagStats: %v", err)
+	}
+	if len(tags) != 1 {
+		t.Fatalf("expected 1 tag with MaxCount=2, got %d: %v", len(tags), tags)
+	}
+	if tags[0].Tag != "low" {
+		t.Errorf("expected 'low', got %q", tags[0].Tag)
+	}
+}
+
+func TestTagStatsUnusedSince(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-ts-stale", "proj-stale")
+
+	add := func(title string, tags []string) int64 {
+		t.Helper()
+		id, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-ts-stale",
+			Type:      "decision",
+			Title:     title,
+			Content:   "content",
+			Project:   "proj-stale",
+			Tags:      tags,
+		})
+		if err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+		return id
+	}
+
+	add("obs1", []string{"fresh"})
+	staleID := add("obs2", []string{"stale-tag"})
+
+	// Backdate the stale observation to 2025.
+	cutoff := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	past := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := s.db.Exec(
+		"UPDATE observations SET created_at = ? WHERE id = ?",
+		past.UTC().Format(time.RFC3339),
+		staleID,
+	); err != nil {
+		t.Fatalf("backdate observation: %v", err)
+	}
+
+	tags, err := s.TagStats("proj-stale", TagStatsOptions{UnusedSince: cutoff})
+	if err != nil {
+		t.Fatalf("TagStats: %v", err)
+	}
+	if len(tags) != 1 {
+		t.Fatalf("expected 1 stale tag, got %d: %v", len(tags), tags)
+	}
+	if tags[0].Tag != "stale-tag" {
+		t.Errorf("expected 'stale-tag', got %q", tags[0].Tag)
+	}
+}
+
+func TestTagStatsSortByStale(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-ts-sort", "proj-sort")
+
+	// tag names are lowercase after normalization.
+	type tagEntry struct {
+		name string
+		ts   time.Time
+	}
+	entries := []tagEntry{
+		{"tag-alpha", time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)}, // newest
+		{"tag-beta", time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)},  // middle
+		{"tag-gamma", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}, // oldest
+	}
+	for i, e := range entries {
+		id, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-ts-sort",
+			Type:      "decision",
+			Title:     fmt.Sprintf("obs%d", i),
+			Content:   "content",
+			Project:   "proj-sort",
+			Tags:      []string{e.name},
+		})
+		if err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+		if _, err := s.db.Exec(
+			"UPDATE observations SET created_at = ? WHERE id = ?",
+			e.ts.UTC().Format(time.RFC3339), id,
+		); err != nil {
+			t.Fatalf("backdate observation id=%d: %v", id, err)
+		}
+	}
+
+	tags, err := s.TagStats("proj-sort", TagStatsOptions{SortBy: "stale"})
+	if err != nil {
+		t.Fatalf("TagStats: %v", err)
+	}
+	if len(tags) != 3 {
+		t.Fatalf("expected 3 tags, got %d", len(tags))
+	}
+	// stale sort: oldest first → tag-gamma, tag-beta, tag-alpha.
+	if tags[0].Tag != "tag-gamma" {
+		t.Errorf("expected tag-gamma first (oldest), got %q", tags[0].Tag)
+	}
+	if tags[2].Tag != "tag-alpha" {
+		t.Errorf("expected tag-alpha last (newest), got %q", tags[2].Tag)
+	}
+}
+
+func TestTagStatsLimit(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-ts-limit", "proj-limit")
+
+	for i := 0; i < 5; i++ {
+		tag := fmt.Sprintf("tag%d", i)
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-ts-limit",
+			Type:      "decision",
+			Title:     tag,
+			Content:   "content",
+			Project:   "proj-limit",
+			Tags:      []string{tag},
+		}); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+
+	tags, err := s.TagStats("proj-limit", TagStatsOptions{Limit: 3})
+	if err != nil {
+		t.Fatalf("TagStats: %v", err)
+	}
+	if len(tags) != 3 {
+		t.Errorf("expected 3 results with Limit=3, got %d", len(tags))
+	}
+}
+
+func TestTagStatsDoesNotBreakListTags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-ts-compat", "proj-compat")
+
+	add := func(title string, tags []string) {
+		t.Helper()
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-ts-compat",
+			Type:      "decision",
+			Title:     title,
+			Content:   "content",
+			Project:   "proj-compat",
+			Tags:      tags,
+		}); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+
+	add("obs1", []string{"auth", "backend"})
+	add("obs2", []string{"auth"})
+
+	listResult, err := s.ListTags("proj-compat")
+	if err != nil {
+		t.Fatalf("ListTags: %v", err)
+	}
+	statsResult, err := s.TagStats("proj-compat", TagStatsOptions{})
+	if err != nil {
+		t.Fatalf("TagStats: %v", err)
+	}
+
+	// Both must return the same tags (order may differ on tie, but same set and counts).
+	if len(listResult) != len(statsResult) {
+		t.Errorf("ListTags returned %d tags, TagStats returned %d", len(listResult), len(statsResult))
+	}
+	byTag := make(map[string]int, len(listResult))
+	for _, ti := range listResult {
+		byTag[ti.Tag] = ti.Count
+	}
+	for _, ti := range statsResult {
+		if byTag[ti.Tag] != ti.Count {
+			t.Errorf("tag %q: ListTags count=%d, TagStats count=%d", ti.Tag, byTag[ti.Tag], ti.Count)
+		}
+	}
+}
+
+func TestTagWeightsBasic(t *testing.T) {
+	now := time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC)
+	tags := []TagInfo{
+		{Tag: "auth", Count: 10, LastUsedAt: "2026-04-05T00:00:00Z"},
+		{Tag: "backend", Count: 5, LastUsedAt: "2026-03-01T00:00:00Z"},
+		{Tag: "legacy", Count: 1, LastUsedAt: "2026-01-01T00:00:00Z"},
+	}
+
+	weights := tagWeights(tags, 2, now)
+	if len(weights) != 3 {
+		t.Fatalf("expected 3 weights, got %d", len(weights))
+	}
+
+	byTag := make(map[string]TagWeight, len(weights))
+	for _, w := range weights {
+		byTag[w.Tag] = w
+	}
+
+	// Top 2 by frequency: auth (10) and backend (5) are dominant.
+	if !byTag["auth"].IsDominant {
+		t.Error("auth should be dominant (top 2)")
+	}
+	if !byTag["backend"].IsDominant {
+		t.Error("backend should be dominant (top 2)")
+	}
+	if byTag["legacy"].IsDominant {
+		t.Error("legacy should not be dominant (rank 3)")
+	}
+
+	// auth is the newest → RecencyScore should be 1.0.
+	if byTag["auth"].RecencyScore != 1.0 {
+		t.Errorf("auth RecencyScore: expected 1.0, got %f", byTag["auth"].RecencyScore)
+	}
+	// legacy is the oldest → RecencyScore should be 0.0.
+	if byTag["legacy"].RecencyScore != 0.0 {
+		t.Errorf("legacy RecencyScore: expected 0.0, got %f", byTag["legacy"].RecencyScore)
+	}
+	// backend is in the middle → 0 < score < 1.
+	if byTag["backend"].RecencyScore <= 0 || byTag["backend"].RecencyScore >= 1 {
+		t.Errorf("backend RecencyScore should be between 0 and 1, got %f", byTag["backend"].RecencyScore)
+	}
+}
