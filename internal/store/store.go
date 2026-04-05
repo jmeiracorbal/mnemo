@@ -1757,7 +1757,7 @@ func (s *Store) TagStats(project string, opts TagStatsOptions) ([]TagInfo, error
 		args = append(args, opts.MaxCount)
 	}
 	if !opts.UnusedSince.IsZero() {
-		having = append(having, "datetime(MAX(o.created_at)) < datetime(?)")
+		having = append(having, "MAX(datetime(o.created_at)) < datetime(?)")
 		args = append(args, opts.UnusedSince.UTC().Format(time.RFC3339))
 	}
 	if len(having) > 0 {
@@ -1795,7 +1795,7 @@ func (s *Store) TagStats(project string, opts TagStatsOptions) ([]TagInfo, error
 	return tags, rows.Err()
 }
 
-// tagWeights computes observability signals for a slice of TagInfo relative to now.
+// tagWeights computes observability signals for a slice of TagInfo.
 // topN controls the IsDominant threshold: the top N tags by frequency are marked dominant.
 // RecencyScore is normalised to [0.0, 1.0] within the provided set.
 // Not yet used in retrieval — prepared for a future weighting phase.
@@ -1808,7 +1808,7 @@ func parseTagTimestamp(s string) (time.Time, error) {
 	return time.ParseInLocation("2006-01-02 15:04:05", s, time.UTC)
 }
 
-func tagWeights(tags []TagInfo, topN int, now time.Time) []TagWeight {
+func tagWeights(tags []TagInfo, topN int) []TagWeight {
 	if len(tags) == 0 {
 		return nil
 	}

@@ -5662,14 +5662,13 @@ func TestTagStatsDoesNotBreakListTags(t *testing.T) {
 }
 
 func TestTagWeightsBasic(t *testing.T) {
-	now := time.Date(2026, 4, 5, 0, 0, 0, 0, time.UTC)
 	tags := []TagInfo{
 		{Tag: "auth", Count: 10, LastUsedAt: "2026-04-05T00:00:00Z"},
 		{Tag: "backend", Count: 5, LastUsedAt: "2026-03-01T00:00:00Z"},
 		{Tag: "legacy", Count: 1, LastUsedAt: "2026-01-01T00:00:00Z"},
 	}
 
-	weights := tagWeights(tags, 2, now)
+	weights := tagWeights(tags, 2)
 	if len(weights) != 3 {
 		t.Fatalf("expected 3 weights, got %d", len(weights))
 	}
