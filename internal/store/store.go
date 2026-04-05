@@ -1750,10 +1750,10 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 			}
 			obsList = append(obsList, r)
 		}
+		obsRows.Close()
 		if err := obsRows.Err(); err != nil {
 			return fmt.Errorf("merge: iterate observations: %w", err)
 		}
-		obsRows.Close()
 
 		// Collect affected sessions before modifying tags.
 		sessRows, err := s.queryItHook(tx,
@@ -1778,10 +1778,10 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 			}
 			sessList = append(sessList, r)
 		}
+		sessRows.Close()
 		if err := sessRows.Err(); err != nil {
 			return fmt.Errorf("merge: iterate sessions: %w", err)
 		}
-		sessRows.Close()
 
 		// Promote fromTag → toTag in observations (dedup via INSERT OR IGNORE).
 		if _, err := s.execHook(tx,
