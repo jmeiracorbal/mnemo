@@ -4549,6 +4549,53 @@ func TestMergeTagsBlockedTarget(t *testing.T) {
 	}
 }
 
+// TestMergeTagsLegacyAlias verifies the primary use case: migrating legacy rows
+// that predate alias resolution. "database" and "db" would normally be
+// "identical after normalization" if both were aliased, but MergeTags preserves
+// the raw source so the merge can find and rewrite stored "database" rows.
+func TestMergeTagsLegacyAlias(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-legacy", "mnemo")
+
+	// Insert directly with raw tag to simulate pre-alias data.
+	id, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-legacy",
+		Type:      "decision",
+		Title:     "legacy db obs",
+		Content:   "test",
+		Project:   "mnemo",
+		Tags:      []string{"backend"},
+	})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	// Seed a legacy tag directly in the DB to bypass normalizeTag alias.
+	if _, err := s.db.Exec(`INSERT OR IGNORE INTO observation_tags (observation_id, tag) VALUES (?, ?)`, id, "database"); err != nil {
+		t.Fatalf("seed legacy tag: %v", err)
+	}
+
+	obsCount, _, err := s.MergeTags("database", "db")
+	if err != nil {
+		t.Fatalf("MergeTags: %v", err)
+	}
+	if obsCount != 1 {
+		t.Errorf("MergeTags obsCount = %d, want 1", obsCount)
+	}
+
+	obs, _ := s.GetObservation(id)
+	tagSet := make(map[string]bool)
+	for _, tag := range obs.Tags {
+		tagSet[tag] = true
+	}
+	if tagSet["database"] {
+		t.Error("legacy tag 'database' still present after merge")
+	}
+	if !tagSet["db"] {
+		t.Error("canonical tag 'db' missing after merge")
+	}
+}
+
 func TestTopicKeyUpsertPreservesTags(t *testing.T) {
 	s := newTestStore(t)
 	newTestSession(t, s, "sess-topic-tags", "mnemo")

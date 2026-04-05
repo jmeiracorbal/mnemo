@@ -1705,10 +1705,13 @@ func (s *Store) ListTags(project string) ([]TagInfo, error) {
 }
 
 // MergeTags renames every occurrence of fromTag to toTag across all observations
-// and sessions. fromTag and toTag are normalized before use. Returns the number
-// of observations and sessions updated.
+// and sessions. fromTag is matched against the raw stored value (no alias
+// resolution), which allows migrating legacy tags (e.g. "database" → "db").
+// toTag goes through full normalization including alias resolution.
+// Returns the number of observations and sessions updated.
 func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, err error) {
-	from := normalizeTag(fromTag)
+	// from uses base normalization only — no alias — to match what may be stored.
+	from := normalizeTagBase(fromTag)
 	to := normalizeTag(toTag)
 	if from == "" || to == "" {
 		return 0, 0, fmt.Errorf("both from and to tags must be non-empty after normalization")
@@ -1721,6 +1724,59 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 	}
 
 	err = s.withTx(func(tx *sql.Tx) error {
+		// Collect affected observations before modifying tags.
+		obsRows, err := s.queryItHook(tx,
+			`SELECT o.id, o.sync_id, o.session_id, o.type, o.title, o.content,
+			        o.tool_name, o.project, o.scope, o.topic_key
+			 FROM observations o
+			 JOIN observation_tags ot ON ot.observation_id = o.id
+			 WHERE ot.tag = ? AND o.deleted_at IS NULL`, from)
+		if err != nil {
+			return fmt.Errorf("merge: collect observations: %w", err)
+		}
+		type affectedObs struct {
+			id      int64
+			payload syncObservationPayload
+		}
+		var obsList []affectedObs
+		for obsRows.Next() {
+			var r affectedObs
+			if err := obsRows.Scan(&r.id, &r.payload.SyncID, &r.payload.SessionID,
+				&r.payload.Type, &r.payload.Title, &r.payload.Content,
+				&r.payload.ToolName, &r.payload.Project, &r.payload.Scope, &r.payload.TopicKey,
+			); err != nil {
+				obsRows.Close()
+				return fmt.Errorf("merge: scan observation: %w", err)
+			}
+			obsList = append(obsList, r)
+		}
+		obsRows.Close()
+
+		// Collect affected sessions before modifying tags.
+		sessRows, err := s.queryItHook(tx,
+			`SELECT s.id, s.project, s.directory, s.ended_at, s.summary
+			 FROM sessions s
+			 JOIN session_tags st ON st.session_id = s.id
+			 WHERE st.tag = ?`, from)
+		if err != nil {
+			return fmt.Errorf("merge: collect sessions: %w", err)
+		}
+		type affectedSess struct {
+			payload syncSessionPayload
+		}
+		var sessList []affectedSess
+		for sessRows.Next() {
+			var r affectedSess
+			if err := sessRows.Scan(&r.payload.ID, &r.payload.Project,
+				&r.payload.Directory, &r.payload.EndedAt, &r.payload.Summary,
+			); err != nil {
+				sessRows.Close()
+				return fmt.Errorf("merge: scan session: %w", err)
+			}
+			sessList = append(sessList, r)
+		}
+		sessRows.Close()
+
 		// Promote fromTag → toTag in observations (dedup via INSERT OR IGNORE).
 		if _, err := s.execHook(tx,
 			`INSERT OR IGNORE INTO observation_tags (observation_id, tag)
@@ -1729,12 +1785,10 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 		); err != nil {
 			return fmt.Errorf("merge observation_tags insert: %w", err)
 		}
-		res, err := s.execHook(tx, `DELETE FROM observation_tags WHERE tag = ?`, from)
-		if err != nil {
+		if _, err := s.execHook(tx, `DELETE FROM observation_tags WHERE tag = ?`, from); err != nil {
 			return fmt.Errorf("merge observation_tags delete: %w", err)
 		}
-		n, _ := res.RowsAffected()
-		obsCount = int(n)
+		obsCount = len(obsList)
 
 		// Promote fromTag → toTag in sessions.
 		if _, err := s.execHook(tx,
@@ -1744,12 +1798,41 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 		); err != nil {
 			return fmt.Errorf("merge session_tags insert: %w", err)
 		}
-		res, err = s.execHook(tx, `DELETE FROM session_tags WHERE tag = ?`, from)
-		if err != nil {
+		if _, err := s.execHook(tx, `DELETE FROM session_tags WHERE tag = ?`, from); err != nil {
 			return fmt.Errorf("merge session_tags delete: %w", err)
 		}
-		n, _ = res.RowsAffected()
-		sessCount = int(n)
+		sessCount = len(sessList)
+
+		// Enqueue sync mutations for affected observations.
+		for _, r := range obsList {
+			var o Observation
+			o.ID = r.id
+			s.loadTagsForObservationTx(tx, &o)
+			tags := o.Tags
+			if tags == nil {
+				tags = []string{}
+			}
+			r.payload.Tags = &tags
+			if err := s.enqueueSyncMutationTx(tx, SyncEntityObservation, r.payload.SyncID, SyncOpUpsert, r.payload); err != nil {
+				return fmt.Errorf("merge: enqueue observation sync: %w", err)
+			}
+		}
+
+		// Enqueue sync mutations for affected sessions.
+		for _, r := range sessList {
+			var sess Session
+			sess.ID = r.payload.ID
+			s.loadTagsForSessionTx(tx, &sess)
+			tags := sess.Tags
+			if tags == nil {
+				tags = []string{}
+			}
+			r.payload.Tags = &tags
+			if err := s.enqueueSyncMutationTx(tx, SyncEntitySession, r.payload.ID, SyncOpUpsert, r.payload); err != nil {
+				return fmt.Errorf("merge: enqueue session sync: %w", err)
+			}
+		}
+
 		return nil
 	})
 	return obsCount, sessCount, err
@@ -3223,15 +3306,19 @@ func SuggestTags(typ, title, content string) []string {
 		"error", "panic",
 	}
 	for _, kw := range candidates {
-		if !seen[kw] {
-			if _, ok := tokens[kw]; !ok {
-				continue
-			}
-			tags = append(tags, kw)
-			seen[kw] = true
-			if len(tags) >= 5 {
-				break
-			}
+		// Check token presence using the raw candidate (text is lowercased, so exact match).
+		if _, ok := tokens[kw]; !ok {
+			continue
+		}
+		// Normalize and alias-resolve before appending.
+		norm := normalizeTag(kw)
+		if norm == "" || isBlockedTag(norm) || seen[norm] {
+			continue
+		}
+		tags = append(tags, norm)
+		seen[norm] = true
+		if len(tags) >= 5 {
+			break
 		}
 	}
 	return tags
@@ -3375,10 +3462,9 @@ func isBlockedTag(tag string) bool {
 	return blockedTags[tag]
 }
 
-// normalizeTag lowercases, trims, and replaces any non-alphanumeric character
-// (except hyphens) with a hyphen. Consecutive hyphens are collapsed. Leading
-// and trailing hyphens are stripped. Alias resolution is applied last.
-func normalizeTag(s string) string {
+// normalizeTagBase lowercases, trims, and cleans a tag string without applying
+// alias resolution. Used when the raw stored value must be matched (e.g. MergeTags).
+func normalizeTagBase(s string) string {
 	v := strings.TrimSpace(strings.ToLower(s))
 	if v == "" {
 		return ""
@@ -3392,11 +3478,24 @@ func normalizeTag(s string) string {
 	if len(v) > 50 {
 		v = v[:50]
 	}
+	return v
+}
+
+// normalizeTag normalizes a tag and resolves it to its canonical alias form.
+func normalizeTag(s string) string {
+	v := normalizeTagBase(s)
+	if v == "" {
+		return ""
+	}
 	if canonical, ok := tagAliases[v]; ok {
 		return canonical
 	}
 	return v
 }
+
+// NormalizeTag is the exported equivalent of normalizeTag, available to callers
+// outside this package (e.g. the MCP handler layer).
+func NormalizeTag(s string) string { return normalizeTag(s) }
 
 // setTagsForObservationTx replaces all tags for an observation within a
 // transaction. An empty slice removes all tags.
@@ -3516,6 +3615,20 @@ func (s *Store) setTagsForSessionTx(tx *sql.Tx, sessionID string, tags []string)
 func (s *Store) loadTagsForSession(sess *Session) {
 	rows, err := s.queryItHook(s.db,
 		"SELECT tag FROM session_tags WHERE session_id = ? ORDER BY tag", sess.ID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tag string
+		if rows.Scan(&tag) == nil {
+			sess.Tags = append(sess.Tags, tag)
+		}
+	}
+}
+
+func (s *Store) loadTagsForSessionTx(tx *sql.Tx, sess *Session) {
+	rows, err := tx.Query("SELECT tag FROM session_tags WHERE session_id = ? ORDER BY tag", sess.ID)
 	if err != nil {
 		return
 	}

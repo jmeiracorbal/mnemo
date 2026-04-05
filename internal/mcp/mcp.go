@@ -955,11 +955,16 @@ func handleMergeTags(s *store.Store) server.ToolHandlerFunc {
 		if strings.TrimSpace(from) == "" || strings.TrimSpace(to) == "" {
 			return mcp.NewToolResultError("both 'from' and 'to' are required"), nil
 		}
+		// Normalize to so the output message shows the canonical target form.
+		canonicalTo := store.NormalizeTag(to)
+		if canonicalTo == "" {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid target tag %q: empty after normalization", to)), nil
+		}
 		obsCount, sessCount, err := s.MergeTags(from, to)
 		if err != nil {
 			return mcp.NewToolResultError("merge failed: " + err.Error()), nil
 		}
-		msg := fmt.Sprintf("Merged %q → %q: %d observation(s), %d session(s) updated.", from, to, obsCount, sessCount)
+		msg := fmt.Sprintf("Merged %q → %q: %d observation(s), %d session(s) updated.", from, canonicalTo, obsCount, sessCount)
 		return mcp.NewToolResultText(msg), nil
 	}
 }
