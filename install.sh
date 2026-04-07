@@ -150,7 +150,9 @@ check_path() {
 
 download_scripts() {
   local version="$1"
-  local archive_url="https://github.com/${REPO}/releases/download/${version}/mnemo-scripts.tar.gz"
+  local base_url="https://github.com/${REPO}/releases/download/${version}"
+  local archive_url="${base_url}/mnemo-scripts.tar.gz"
+  local checksum_url="${base_url}/mnemo-scripts.tar.gz.sha256"
 
   TMP_SCRIPTS=$(mktemp -d)
   trap 'rm -rf "$TMP_SCRIPTS"' EXIT
@@ -160,6 +162,16 @@ download_scripts() {
   tmp_archive=$(mktemp)
 
   fetch "$archive_url" "$tmp_archive" || err "Scripts archive download failed: ${archive_url}"
+
+  local expected_hash actual_hash
+  expected_hash=$(fetch_stdout "$checksum_url" | awk '{print $1}')
+  if [ -n "$expected_hash" ]; then
+    actual_hash=$(shasum -a 256 "$tmp_archive" | awk '{print $1}')
+    if [ "$expected_hash" != "$actual_hash" ]; then
+      err "Checksum mismatch for scripts archive. Expected: ${expected_hash}, got: ${actual_hash}"
+    fi
+  fi
+
   tar -xzf "$tmp_archive" -C "$TMP_SCRIPTS" --strip-components=1
   rm -f "$tmp_archive"
   ok "Scripts ready"
@@ -290,8 +302,10 @@ main() {
     return
   fi
 
-  local mnemo_bin
-  mnemo_bin=$(command -v mnemo 2>/dev/null || echo "${INSTALL_DIR}/mnemo")
+  local mnemo_bin="${INSTALL_DIR}/mnemo"
+  if ! [ -x "$mnemo_bin" ]; then
+    mnemo_bin=$(command -v mnemo 2>/dev/null) || err "mnemo not found in ${INSTALL_DIR} or PATH"
+  fi
 
   download_scripts "$version"
 

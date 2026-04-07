@@ -70,7 +70,10 @@ func MergeFile(filePath string) (changed bool, err error) {
 	tmpName := tmp.Name()
 	defer func() {
 		if err != nil {
-			os.Remove(tmpName)
+			if removeErr := os.Remove(tmpName); removeErr != nil && !os.IsNotExist(removeErr) {
+				// best-effort cleanup; primary error takes precedence
+				_ = removeErr
+			}
 		}
 	}()
 	if _, err = tmp.Write(mergedBytes); err != nil {

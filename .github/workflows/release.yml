@@ -15,12 +15,16 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build scripts archive
-        run: tar -czf mnemo-scripts.tar.gz scripts/
+        run: |
+          tar -czf mnemo-scripts.tar.gz scripts/
+          shasum -a 256 mnemo-scripts.tar.gz > mnemo-scripts.tar.gz.sha256
 
       - name: Upload scripts archive
         uses: softprops/action-gh-release@v2
         with:
-          files: mnemo-scripts.tar.gz
+          files: |
+            mnemo-scripts.tar.gz
+            mnemo-scripts.tar.gz.sha256
 
   release:
     strategy:

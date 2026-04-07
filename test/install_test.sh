@@ -16,7 +16,6 @@ FAIL=0
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 RESET='\033[0m'
 
 ok()   { printf "${GREEN}  ✓${RESET} %s\n" "$1"; PASS=$((PASS + 1)); }
@@ -211,9 +210,6 @@ run_test_cursor() {
 
   header "cursor — idempotencia"
   HOME="$fake_home" setup_cursor "$MNEMO_BIN"
-  local hook_count
-  hook_count=$(cat "$fake_home/.cursor/hooks.json" | "$MNEMO_BIN" json hooks beforeSubmitPrompt 2>/dev/null)
-  # Verificamos que el array sigue teniendo 1 entry (no duplicado)
   local before_count
   before_count=$(grep -c "before-submit-prompt.sh" "$fake_home/.cursor/hooks.json" 2>/dev/null || echo 0)
   if [ "$before_count" -le 1 ]; then
