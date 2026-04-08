@@ -283,10 +283,24 @@ run_test_json_merge() {
   rm -f "$tmp"
 }
 
+# ── validate shipped scripts ─────────────────────────────────────────────────
+
+validate_shipped_scripts() {
+  header "shipped scripts — existence check"
+  assert_file_exists "$REPO_ROOT/scripts/claudecode/mnemo.md" "claudecode: mnemo.md"
+  assert_file_exists "$REPO_ROOT/scripts/cursor/hooks/before-submit-prompt.sh" "cursor: before-submit-prompt.sh"
+  assert_file_exists "$REPO_ROOT/scripts/cursor/hooks/stop.sh" "cursor: stop.sh"
+  assert_file_exists "$REPO_ROOT/scripts/cursor/rules/mnemo.mdc" "cursor: mnemo.mdc"
+  assert_file_exists "$REPO_ROOT/scripts/windsurf/hooks/pre-user-prompt.sh" "windsurf: pre-user-prompt.sh"
+  assert_file_exists "$REPO_ROOT/scripts/windsurf/hooks/post-cascade-response.sh" "windsurf: post-cascade-response.sh"
+  assert_file_exists "$REPO_ROOT/scripts/windsurf/templates/global_rules.md" "windsurf: global_rules.md"
+}
+
 # ── run ───────────────────────────────────────────────────────────────────────
 
 FILTER="${1:-all}"
 
+validate_shipped_scripts
 run_test_json_merge
 
 case "$FILTER" in

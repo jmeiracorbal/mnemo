@@ -27,6 +27,7 @@ jobs:
             mnemo-scripts.tar.gz.sha256
 
   release:
+    needs: scripts
     strategy:
       matrix:
         include:

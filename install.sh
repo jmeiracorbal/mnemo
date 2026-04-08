@@ -170,6 +170,8 @@ download_scripts() {
     if [ "$expected_hash" != "$actual_hash" ]; then
       err "Checksum mismatch for scripts archive. Expected: ${expected_hash}, got: ${actual_hash}"
     fi
+  else
+    warn "Checksum file not found for scripts archive — skipping verification"
   fi
 
   tar -xzf "$tmp_archive" -C "$TMP_SCRIPTS" --strip-components=1
@@ -305,6 +307,7 @@ main() {
   local mnemo_bin="${INSTALL_DIR}/mnemo"
   if ! [ -x "$mnemo_bin" ]; then
     mnemo_bin=$(command -v mnemo 2>/dev/null) || err "mnemo not found in ${INSTALL_DIR} or PATH"
+    warn "Using mnemo from PATH: ${mnemo_bin} (expected: ${INSTALL_DIR}/mnemo)"
   fi
 
   download_scripts "$version"

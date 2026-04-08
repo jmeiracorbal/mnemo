@@ -41,6 +41,10 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 					continue
 				}
 				scriptName := strings.TrimPrefix(cmd, prefix)
+				// Strip any arguments after the script name.
+				if idx := strings.Index(scriptName, " "); idx != -1 {
+					scriptName = scriptName[:idx]
+				}
 				scriptPath := filepath.Join(scriptsDir, scriptName)
 				if _, err := os.Stat(scriptPath); err != nil {
 					t.Errorf("hooks.json [%s]: references %q but file does not exist at %s", event, scriptName, scriptPath)
