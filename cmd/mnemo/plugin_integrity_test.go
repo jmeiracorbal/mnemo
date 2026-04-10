@@ -32,18 +32,30 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 
 	const prefix = "${CLAUDE_PLUGIN_ROOT}/scripts/"
 	scriptsDir := filepath.Join("..", "..", "plugin", "claude-code", "scripts")
+	validatedCount := 0
 
 	for event, matchers := range raw.Hooks {
 		for _, matcher := range matchers {
 			for _, hook := range matcher.Hooks {
 				cmd := hook.Command
-				if !strings.HasPrefix(cmd, prefix) {
+				// Search all tokens so commands like "bash ${CLAUDE_PLUGIN_ROOT}/scripts/foo.sh"
+				// are also validated, not only commands that start with the prefix.
+				var scriptName string
+				for _, tok := range strings.Fields(cmd) {
+					tok = strings.Trim(tok, `"'`)
+					if strings.HasPrefix(tok, prefix) {
+						scriptName = strings.TrimPrefix(tok, prefix)
+						break
+					}
+				}
+				if scriptName == "" {
 					continue
 				}
-				scriptName := strings.TrimPrefix(cmd, prefix)
-				// Strip any arguments after the script name.
-				if idx := strings.Index(scriptName, " "); idx != -1 {
-					scriptName = scriptName[:idx]
+				validatedCount++
+				scriptName = filepath.Clean(scriptName)
+				if filepath.IsAbs(scriptName) || scriptName == ".." || strings.HasPrefix(scriptName, ".."+string(os.PathSeparator)) {
+					t.Errorf("hooks.json [%s]: invalid script path %q", event, scriptName)
+					continue
 				}
 				scriptPath := filepath.Join(scriptsDir, scriptName)
 				if _, err := os.Stat(scriptPath); err != nil {
@@ -51,5 +63,8 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 				}
 			}
 		}
+	}
+	if validatedCount == 0 {
+		t.Fatalf("no script references were validated from hooks.json")
 	}
 }

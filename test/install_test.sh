@@ -205,6 +205,8 @@ run_test_cursor() {
   assert_json_key "$fake_home/.cursor/mcp.json" "mcpServers mnemo command" "mcp.json mnemo.command"
   assert_file_exists "$fake_home/.cursor/hooks.json" "hooks.json"
   assert_json_key "$fake_home/.cursor/hooks.json" "version" "hooks.json version"
+  assert_file_contains "$fake_home/.cursor/hooks.json" "$fake_home/.cursor/hooks/before-submit-prompt.sh" "hooks.json referencia before-submit-prompt.sh"
+  assert_file_contains "$fake_home/.cursor/hooks.json" "$fake_home/.cursor/hooks/stop.sh" "hooks.json referencia stop.sh"
   assert_file_exists "$fake_home/.cursor/rules/mnemo.mdc" "mnemo.mdc"
   assert_file_contains "$fake_home/.cursor/rules/mnemo.mdc" "alwaysApply: true" "mnemo.mdc frontmatter"
 
@@ -245,6 +247,8 @@ run_test_windsurf() {
   assert_file_exists "$fake_home/.codeium/windsurf/mcp_config.json" "mcp_config.json"
   assert_json_key "$fake_home/.codeium/windsurf/mcp_config.json" "mcpServers mnemo command" "mcp_config.json mnemo.command"
   assert_file_exists "$fake_home/.codeium/windsurf/hooks.json" "hooks.json"
+  assert_file_contains "$fake_home/.codeium/windsurf/hooks.json" "$fake_home/.codeium/windsurf/hooks/pre-user-prompt.sh" "hooks.json referencia pre-user-prompt.sh"
+  assert_file_contains "$fake_home/.codeium/windsurf/hooks.json" "$fake_home/.codeium/windsurf/hooks/post-cascade-response.sh" "hooks.json referencia post-cascade-response.sh"
   assert_file_exists "$fake_home/.codeium/windsurf/memories/global_rules.md" "global_rules.md"
   assert_file_contains "$fake_home/.codeium/windsurf/memories/global_rules.md" "mnemo — Persistent Memory Protocol" "global_rules.md contenido"
 

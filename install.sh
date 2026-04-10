@@ -78,6 +78,34 @@ fetch_stdout() {
   fi
 }
 
+probe_url() {
+  local url="$1"
+  if command -v curl >/dev/null 2>&1; then
+    curl -sSfI "$url" >/dev/null 2>&1
+  else
+    wget -q --spider "$url" 2>/dev/null
+  fi
+}
+
+# ── version compatibility check ───────────────────────────────────────────────
+
+check_version_compat() {
+  local version="$1" platform="$2"
+  local base_url="https://github.com/${REPO}/releases/download/${version}"
+
+  info "Checking compatibility of pinned version ${version}..."
+
+  if ! probe_url "${base_url}/mnemo-scripts.tar.gz.sha256"; then
+    err "Release ${version} does not ship mnemo-scripts.tar.gz. This asset is required by the current installer. Unset MNEMO_VERSION to use the latest release."
+  fi
+
+  if ! probe_url "${base_url}/mnemo-${platform}.sha256"; then
+    err "Release ${version} does not ship a binary for ${platform}. Unset MNEMO_VERSION to use the latest release."
+  fi
+
+  ok "Release ${version} is compatible."
+}
+
 # ── fetch latest version ───────────────────────────────────────────────────────
 
 fetch_latest_version() {
@@ -163,15 +191,14 @@ download_scripts() {
 
   fetch "$archive_url" "$tmp_archive" || err "Scripts archive download failed: ${archive_url}"
 
-  local expected_hash actual_hash
-  expected_hash=$(fetch_stdout "$checksum_url" | awk '{print $1}')
-  if [ -n "$expected_hash" ]; then
-    actual_hash=$(shasum -a 256 "$tmp_archive" | awk '{print $1}')
-    if [ "$expected_hash" != "$actual_hash" ]; then
-      err "Checksum mismatch for scripts archive. Expected: ${expected_hash}, got: ${actual_hash}"
-    fi
-  else
-    warn "Checksum file not found for scripts archive — skipping verification"
+  local checksum_text expected_hash actual_hash
+  checksum_text=$(fetch_stdout "$checksum_url") || err "Scripts checksum download failed: ${checksum_url}"
+  expected_hash=$(printf '%s\n' "$checksum_text" | awk '{print $1}')
+  [ -n "$expected_hash" ] || err "Scripts checksum missing or malformed: ${checksum_url}"
+
+  actual_hash=$(shasum -a 256 "$tmp_archive" | awk '{print $1}')
+  if [ "$expected_hash" != "$actual_hash" ]; then
+    err "Checksum mismatch for scripts archive. Expected: ${expected_hash}, got: ${actual_hash}"
   fi
 
   tar -xzf "$tmp_archive" -C "$TMP_SCRIPTS" --strip-components=1
@@ -294,6 +321,14 @@ main() {
   version="${MNEMO_VERSION:-$(fetch_latest_version)}"
 
   info "Latest release: ${version}"
+
+  if [ -n "${MNEMO_VERSION}" ]; then
+    if [ "$DRY_RUN" = "true" ]; then
+      info "Dry-run: would check compatibility of pinned version ${version}"
+    else
+      check_version_compat "$version" "$platform"
+    fi
+  fi
 
   download_binary "$version" "$platform"
   check_path

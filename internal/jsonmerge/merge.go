@@ -21,6 +21,18 @@ import (
 //
 // Returns true if the file was changed, false if it was already up to date.
 func MergeFile(filePath string) (changed bool, err error) {
+	// If filePath is a symlink, resolve it so we write to the real file and
+	// do not replace the symlink with a regular file (e.g. dotfiles setups).
+	if fi, statErr := os.Lstat(filePath); statErr == nil && fi.Mode()&os.ModeSymlink != 0 {
+		resolved, evalErr := filepath.EvalSymlinks(filePath)
+		if evalErr != nil {
+			return false, fmt.Errorf("resolve symlink %s: %w", filePath, evalErr)
+		}
+		filePath = resolved
+	} else if statErr != nil && !os.IsNotExist(statErr) {
+		return false, fmt.Errorf("stat %s: %w", filePath, statErr)
+	}
+
 	// Read existing content.
 	var target any = map[string]any{}
 	data, err := os.ReadFile(filePath)
