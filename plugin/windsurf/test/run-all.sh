@@ -4,7 +4,7 @@
 #   test-name: pre-user-prompt | post-cascade-response | post-cascade-with-transcript
 #              (omit to run all)
 
-SCRIPTS_DIR="$(cd "$(dirname "$0")/../scripts" && pwd)"
+SCRIPTS_DIR="$(cd "$(dirname "$0")/../../../scripts/windsurf/hooks" && pwd)"
 PASS=0
 FAIL=0
 

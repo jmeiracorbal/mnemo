@@ -4,7 +4,7 @@
 #   test-name: before-submit-prompt | stop | stop-with-transcript
 #              (omit to run all)
 
-SCRIPTS_DIR="$(cd "$(dirname "$0")/../scripts" && pwd)"
+SCRIPTS_DIR="$(cd "$(dirname "$0")/../../../scripts/cursor/hooks" && pwd)"
 PASS=0
 FAIL=0
 
