@@ -9,9 +9,7 @@ import (
 	"strings"
 
 	mcpserver "github.com/jmeiracorbal/mnemo/internal/mcp"
-	"github.com/jmeiracorbal/mnemo/internal/plugin/claudecode"
-	"github.com/jmeiracorbal/mnemo/internal/plugin/cursor"
-	"github.com/jmeiracorbal/mnemo/internal/plugin/windsurf"
+	"github.com/jmeiracorbal/mnemo/internal/jsonmerge"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -29,14 +27,14 @@ func main() {
 	case "json":
 		runJSON()
 		return
+	case "json-merge":
+		runJSONMerge()
+		return
 	case "extract-transcript":
 		runExtractTranscript()
 		return
 	case "--version", "version":
 		fmt.Printf("mnemo %s\n", version)
-		return
-	case "setup":
-		runSetup()
 		return
 	}
 
@@ -545,35 +543,24 @@ func runExtractTranscript() {
 	fmt.Println(strings.Join(lines, "\n"))
 }
 
-// ─── setup ───────────────────────────────────────────────────────────────────
+// ─── json-merge ──────────────────────────────────────────────────────────────
 
-func runSetup() {
-	dryRun := false
-	forCursor := false
-	forWindsurf := false
-	for _, arg := range os.Args[2:] {
-		switch arg {
-		case "--dry-run":
-			dryRun = true
-		case "--cursor":
-			forCursor = true
-		case "--windsurf":
-			forWindsurf = true
-		}
-	}
-
-	var err error
-	switch {
-	case forCursor:
-		err = (cursor.Installer{}).Install(dryRun)
-	case forWindsurf:
-		err = (windsurf.Installer{}).Install(dryRun)
-	default:
-		err = (claudecode.Installer{}).Install(dryRun)
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: setup failed: %v\n", err)
+// runJSONMerge reads a JSON patch from stdin and deep-merges it into FILE.
+// Usage: mnemo json-merge <file>
+func runJSONMerge() {
+	if len(os.Args) < 3 {
+		fmt.Fprintln(os.Stderr, "usage: mnemo json-merge <file>")
 		os.Exit(1)
+	}
+	changed, err := jsonmerge.MergeFile(os.Args[2])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: json-merge: %v\n", err)
+		os.Exit(1)
+	}
+	if changed {
+		fmt.Println("updated")
+	} else {
+		fmt.Println("already up to date")
 	}
 }
 
@@ -594,10 +581,8 @@ Usage:
   mnemo import <file.json>             Import memories from JSON
   mnemo capture <content>              Extract learnings from text (passive capture)
   mnemo json KEY [KEY ...]             Extract field from JSON on stdin (used by hooks)
+  mnemo json-merge <file>              Deep-merge JSON from stdin into file
   mnemo extract-transcript <file>      Extract assistant text from JSONL transcript
-  mnemo setup [--dry-run]              Install hooks and configure Claude Code
-  mnemo setup --cursor [--dry-run]     Install hooks and configure Cursor
-  mnemo setup --windsurf [--dry-run]   Install hooks and configure Windsurf
   mnemo version                        Show version
 
 Tool profiles for mcp:

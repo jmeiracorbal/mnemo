@@ -12,7 +12,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -3924,7 +3923,7 @@ func normalizeSyncTargetKey(targetKey string) string {
 
 func newSyncID(prefix string) string {
 	b := make([]byte, 8)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+	if _, err := rand.Read(b); err != nil {
 		return fmt.Sprintf("%s-%d", prefix, time.Now().UTC().UnixNano())
 	}
 	return prefix + "-" + hex.EncodeToString(b)

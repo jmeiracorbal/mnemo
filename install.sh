@@ -1,6 +1,16 @@
 #!/bin/bash
 # mnemo installer
 # Usage: curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
+#
+# Agent selection (default: claudecode):
+#   bash -s -- --agent=cursor
+#   bash -s -- --agent=windsurf
+#   bash -s -- --agent=all
+#
+# Environment overrides:
+#   MNEMO_AGENT=cursor bash install.sh
+#   MNEMO_VERSION=v0.9.0 bash install.sh
+#   MNEMO_DRY_RUN=true bash install.sh
 
 set -e
 
@@ -8,6 +18,8 @@ REPO="jmeiracorbal/mnemo"
 INSTALL_DIR="${MNEMO_INSTALL_DIR:-$HOME/.local/bin}"
 DRY_RUN="${MNEMO_DRY_RUN:-false}"
 MNEMO_VERSION="${MNEMO_VERSION:-}"
+AGENT="${MNEMO_AGENT:-claudecode}"
+TMP_SCRIPTS=""
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +76,34 @@ fetch_stdout() {
   else
     wget -qO- "$url" 2>/dev/null
   fi
+}
+
+probe_url() {
+  local url="$1"
+  if command -v curl >/dev/null 2>&1; then
+    curl -sSfI "$url" >/dev/null 2>&1
+  else
+    wget -q --spider "$url" 2>/dev/null
+  fi
+}
+
+# ── version compatibility check ───────────────────────────────────────────────
+
+check_version_compat() {
+  local version="$1" platform="$2"
+  local base_url="https://github.com/${REPO}/releases/download/${version}"
+
+  info "Checking compatibility of pinned version ${version}..."
+
+  if ! probe_url "${base_url}/mnemo-scripts.tar.gz.sha256"; then
+    err "Release ${version} does not ship mnemo-scripts.tar.gz. This asset is required by the current installer. Unset MNEMO_VERSION to use the latest release."
+  fi
+
+  if ! probe_url "${base_url}/mnemo-${platform}.sha256"; then
+    err "Release ${version} does not ship a binary for ${platform}. Unset MNEMO_VERSION to use the latest release."
+  fi
+
+  ok "Release ${version} is compatible."
 }
 
 # ── fetch latest version ───────────────────────────────────────────────────────
@@ -134,29 +174,146 @@ check_path() {
   fi
 }
 
-# ── run setup ─────────────────────────────────────────────────────────────────
+# ── download scripts archive ───────────────────────────────────────────────────
 
-run_setup() {
-  if [ "$DRY_RUN" = "true" ]; then
-    dry "mnemo setup"
-    return
+download_scripts() {
+  local version="$1"
+  local base_url="https://github.com/${REPO}/releases/download/${version}"
+  local archive_url="${base_url}/mnemo-scripts.tar.gz"
+  local checksum_url="${base_url}/mnemo-scripts.tar.gz.sha256"
+
+  TMP_SCRIPTS=$(mktemp -d)
+  trap 'rm -rf "$TMP_SCRIPTS"' EXIT
+
+  info "Downloading scripts archive..."
+  local tmp_archive
+  tmp_archive=$(mktemp)
+
+  fetch "$archive_url" "$tmp_archive" || err "Scripts archive download failed: ${archive_url}"
+
+  local checksum_text expected_hash actual_hash
+  checksum_text=$(fetch_stdout "$checksum_url") || err "Scripts checksum download failed: ${checksum_url}"
+  expected_hash=$(printf '%s\n' "$checksum_text" | awk '{print $1}')
+  [ -n "$expected_hash" ] || err "Scripts checksum missing or malformed: ${checksum_url}"
+
+  actual_hash=$(shasum -a 256 "$tmp_archive" | awk '{print $1}')
+  if [ "$expected_hash" != "$actual_hash" ]; then
+    err "Checksum mismatch for scripts archive. Expected: ${expected_hash}, got: ${actual_hash}"
   fi
 
-  if ! command -v mnemo >/dev/null 2>&1 && ! [ -x "${INSTALL_DIR}/mnemo" ]; then
-    warn "mnemo not found in PATH — skipping setup. Run 'mnemo setup' manually after adding ${INSTALL_DIR} to PATH."
-    return
+  tar -xzf "$tmp_archive" -C "$TMP_SCRIPTS" --strip-components=1
+  rm -f "$tmp_archive"
+  ok "Scripts ready"
+}
+
+# ── setup: Claude Code ─────────────────────────────────────────────────────────
+
+setup_claudecode() {
+  local mnemo_bin="$1"
+  local claude_dir="$HOME/.claude"
+  local mnemo_md="$claude_dir/mnemo.md"
+  local claude_md="$claude_dir/CLAUDE.md"
+  local reference="@mnemo.md"
+
+  info "Configuring Claude Code..."
+  mkdir -p "$claude_dir"
+
+  cp "$TMP_SCRIPTS/claudecode/mnemo.md" "$mnemo_md"
+  ok "~/.claude/mnemo.md written"
+
+  if [ -f "$claude_md" ] && grep -qF "$reference" "$claude_md" 2>/dev/null; then
+    ok "~/.claude/CLAUDE.md already up to date"
+  else
+    if [ -f "$claude_md" ] && [ -s "$claude_md" ]; then
+      tail -c1 "$claude_md" | grep -q $'\n' || printf '\n' >> "$claude_md"
+    fi
+    printf '%s\n' "$reference" >> "$claude_md"
+    ok "~/.claude/CLAUDE.md updated"
   fi
+}
 
-  local mnemo_bin
-  mnemo_bin=$(command -v mnemo 2>/dev/null || echo "${INSTALL_DIR}/mnemo")
+# ── setup: Cursor ──────────────────────────────────────────────────────────────
 
-  info "Running mnemo setup..."
-  "$mnemo_bin" setup
+setup_cursor() {
+  local mnemo_bin="$1"
+  local hooks_dir="$HOME/.cursor/hooks"
+  local mcp_json="$HOME/.cursor/mcp.json"
+  local hooks_json="$HOME/.cursor/hooks.json"
+  local rules_dir="$HOME/.cursor/rules"
+
+  info "Configuring Cursor..."
+
+  mkdir -p "$hooks_dir"
+  cp "$TMP_SCRIPTS/cursor/hooks/before-submit-prompt.sh" "$hooks_dir/"
+  cp "$TMP_SCRIPTS/cursor/hooks/stop.sh" "$hooks_dir/"
+  chmod +x "$hooks_dir/before-submit-prompt.sh" "$hooks_dir/stop.sh"
+  ok "Hook scripts installed to ${hooks_dir}"
+
+  local result
+  result=$(printf '{"mcpServers":{"mnemo":{"command":"%s","args":["mcp","--tools=agent"]}}}' \
+    "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
+  ok "~/.cursor/mcp.json: ${result}"
+
+  result=$(printf '{"version":1,"hooks":{"beforeSubmitPrompt":[{"command":"%s/before-submit-prompt.sh"}],"stop":[{"command":"%s/stop.sh"}]}}' \
+    "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
+  ok "~/.cursor/hooks.json: ${result}"
+
+  mkdir -p "$rules_dir"
+  cp "$TMP_SCRIPTS/cursor/rules/mnemo.mdc" "$rules_dir/"
+  ok "~/.cursor/rules/mnemo.mdc written"
+}
+
+# ── setup: Windsurf ────────────────────────────────────────────────────────────
+
+setup_windsurf() {
+  local mnemo_bin="$1"
+  local hooks_dir="$HOME/.codeium/windsurf/hooks"
+  local mcp_json="$HOME/.codeium/windsurf/mcp_config.json"
+  local hooks_json="$HOME/.codeium/windsurf/hooks.json"
+  local memories_dir="$HOME/.codeium/windsurf/memories"
+  local global_rules="$memories_dir/global_rules.md"
+  local marker="## mnemo — Persistent Memory Protocol"
+
+  info "Configuring Windsurf..."
+
+  mkdir -p "$hooks_dir"
+  cp "$TMP_SCRIPTS/windsurf/hooks/pre-user-prompt.sh" "$hooks_dir/"
+  cp "$TMP_SCRIPTS/windsurf/hooks/post-cascade-response.sh" "$hooks_dir/"
+  chmod +x "$hooks_dir/pre-user-prompt.sh" "$hooks_dir/post-cascade-response.sh"
+  ok "Hook scripts installed to ${hooks_dir}"
+
+  local result
+  result=$(printf '{"mcpServers":{"mnemo":{"command":"%s","args":["mcp","--tools=agent"]}}}' \
+    "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
+  ok "~/.codeium/windsurf/mcp_config.json: ${result}"
+
+  result=$(printf '{"hooks":{"pre_user_prompt":[{"command":"%s/pre-user-prompt.sh"}],"post_cascade_response_with_transcript":[{"command":"%s/post-cascade-response.sh"}]}}' \
+    "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
+  ok "~/.codeium/windsurf/hooks.json: ${result}"
+
+  mkdir -p "$memories_dir"
+  if [ -f "$global_rules" ] && grep -qF "$marker" "$global_rules" 2>/dev/null; then
+    ok "~/.codeium/windsurf/memories/global_rules.md already up to date"
+  else
+    if [ -f "$global_rules" ] && [ -s "$global_rules" ]; then
+      tail -c1 "$global_rules" | grep -q $'\n' || printf '\n' >> "$global_rules"
+      printf '\n' >> "$global_rules"
+    fi
+    cat "$TMP_SCRIPTS/windsurf/templates/global_rules.md" >> "$global_rules"
+    ok "~/.codeium/windsurf/memories/global_rules.md updated"
+  fi
 }
 
 # ── main ───────────────────────────────────────────────────────────────────────
 
 main() {
+  # Parse --agent=X from arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --agent=*) AGENT="${arg#--agent=}" ;;
+    esac
+  done
+
   [ "$DRY_RUN" = "true" ] && info "Dry-run mode — no changes will be made"
 
   local platform version
@@ -165,11 +322,54 @@ main() {
 
   info "Latest release: ${version}"
 
+  if [ -n "${MNEMO_VERSION}" ]; then
+    if [ "$DRY_RUN" = "true" ]; then
+      info "Dry-run: would check compatibility of pinned version ${version}"
+    else
+      check_version_compat "$version" "$platform"
+    fi
+  fi
+
   download_binary "$version" "$platform"
   check_path
-  run_setup
 
-  ok "Done. Restart Claude Code to activate mnemo."
+  if [ "$DRY_RUN" = "true" ]; then
+    info "Dry-run: would configure agent=${AGENT}"
+    ok "Done (dry-run)."
+    return
+  fi
+
+  local mnemo_bin="${INSTALL_DIR}/mnemo"
+  if ! [ -x "$mnemo_bin" ]; then
+    mnemo_bin=$(command -v mnemo 2>/dev/null) || err "mnemo not found in ${INSTALL_DIR} or PATH"
+    warn "Using mnemo from PATH: ${mnemo_bin} (expected: ${INSTALL_DIR}/mnemo)"
+  fi
+
+  download_scripts "$version"
+
+  case "$AGENT" in
+    claudecode)
+      setup_claudecode "$mnemo_bin"
+      ok "Done. Restart Claude Code to activate mnemo."
+      ;;
+    cursor)
+      setup_cursor "$mnemo_bin"
+      ok "Done. Restart Cursor to activate mnemo."
+      ;;
+    windsurf)
+      setup_windsurf "$mnemo_bin"
+      ok "Done. Restart Windsurf to activate mnemo."
+      ;;
+    all)
+      setup_claudecode "$mnemo_bin"
+      setup_cursor "$mnemo_bin"
+      setup_windsurf "$mnemo_bin"
+      ok "Done. Restart your editors to activate mnemo."
+      ;;
+    *)
+      err "Unknown agent: ${AGENT}. Valid options: claudecode | cursor | windsurf | all"
+      ;;
+  esac
 }
 
 main "$@"
