@@ -1122,11 +1122,23 @@ func handleRelatedTags(s *store.Store) server.ToolHandlerFunc {
 		limit := intArg(req, "limit", 20)
 		minCooc := intArg(req, "min_cooccurrence", 0)
 		sinceStr, _ := req.GetArguments()["since"].(string)
-		includeObs := boolArg(req, "include_observations", true)
-		includeSes := boolArg(req, "include_sessions", true)
+		includeObs, obsProvided := req.GetArguments()["include_observations"].(bool)
+		if !obsProvided {
+			includeObs = true
+		}
+		includeSes, sesProvided := req.GetArguments()["include_sessions"].(bool)
+		if !sesProvided {
+			includeSes = true
+		}
 
 		if limit < 0 {
 			return mcp.NewToolResultError("limit must be >= 0"), nil
+		}
+		if minCooc < 0 {
+			return mcp.NewToolResultError("min_cooccurrence must be >= 0"), nil
+		}
+		if obsProvided && sesProvided && !includeObs && !includeSes {
+			return mcp.NewToolResultError("at least one of include_observations or include_sessions must be true"), nil
 		}
 
 		opts := store.RelatedTagsOptions{
