@@ -11,8 +11,6 @@
 
 Persistent memory for AI coding agents. mnemo stores decisions, bugs, conventions, and discoveries across sessions in a local SQLite database. A one-command setup wires it into Claude Code, Cursor, or Windsurf via hooks and MCP.
 
----
-
 ## Prerequisite: binary in PATH
 
 The `mnemo` binary must be in your `PATH` before any agent integration will work. This applies to Claude Code, Cursor, and Windsurf regardless of how the integration is installed.
@@ -40,18 +38,14 @@ Verify:
 mnemo --version
 ```
 
----
-
 ## Features
 
 - **Session hooks:** starts/ends sessions and injects memory context at the beginning of every conversation
-- **17 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_tag_stats`, and more, available directly inside your editor
+- **18 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_tag_stats`, and more, available directly inside your editor
 - **Passive capture:** extracts learnings from conversation transcripts automatically at session end
 - **Full CLI:** save, search, export, import, and inspect memories from the terminal
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
 - **Claude Code + Cursor + Windsurf:** native integration for all three editors via their respective hook systems
-
----
 
 ## Agent setup
 
@@ -121,8 +115,6 @@ mnemo setup --windsurf --dry-run
 
 Restart Windsurf after setup.
 
----
-
 ## Verification checklist
 
 Run this after every installation or update.
@@ -164,8 +156,6 @@ mnemo setup --cursor
 mnemo setup --windsurf
 ```
 
----
-
 ## How it works
 
 ### Claude Code
@@ -194,13 +184,11 @@ mnemo setup --windsurf
 
 On session start, mnemo detects the project from the git root directory name and emits relevant memories from previous sessions into the context.
 
----
-
 ## MCP tools
 
 Tools available inside your editor via the `mcp__mnemo__*` namespace:
 
-### Agent profile (default, 14 tools)
+### Agent profile (default, 15 tools)
 
 | Tool | Description |
 |---|---|
@@ -218,6 +206,7 @@ Tools available inside your editor via the `mcp__mnemo__*` namespace:
 | `mem_list_tags` | List all tags in use for a project, ordered by frequency |
 | `mem_merge_tags` | Merge all occurrences of one tag into another |
 | `mem_tag_stats` | Query tag observability: top tags, low-frequency tags, stale tags |
+| `mem_related_tags` | Find tags that co-occur with a given tag across observations and sessions |
 
 ### Admin profile (3 tools)
 
@@ -243,8 +232,6 @@ To add the admin profile as a separate MCP server:
 ```bash
 claude mcp add -s user mnemo-admin -- ~/.local/bin/mnemo mcp --tools=admin
 ```
-
----
 
 ## CLI reference
 
@@ -295,13 +282,9 @@ Export everything to JSON:
 mnemo export backup.json
 ```
 
----
-
 ## Storage
 
 mnemo uses `~/.mnemo/memory.db`, created automatically on first run. The schema uses SQLite with FTS5 for full-text search.
-
----
 
 ## License
 
