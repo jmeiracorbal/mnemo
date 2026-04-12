@@ -65,6 +65,7 @@ var ProfileAgent = map[string]bool{
 	"mem_list_tags":         true,
 	"mem_merge_tags":        true,
 	"mem_tag_stats":         true,
+	"mem_related_tags":      true,
 }
 
 // ProfileAdmin contains tools for CLI curation and dashboards.
@@ -472,6 +473,43 @@ Examples:
 				),
 			),
 			handleTagStats(s),
+		)
+	}
+
+	// ─── mem_related_tags ───────────────────────────────────────────────
+	if shouldRegister("mem_related_tags", allowlist) {
+		srv.AddTool(
+			mcp.NewTool("mem_related_tags",
+				mcp.WithDescription("Find tags that frequently co-occur with a given tag in observations or sessions. Useful for discovering related topics and navigating the tag graph."),
+				mcp.WithTitleAnnotation("Related Tags"),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
+				mcp.WithString("tag",
+					mcp.Required(),
+					mcp.Description("Tag to find related tags for."),
+				),
+				mcp.WithString("project",
+					mcp.Description("Project name (omit for all projects)."),
+				),
+				mcp.WithNumber("limit",
+					mcp.Description("Max results to return (default: 20, 0 = no limit)."),
+				),
+				mcp.WithString("since",
+					mcp.Description("ISO8601 date. Only count co-occurrences after this date (e.g. '2026-01-01')."),
+				),
+				mcp.WithNumber("min_cooccurrence",
+					mcp.Description("Minimum co-occurrence count to include a tag (default: 1)."),
+				),
+				mcp.WithBoolean("include_observations",
+					mcp.Description("Include co-occurrences from observations (default: true)."),
+				),
+				mcp.WithBoolean("include_sessions",
+					mcp.Description("Include co-occurrences from sessions (default: true)."),
+				),
+			),
+			handleRelatedTags(s),
 		)
 	}
 
@@ -1071,6 +1109,68 @@ func handleMergeTags(s *store.Store) server.ToolHandlerFunc {
 		}
 		msg := fmt.Sprintf("Merged %q → %q: %d observation(s), %d session(s) updated.", from, canonicalTo, obsCount, sessCount)
 		return mcp.NewToolResultText(msg), nil
+	}
+}
+
+func handleRelatedTags(s *store.Store) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		tag, _ := req.GetArguments()["tag"].(string)
+		if strings.TrimSpace(tag) == "" {
+			return mcp.NewToolResultError("'tag' is required"), nil
+		}
+		project, _ := req.GetArguments()["project"].(string)
+		limit := intArg(req, "limit", 20)
+		minCooc := intArg(req, "min_cooccurrence", 0)
+		sinceStr, _ := req.GetArguments()["since"].(string)
+		includeObs := boolArg(req, "include_observations", true)
+		includeSes := boolArg(req, "include_sessions", true)
+
+		if limit < 0 {
+			return mcp.NewToolResultError("limit must be >= 0"), nil
+		}
+
+		opts := store.RelatedTagsOptions{
+			Limit:               limit,
+			MinCooccurrence:     minCooc,
+			IncludeObservations: includeObs,
+			IncludeSessions:     includeSes,
+		}
+		if sinceStr != "" {
+			t, err := time.Parse(time.RFC3339, sinceStr)
+			if err != nil {
+				t, err = time.Parse("2006-01-02", sinceStr)
+				if err != nil {
+					return mcp.NewToolResultError("invalid since format: use ISO8601 (e.g. '2026-01-01T00:00:00Z' or '2026-01-01')"), nil
+				}
+			}
+			opts.Since = t
+		}
+
+		related, err := s.RelatedTags(project, tag, opts)
+		if err != nil {
+			return mcp.NewToolResultError("Failed to get related tags: " + err.Error()), nil
+		}
+
+		if len(related) == 0 {
+			msg := fmt.Sprintf("No tags co-occur with %q", tag)
+			if project != "" {
+				msg += " in project " + project
+			}
+			return mcp.NewToolResultText(msg + "."), nil
+		}
+
+		var b strings.Builder
+		label := "all projects"
+		if project != "" {
+			label = fmt.Sprintf("project %q", project)
+		}
+		fmt.Fprintf(&b, "Tags related to %q in %s (%d results):\n\n", tag, label, len(related))
+		fmt.Fprintf(&b, "  %-30s %12s   %s\n", "Tag", "Cooccurrences", "Last seen")
+		fmt.Fprintf(&b, "  %-30s %12s   %s\n", strings.Repeat("-", 30), "-------------", "---------")
+		for _, rt := range related {
+			fmt.Fprintf(&b, "  %-30s %12d   %s\n", rt.Tag, rt.CooccurrenceCount, rt.LastSeenAt)
+		}
+		return mcp.NewToolResultText(b.String()), nil
 	}
 }
 

@@ -87,6 +87,28 @@ type TagWeight struct {
 	IsDominant   bool    // true if this tag is within the top N by frequency
 }
 
+// RelatedTag represents a tag that co-occurs with a queried tag.
+type RelatedTag struct {
+	Tag               string  `json:"tag"`
+	CooccurrenceCount int     `json:"cooccurrence_count"`
+	Score             float64 `json:"score"`
+	LastSeenAt        string  `json:"last_seen_at"`
+}
+
+// RelatedTagsOptions controls RelatedTags behaviour.
+type RelatedTagsOptions struct {
+	// Limit caps results. Zero means no limit.
+	Limit int
+	// Since restricts to co-occurrences seen after this time. Zero means no filter.
+	Since time.Time
+	// MinCooccurrence filters out tags that co-occur fewer than this many times. Zero means no filter.
+	MinCooccurrence int
+	// IncludeObservations counts co-occurrences from observation_tags (default: true when both are false).
+	IncludeObservations bool
+	// IncludeSessions counts co-occurrences from session_tags (default: true when both are false).
+	IncludeSessions bool
+}
+
 type SearchResult struct {
 	Observation
 	Rank float64 `json:"rank"`
@@ -1792,6 +1814,153 @@ func (s *Store) TagStats(project string, opts TagStatsOptions) ([]TagInfo, error
 		tags = append(tags, ti)
 	}
 	return tags, rows.Err()
+}
+
+// RelatedTags returns tags that co-occur with the given tag in observations and/or sessions.
+// When both IncludeObservations and IncludeSessions are false, both sources are used.
+func (s *Store) RelatedTags(project, tag string, opts RelatedTagsOptions) ([]RelatedTag, error) {
+	tag = NormalizeTag(tag)
+	if tag == "" {
+		return nil, fmt.Errorf("tag must not be empty")
+	}
+
+	// If neither flag is set, include both sources.
+	includeObs := opts.IncludeObservations || (!opts.IncludeObservations && !opts.IncludeSessions)
+	includeSes := opts.IncludeSessions || (!opts.IncludeObservations && !opts.IncludeSessions)
+
+	// acc accumulates counts and last-seen dates per co-occurring tag.
+	type entry struct {
+		count    int
+		lastSeen string
+	}
+	acc := make(map[string]*entry)
+
+	maxDate := func(a, b string) string {
+		if a > b {
+			return a
+		}
+		return b
+	}
+
+	if includeObs {
+		q := `
+			SELECT ot2.tag, COUNT(*) AS cnt, MAX(o.created_at) AS last_seen
+			FROM observation_tags ot1
+			JOIN observation_tags ot2
+			  ON ot1.observation_id = ot2.observation_id AND ot2.tag != ot1.tag
+			JOIN observations o ON o.id = ot1.observation_id
+			WHERE ot1.tag = ?
+			  AND o.deleted_at IS NULL`
+		var args []any
+		args = append(args, tag)
+		if project != "" {
+			q += " AND o.project = ?"
+			args = append(args, project)
+		}
+		if !opts.Since.IsZero() {
+			q += " AND o.created_at >= datetime(?)"
+			args = append(args, opts.Since.UTC().Format(time.RFC3339))
+		}
+		q += " GROUP BY ot2.tag"
+
+		rows, err := s.queryItHook(s.db, q, args...)
+		if err != nil {
+			return nil, fmt.Errorf("related tags (observations): %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var t string
+			var cnt int
+			var last string
+			if err := rows.Scan(&t, &cnt, &last); err != nil {
+				return nil, err
+			}
+			if e, ok := acc[t]; ok {
+				e.count += cnt
+				e.lastSeen = maxDate(e.lastSeen, last)
+			} else {
+				acc[t] = &entry{count: cnt, lastSeen: last}
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+
+	if includeSes {
+		q := `
+			SELECT st2.tag, COUNT(*) AS cnt, MAX(s.started_at) AS last_seen
+			FROM session_tags st1
+			JOIN session_tags st2
+			  ON st1.session_id = st2.session_id AND st2.tag != st1.tag
+			JOIN sessions s ON s.id = st1.session_id
+			WHERE st1.tag = ?`
+		var args []any
+		args = append(args, tag)
+		if project != "" {
+			q += " AND s.project = ?"
+			args = append(args, project)
+		}
+		if !opts.Since.IsZero() {
+			q += " AND s.started_at >= datetime(?)"
+			args = append(args, opts.Since.UTC().Format(time.RFC3339))
+		}
+		q += " GROUP BY st2.tag"
+
+		rows, err := s.queryItHook(s.db, q, args...)
+		if err != nil {
+			return nil, fmt.Errorf("related tags (sessions): %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var t string
+			var cnt int
+			var last string
+			if err := rows.Scan(&t, &cnt, &last); err != nil {
+				return nil, err
+			}
+			if e, ok := acc[t]; ok {
+				e.count += cnt
+				e.lastSeen = maxDate(e.lastSeen, last)
+			} else {
+				acc[t] = &entry{count: cnt, lastSeen: last}
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+
+	// Build result slice, apply MinCooccurrence filter.
+	minC := opts.MinCooccurrence
+	if minC <= 0 {
+		minC = 1
+	}
+	var result []RelatedTag
+	for t, e := range acc {
+		if e.count < minC {
+			continue
+		}
+		result = append(result, RelatedTag{
+			Tag:               t,
+			CooccurrenceCount: e.count,
+			Score:             float64(e.count),
+			LastSeenAt:        e.lastSeen,
+		})
+	}
+
+	// Sort: score desc, tag asc for ties.
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Score != result[j].Score {
+			return result[i].Score > result[j].Score
+		}
+		return result[i].Tag < result[j].Tag
+	})
+
+	if opts.Limit > 0 && len(result) > opts.Limit {
+		result = result[:opts.Limit]
+	}
+	return result, nil
 }
 
 // tagWeights computes observability signals for a slice of TagInfo.

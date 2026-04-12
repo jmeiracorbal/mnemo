@@ -5731,3 +5731,384 @@ func TestTagStatsSortByAlpha(t *testing.T) {
 		t.Fatalf("unexpected alpha ordering: %v %v %v", tags[0].Tag, tags[1].Tag, tags[2].Tag)
 	}
 }
+
+// ─── RelatedTags ─────────────────────────────────────────────────────────────
+
+func TestRelatedTagsFromObservations(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-rt-obs", "proj-rt")
+
+	n := 0
+	add := func(tags []string) {
+		t.Helper()
+		n++
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-rt-obs",
+			Type:      "decision",
+			Title:     fmt.Sprintf("obs %d", n),
+			Content:   fmt.Sprintf("content %d", n),
+			Project:   "proj-rt",
+			Tags:      tags,
+		}); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+
+	add([]string{"auth", "backend", "security"})
+	add([]string{"auth", "backend"})
+	add([]string{"auth", "frontend"})
+
+	related, err := s.RelatedTags("proj-rt", "auth", RelatedTagsOptions{IncludeObservations: true})
+	if err != nil {
+		t.Fatalf("RelatedTags: %v", err)
+	}
+
+	byTag := make(map[string]RelatedTag)
+	for _, rt := range related {
+		byTag[rt.Tag] = rt
+	}
+
+	if byTag["backend"].CooccurrenceCount != 2 {
+		t.Errorf("expected backend count=2, got %d", byTag["backend"].CooccurrenceCount)
+	}
+	if byTag["security"].CooccurrenceCount != 1 {
+		t.Errorf("expected security count=1, got %d", byTag["security"].CooccurrenceCount)
+	}
+	if byTag["frontend"].CooccurrenceCount != 1 {
+		t.Errorf("expected frontend count=1, got %d", byTag["frontend"].CooccurrenceCount)
+	}
+	if _, found := byTag["auth"]; found {
+		t.Error("auth should not appear in its own related tags")
+	}
+}
+
+func TestRelatedTagsFromSessions(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-rt-s1", "proj-rts")
+	newTestSession(t, s, "sess-rt-s2", "proj-rts")
+	newTestSession(t, s, "sess-rt-s3", "proj-rts")
+
+	if err := s.SetSessionTags("sess-rt-s1", []string{"api", "backend"}); err != nil {
+		t.Fatalf("SetSessionTags s1: %v", err)
+	}
+	if err := s.SetSessionTags("sess-rt-s2", []string{"api", "backend"}); err != nil {
+		t.Fatalf("SetSessionTags s2: %v", err)
+	}
+	if err := s.SetSessionTags("sess-rt-s3", []string{"api", "frontend"}); err != nil {
+		t.Fatalf("SetSessionTags s3: %v", err)
+	}
+
+	related, err := s.RelatedTags("proj-rts", "api", RelatedTagsOptions{IncludeSessions: true})
+	if err != nil {
+		t.Fatalf("RelatedTags: %v", err)
+	}
+
+	byTag := make(map[string]RelatedTag)
+	for _, rt := range related {
+		byTag[rt.Tag] = rt
+	}
+
+	if byTag["backend"].CooccurrenceCount != 2 {
+		t.Errorf("expected backend count=2, got %d", byTag["backend"].CooccurrenceCount)
+	}
+	if byTag["frontend"].CooccurrenceCount != 1 {
+		t.Errorf("expected frontend count=1, got %d", byTag["frontend"].CooccurrenceCount)
+	}
+}
+
+func TestRelatedTagsBothSources(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-rt-both", "proj-both")
+
+	// obs: auth + backend (1 co-occurrence from observations)
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-rt-both",
+		Type:      "decision",
+		Title:     "obs",
+		Content:   "content",
+		Project:   "proj-both",
+		Tags:      []string{"auth", "backend"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	// session: auth + backend (1 co-occurrence from sessions)
+	if err := s.SetSessionTags("sess-rt-both", []string{"auth", "backend"}); err != nil {
+		t.Fatalf("SetSessionTags: %v", err)
+	}
+
+	// Both sources enabled (default).
+	related, err := s.RelatedTags("proj-both", "auth", RelatedTagsOptions{})
+	if err != nil {
+		t.Fatalf("RelatedTags: %v", err)
+	}
+
+	byTag := make(map[string]RelatedTag)
+	for _, rt := range related {
+		byTag[rt.Tag] = rt
+	}
+
+	if byTag["backend"].CooccurrenceCount != 2 {
+		t.Errorf("expected backend count=2 (1 obs + 1 session), got %d", byTag["backend"].CooccurrenceCount)
+	}
+}
+
+func TestRelatedTagsProjectFilter(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-rt-pa", "proj-a")
+	newTestSession(t, s, "sess-rt-pb", "proj-b")
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-rt-pa",
+		Type:      "decision",
+		Title:     "obs-a",
+		Content:   "content",
+		Project:   "proj-a",
+		Tags:      []string{"auth", "backend"},
+	}); err != nil {
+		t.Fatalf("AddObservation proj-a: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-rt-pb",
+		Type:      "decision",
+		Title:     "obs-b",
+		Content:   "content",
+		Project:   "proj-b",
+		Tags:      []string{"auth", "frontend"},
+	}); err != nil {
+		t.Fatalf("AddObservation proj-b: %v", err)
+	}
+
+	related, err := s.RelatedTags("proj-a", "auth", RelatedTagsOptions{IncludeObservations: true})
+	if err != nil {
+		t.Fatalf("RelatedTags: %v", err)
+	}
+
+	byTag := make(map[string]RelatedTag)
+	for _, rt := range related {
+		byTag[rt.Tag] = rt
+	}
+
+	if _, found := byTag["backend"]; !found {
+		t.Error("expected backend from proj-a")
+	}
+	if _, found := byTag["frontend"]; found {
+		t.Error("frontend from proj-b should not appear when filtering by proj-a")
+	}
+}
+
+func TestRelatedTagsSinceFilter(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-rt-since", "proj-since")
+
+	// Add two observations with different tags co-occurring with auth.
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-rt-since",
+		Type:      "decision",
+		Title:     "obs legacy",
+		Content:   "content legacy",
+		Project:   "proj-since",
+		Tags:      []string{"auth", "legacy"},
+	}); err != nil {
+		t.Fatalf("AddObservation legacy: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-rt-since",
+		Type:      "decision",
+		Title:     "obs modern",
+		Content:   "content modern",
+		Project:   "proj-since",
+		Tags:      []string{"auth", "modern"},
+	}); err != nil {
+		t.Fatalf("AddObservation modern: %v", err)
+	}
+
+	// With no Since filter both should appear.
+	all, err := s.RelatedTags("proj-since", "auth", RelatedTagsOptions{IncludeObservations: true})
+	if err != nil {
+		t.Fatalf("RelatedTags (no filter): %v", err)
+	}
+	byTagAll := make(map[string]RelatedTag)
+	for _, rt := range all {
+		byTagAll[rt.Tag] = rt
+	}
+	if _, found := byTagAll["legacy"]; !found {
+		t.Error("expected legacy in unfiltered results")
+	}
+	if _, found := byTagAll["modern"]; !found {
+		t.Error("expected modern in unfiltered results")
+	}
+
+	// With Since = future, nothing should appear.
+	future := time.Now().UTC().Add(time.Hour)
+	none, err := s.RelatedTags("proj-since", "auth", RelatedTagsOptions{
+		IncludeObservations: true,
+		Since:               future,
+	})
+	if err != nil {
+		t.Fatalf("RelatedTags (future since): %v", err)
+	}
+	if len(none) != 0 {
+		t.Errorf("expected no results with future Since, got %v", none)
+	}
+}
+
+func TestRelatedTagsExcludesSelf(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-rt-self", "proj-self")
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-rt-self",
+		Type:      "decision",
+		Title:     "obs",
+		Content:   "content",
+		Project:   "proj-self",
+		Tags:      []string{"auth", "backend"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+
+	related, err := s.RelatedTags("proj-self", "auth", RelatedTagsOptions{IncludeObservations: true})
+	if err != nil {
+		t.Fatalf("RelatedTags: %v", err)
+	}
+
+	for _, rt := range related {
+		if rt.Tag == "auth" {
+			t.Error("auth must not appear in its own related tags")
+		}
+	}
+}
+
+func TestRelatedTagsOrderByScore(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-rt-order", "proj-order")
+
+	n := 0
+	add := func(tags []string) {
+		t.Helper()
+		n++
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-rt-order",
+			Type:      "decision",
+			Title:     fmt.Sprintf("obs %d", n),
+			Content:   fmt.Sprintf("content %d", n),
+			Project:   "proj-order",
+			Tags:      tags,
+		}); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+
+	// backend co-occurs 3 times, frontend once, security twice.
+	add([]string{"auth", "backend"})
+	add([]string{"auth", "backend"})
+	add([]string{"auth", "backend"})
+	add([]string{"auth", "security"})
+	add([]string{"auth", "security"})
+	add([]string{"auth", "frontend"})
+
+	related, err := s.RelatedTags("proj-order", "auth", RelatedTagsOptions{IncludeObservations: true})
+	if err != nil {
+		t.Fatalf("RelatedTags: %v", err)
+	}
+
+	if len(related) < 3 {
+		t.Fatalf("expected at least 3 related tags, got %d", len(related))
+	}
+	if related[0].Tag != "backend" {
+		t.Errorf("expected backend first (count=3), got %q", related[0].Tag)
+	}
+	if related[1].Tag != "security" {
+		t.Errorf("expected security second (count=2), got %q", related[1].Tag)
+	}
+	if related[2].Tag != "frontend" {
+		t.Errorf("expected frontend third (count=1), got %q", related[2].Tag)
+	}
+}
+
+func TestRelatedTagsMinCooccurrence(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-rt-minc", "proj-minc")
+
+	n := 0
+	add := func(tags []string) {
+		t.Helper()
+		n++
+		if _, err := s.AddObservation(AddObservationParams{
+			SessionID: "sess-rt-minc",
+			Type:      "decision",
+			Title:     fmt.Sprintf("obs %d", n),
+			Content:   fmt.Sprintf("content %d", n),
+			Project:   "proj-minc",
+			Tags:      tags,
+		}); err != nil {
+			t.Fatalf("AddObservation: %v", err)
+		}
+	}
+
+	add([]string{"auth", "backend"})
+	add([]string{"auth", "backend"})
+	add([]string{"auth", "rare"})
+
+	related, err := s.RelatedTags("proj-minc", "auth", RelatedTagsOptions{
+		IncludeObservations: true,
+		MinCooccurrence:     2,
+	})
+	if err != nil {
+		t.Fatalf("RelatedTags: %v", err)
+	}
+
+	for _, rt := range related {
+		if rt.Tag == "rare" {
+			t.Error("rare should be excluded by min_cooccurrence=2")
+		}
+	}
+	if len(related) != 1 || related[0].Tag != "backend" {
+		t.Errorf("expected only backend, got %v", related)
+	}
+}
+
+func TestRelatedTagsEmptyTagError(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.RelatedTags("", "", RelatedTagsOptions{})
+	if err == nil {
+		t.Error("expected error for empty tag")
+	}
+}
+
+func TestRelatedTagsIncludeFlags(t *testing.T) {
+	s := newTestStore(t)
+	newTestSession(t, s, "sess-rt-flags", "proj-flags")
+
+	// obs: auth + obs-only
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sess-rt-flags",
+		Type:      "decision",
+		Title:     "obs",
+		Content:   "content",
+		Project:   "proj-flags",
+		Tags:      []string{"auth", "obs-only"},
+	}); err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	// session: auth + sess-only
+	if err := s.SetSessionTags("sess-rt-flags", []string{"auth", "sess-only"}); err != nil {
+		t.Fatalf("SetSessionTags: %v", err)
+	}
+
+	// IncludeObservations=true, IncludeSessions=false → only obs-only should appear.
+	related, err := s.RelatedTags("proj-flags", "auth", RelatedTagsOptions{IncludeObservations: true, IncludeSessions: false})
+	if err != nil {
+		t.Fatalf("RelatedTags: %v", err)
+	}
+	byTag := make(map[string]RelatedTag)
+	for _, rt := range related {
+		byTag[rt.Tag] = rt
+	}
+	if _, found := byTag["obs-only"]; !found {
+		t.Error("obs-only should appear when IncludeObservations=true")
+	}
+	if _, found := byTag["sess-only"]; found {
+		t.Error("sess-only should not appear when IncludeSessions=false")
+	}
+}
