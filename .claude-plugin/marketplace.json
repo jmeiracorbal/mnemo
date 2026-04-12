@@ -11,7 +11,7 @@
     {
       "name": "mnemo",
       "description": "Persistent memory with session tracking, passive capture, and memory protocol. Gives Claude a brain that survives across sessions.",
-      "version": "0.10.0",
+      "version": "0.11.0",
       "author": {
         "name": "jmeiracorbal"
       },
