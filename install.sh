@@ -5,6 +5,7 @@
 # Agent selection (default: claudecode):
 #   bash -s -- --agent=cursor
 #   bash -s -- --agent=windsurf
+#   bash -s -- --agent=codex
 #   bash -s -- --agent=all
 #
 # Environment overrides:
@@ -263,6 +264,60 @@ setup_cursor() {
   ok "~/.cursor/rules/mnemo.mdc written"
 }
 
+# ── setup: Codex ──────────────────────────────────────────────────────────────
+
+setup_codex() {
+  local mnemo_bin="$1"
+  local codex_dir="$HOME/.codex"
+  local hooks_dir="$codex_dir/hooks"
+  local hooks_json="$codex_dir/hooks.json"
+  local codex_config="$codex_dir/config.toml"
+  local agents_md="$codex_dir/AGENTS.md"
+  local marker="## mnemo — Persistent Memory Protocol"
+
+  info "Configuring Codex..."
+
+  mkdir -p "$hooks_dir"
+  cp "$TMP_SCRIPTS/codex/hooks/session-start.sh" "$hooks_dir/"
+  cp "$TMP_SCRIPTS/codex/hooks/stop.sh" "$hooks_dir/"
+  cp "$TMP_SCRIPTS/codex/hooks/mnemo-protocol.md" "$hooks_dir/"
+  chmod +x "$hooks_dir/session-start.sh" "$hooks_dir/stop.sh"
+  ok "Hook scripts installed to ${hooks_dir}"
+
+  touch "$codex_config"
+
+  if grep -q '\[mcp_servers\.mnemo\]' "$codex_config" 2>/dev/null; then
+    ok "~/.codex/config.toml: mnemo MCP already configured"
+  else
+    tail -c1 "$codex_config" | grep -q $'\n' || printf '\n' >> "$codex_config"
+    printf '\n[mcp_servers.mnemo]\ncommand = "%s"\nargs = ["mcp", "--tools=agent"]\n' "$mnemo_bin" >> "$codex_config"
+    ok "~/.codex/config.toml: mnemo MCP configured"
+  fi
+
+  if grep -q 'codex_hooks' "$codex_config" 2>/dev/null; then
+    ok "~/.codex/config.toml: codex_hooks already set"
+  else
+    printf '\n[features]\ncodex_hooks = true\n' >> "$codex_config"
+    ok "~/.codex/config.toml: codex_hooks enabled"
+  fi
+
+  local result
+  result=$(printf '{"hooks":{"SessionStart":[{"matcher":"startup|resume","hooks":[{"type":"command","command":"%s/session-start.sh","statusMessage":"Loading mnemo memory...","timeout":10}]}],"Stop":[{"matcher":"","hooks":[{"type":"command","command":"%s/stop.sh","timeout":10}]}]}}' \
+    "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
+  ok "~/.codex/hooks.json: ${result}"
+
+  if [ -f "$agents_md" ] && grep -qF "$marker" "$agents_md" 2>/dev/null; then
+    ok "~/.codex/AGENTS.md already up to date"
+  else
+    if [ -f "$agents_md" ] && [ -s "$agents_md" ]; then
+      tail -c1 "$agents_md" | grep -q $'\n' || printf '\n' >> "$agents_md"
+      printf '\n' >> "$agents_md"
+    fi
+    cat "$TMP_SCRIPTS/codex/AGENTS.md" >> "$agents_md"
+    ok "~/.codex/AGENTS.md updated"
+  fi
+}
+
 # ── setup: Windsurf ────────────────────────────────────────────────────────────
 
 setup_windsurf() {
@@ -360,14 +415,19 @@ main() {
       setup_windsurf "$mnemo_bin"
       ok "Done. Restart Windsurf to activate mnemo."
       ;;
+    codex)
+      setup_codex "$mnemo_bin"
+      ok "Done. Restart Codex to activate mnemo."
+      ;;
     all)
       setup_claudecode "$mnemo_bin"
       setup_cursor "$mnemo_bin"
       setup_windsurf "$mnemo_bin"
+      setup_codex "$mnemo_bin"
       ok "Done. Restart your editors to activate mnemo."
       ;;
     *)
-      err "Unknown agent: ${AGENT}. Valid options: claudecode | cursor | windsurf | all"
+      err "Unknown agent: ${AGENT}. Valid options: claudecode | cursor | windsurf | codex | all"
       ;;
   esac
 }
