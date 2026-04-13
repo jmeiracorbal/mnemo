@@ -21,7 +21,10 @@ fi
 
 [ -z "$CWD" ] && CWD="$(pwd)"
 
-PROJECT=$(realpath "$CWD" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+REALPATH_CWD=$(realpath "$CWD" 2>/dev/null)
+PROJECT="${REALPATH_CWD#"$HOME/"}"
+PROJECT="${PROJECT#/}"
+PROJECT=$(printf '%s' "$PROJECT" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
 [ -z "$PROJECT" ] && PROJECT=$(basename "$CWD" | tr '[:upper:]' '[:lower:]')
 
 IS_RESUME=$(mnemo session exists "$SESSION_ID" 2>/dev/null)

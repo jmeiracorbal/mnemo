@@ -294,8 +294,13 @@ setup_codex() {
     ok "~/.codex/config.toml: mnemo MCP configured"
   fi
 
-  if grep -q 'codex_hooks' "$codex_config" 2>/dev/null; then
+  if grep -q '^codex_hooks\s*=' "$codex_config" 2>/dev/null; then
     ok "~/.codex/config.toml: codex_hooks already set"
+  elif grep -q '^\[features\]' "$codex_config" 2>/dev/null; then
+    local tmp
+    tmp=$(mktemp)
+    awk '/^\[features\]/{print; print "codex_hooks = true"; next} 1' "$codex_config" > "$tmp" && mv "$tmp" "$codex_config"
+    ok "~/.codex/config.toml: codex_hooks enabled"
   else
     printf '\n[features]\ncodex_hooks = true\n' >> "$codex_config"
     ok "~/.codex/config.toml: codex_hooks enabled"
