@@ -299,7 +299,7 @@ setup_codex() {
   elif grep -q '^\[features\]' "$codex_config" 2>/dev/null; then
     local tmp
     tmp=$(mktemp)
-    awk '/^\[features\]/{print; print "codex_hooks = true"; next} 1' "$codex_config" > "$tmp" && mv "$tmp" "$codex_config"
+    awk '/^\[features\]/{print; print "codex_hooks = true"; next} 1' "$codex_config" > "$tmp" && mv "$tmp" "$codex_config" || rm -f "$tmp"
     ok "~/.codex/config.toml: codex_hooks enabled"
   else
     printf '\n[features]\ncodex_hooks = true\n' >> "$codex_config"
