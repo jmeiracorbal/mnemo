@@ -65,6 +65,8 @@ claude plugin install mnemo@mnemo
 
 The plugin registers the MCP server, hooks (SessionStart, Stop, SubagentStop, PostCompact), and writes the memory protocol to `~/.claude/mnemo.md` and `~/.claude/CLAUDE.md` on first session start.
 
+Restart Claude Code after installing.
+
 **Updating the plugin:**
 
 The marketplace cache can go stale and report an outdated version as the latest. If `claude plugin update mnemo@mnemo` says the plugin is already up to date but the binary is newer, refresh the marketplace first:
