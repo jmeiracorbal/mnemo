@@ -286,24 +286,46 @@ setup_codex() {
 
   touch "$codex_config"
 
-  if grep -q '\[mcp_servers\.mnemo\]' "$codex_config" 2>/dev/null; then
-    ok "~/.codex/config.toml: mnemo MCP already configured"
+  if grep -q '^\[mcp_servers\.mnemo\]' "$codex_config" 2>/dev/null; then
+    local tmp_mcp
+    tmp_mcp=$(mktemp)
+    awk -v bin="$mnemo_bin" '
+      /^\[mcp_servers\.mnemo\]/{
+        print "[mcp_servers.mnemo]"
+        print "command = \"" bin "\""
+        print "args = [\"mcp\", \"--tools=agent\"]"
+        skip=1; next
+      }
+      skip && /^\[/{skip=0}
+      !skip{print}
+    ' "$codex_config" > "$tmp_mcp"
+    if mv "$tmp_mcp" "$codex_config"; then
+      ok "$HOME/.codex/config.toml: mnemo MCP updated"
+    else
+      rm -f "$tmp_mcp"
+      err "Failed to update $HOME/.codex/config.toml"
+    fi
   else
     tail -c1 "$codex_config" | grep -q $'\n' || printf '\n' >> "$codex_config"
     printf '\n[mcp_servers.mnemo]\ncommand = "%s"\nargs = ["mcp", "--tools=agent"]\n' "$mnemo_bin" >> "$codex_config"
-    ok "~/.codex/config.toml: mnemo MCP configured"
+    ok "$HOME/.codex/config.toml: mnemo MCP configured"
   fi
 
   if grep -q '^codex_hooks\s*=' "$codex_config" 2>/dev/null; then
-    ok "~/.codex/config.toml: codex_hooks already set"
+    ok "$HOME/.codex/config.toml: codex_hooks already set"
   elif grep -q '^\[features\]' "$codex_config" 2>/dev/null; then
     local tmp
     tmp=$(mktemp)
-    awk '/^\[features\]/{print; print "codex_hooks = true"; next} 1' "$codex_config" > "$tmp" && mv "$tmp" "$codex_config" || rm -f "$tmp"
-    ok "~/.codex/config.toml: codex_hooks enabled"
+    awk '/^\[features\]/{print; print "codex_hooks = true"; next} 1' "$codex_config" > "$tmp"
+    if mv "$tmp" "$codex_config"; then
+      ok "$HOME/.codex/config.toml: codex_hooks enabled"
+    else
+      rm -f "$tmp"
+      err "Failed to update $HOME/.codex/config.toml"
+    fi
   else
     printf '\n[features]\ncodex_hooks = true\n' >> "$codex_config"
-    ok "~/.codex/config.toml: codex_hooks enabled"
+    ok "$HOME/.codex/config.toml: codex_hooks enabled"
   fi
 
   local result

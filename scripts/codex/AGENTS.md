@@ -22,7 +22,7 @@ Call `mem_save` IMMEDIATELY after ANY of these:
 ### SUBAGENT OUTPUT — required format for passive capture
 When running as a subagent, always end your response with a structured section:
 
-```
+```markdown
 ## Key Learnings
 - <learning 1>
 - <learning 2>
