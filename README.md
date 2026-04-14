@@ -6,14 +6,15 @@
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?logo=anthropic&logoColor=white)](https://claude.ai/code)
 [![Cursor](https://img.shields.io/badge/Cursor-2.6%2B-000000?logo=cursor&logoColor=white)](https://cursor.com)
 [![Windsurf](https://img.shields.io/badge/Windsurf-supported-0066CC)](https://codeium.com/windsurf)
+[![Codex](https://img.shields.io/badge/Codex-supported-412991?logo=openai&logoColor=white)](https://openai.com/codex)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](https://github.com/jmeiracorbal/mnemo)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
-Persistent memory for AI coding agents. mnemo stores decisions, bugs, conventions, and discoveries across sessions in a local SQLite database. A one-command setup wires it into Claude Code, Cursor, or Windsurf via hooks and MCP.
+Persistent memory for AI coding agents. mnemo stores decisions, bugs, conventions, and discoveries across sessions in a local SQLite database. A one-command setup wires it into Claude Code, Cursor, Windsurf, or Codex via hooks and MCP.
 
 ## Prerequisite: binary in PATH
 
-The `mnemo` binary must be in your `PATH` before any agent integration will work. This applies to Claude Code, Cursor, and Windsurf regardless of how the integration is installed.
+The `mnemo` binary must be in your `PATH` before any agent integration will work. This applies to Claude Code, Cursor, Windsurf, and Codex regardless of how the integration is installed.
 
 The hooks that fire on session start, session end, and passive capture all call `mnemo` directly. The MCP server is also the `mnemo` binary. Without it in PATH, hooks fail silently and the MCP server cannot start.
 
@@ -45,7 +46,7 @@ mnemo --version
 - **Passive capture:** extracts learnings from conversation transcripts automatically at session end
 - **Full CLI:** save, search, export, import, and inspect memories from the terminal
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
-- **Claude Code + Cursor + Windsurf:** native integration for all three editors via their respective hook systems
+- **Claude Code + Cursor + Windsurf + Codex:** native integration for all four agents via their respective hook systems
 
 ## Agent setup
 
@@ -75,45 +76,43 @@ claude plugin update mnemo@mnemo
 
 Restart Claude Code after updating.
 
-**Via setup command:**
+**Via install script:**
 
 ```bash
-mnemo setup
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
 ```
 
-This writes hook scripts to `~/.claude/hooks/`, registers the MCP server via `claude mcp add -s user mnemo`, injects hooks into `~/.claude/settings.json`, adds all `mcp__mnemo__*` tools to `permissions.allow`, writes `~/.claude/mnemo.md`, and appends `@mnemo.md` to `~/.claude/CLAUDE.md`.
-
-```bash
-mnemo setup --dry-run   # preview without changes
-```
+Writes `~/.claude/mnemo.md` and appends `@mnemo.md` to `~/.claude/CLAUDE.md`. The plugin (above) is still the recommended path for Claude Code since it also handles MCP registration and hook injection automatically.
 
 ### Cursor
 
 ```bash
-mnemo setup --cursor
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=cursor
 ```
 
-This writes hook scripts to `~/.cursor/hooks/`, registers the MCP server in `~/.cursor/mcp.json`, adds hooks to `~/.cursor/hooks.json` (beforeSubmitPrompt, stop), and writes `~/.cursor/rules/mnemo.mdc` (memory protocol, `alwaysApply: true`).
-
-```bash
-mnemo setup --cursor --dry-run
-```
+Writes hook scripts to `~/.cursor/hooks/`, registers the MCP server in `~/.cursor/mcp.json`, adds hooks to `~/.cursor/hooks.json` (beforeSubmitPrompt, stop), and writes `~/.cursor/rules/mnemo.mdc` (memory protocol, `alwaysApply: true`).
 
 Restart Cursor after setup.
 
 ### Windsurf
 
 ```bash
-mnemo setup --windsurf
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=windsurf
 ```
 
-This writes hook scripts to `~/.codeium/windsurf/hooks/`, registers the MCP server in `~/.codeium/windsurf/mcp_config.json`, adds hooks to `~/.codeium/windsurf/hooks.json` (pre_user_prompt, post_cascade_response_with_transcript), and appends the memory protocol to `~/.codeium/windsurf/memories/global_rules.md`.
-
-```bash
-mnemo setup --windsurf --dry-run
-```
+Writes hook scripts to `~/.codeium/windsurf/hooks/`, registers the MCP server in `~/.codeium/windsurf/mcp_config.json`, adds hooks to `~/.codeium/windsurf/hooks.json` (pre_user_prompt, post_cascade_response_with_transcript), and appends the memory protocol to `~/.codeium/windsurf/memories/global_rules.md`.
 
 Restart Windsurf after setup.
+
+### Codex
+
+```bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=codex
+```
+
+Writes hook scripts to `~/.codex/hooks/`, registers the MCP server in `~/.codex/config.toml`, adds hooks to `~/.codex/hooks.json` (SessionStart, Stop), and appends the memory protocol to `~/.codex/AGENTS.md`. Also enables `codex_hooks = true` in the `[features]` section of `config.toml`.
+
+Restart Codex after setup.
 
 ## Verification checklist
 
@@ -123,14 +122,6 @@ Check that the binary is accessible:
 
 ```bash
 mnemo --version
-```
-
-Verify dry-runs produce no errors:
-
-```bash
-mnemo setup --dry-run
-mnemo setup --cursor --dry-run
-mnemo setup --windsurf --dry-run
 ```
 
 Validate the plugin (Claude Code):
@@ -147,13 +138,16 @@ head -1 ~/.claude/mnemo.md                      # must be: ## mnemo — Persiste
 head -3 ~/.cursor/rules/mnemo.mdc               # must have: alwaysApply: true
 grep "mnemo — Persistent Memory Protocol" \
   ~/.codeium/windsurf/memories/global_rules.md  # must match
+grep "mnemo — Persistent Memory Protocol" \
+  ~/.codex/AGENTS.md                            # must match
 ```
 
 Check idempotency — running setup again must report "already up to date":
 
 ```bash
-mnemo setup --cursor
-mnemo setup --windsurf
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=cursor
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=windsurf
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=codex
 ```
 
 ## How it works
@@ -181,6 +175,13 @@ mnemo setup --windsurf
 |---|---|---|
 | `pre_user_prompt` | First prompt of a conversation | Registers session, injects memory context |
 | `post_cascade_response_with_transcript` | After response | Reads transcript JSONL for passive capture, closes session |
+
+### Codex
+
+| Hook | Trigger | Action |
+|---|---|---|
+| `SessionStart` (startup/resume) | Session starts or resumes | Registers session, injects memory context via `systemMessage` |
+| `Stop` | Agent stops | Reads transcript for passive capture, closes session |
 
 On session start, mnemo detects the project from the git root directory name and emits relevant memories from previous sessions into the context.
 
@@ -250,9 +251,6 @@ mnemo import <file.json>             Import memories from JSON
 mnemo capture <content>              Extract learnings from text (passive capture)
 mnemo json <key> [key...]            Extract a field from JSON read from stdin (key path, array index supported)
 mnemo extract-transcript <file>      Extract assistant text blocks from a JSONL transcript
-mnemo setup [--dry-run]              Install hooks and configure Claude Code
-mnemo setup --cursor [--dry-run]     Install hooks and configure Cursor
-mnemo setup --windsurf [--dry-run]   Install hooks and configure Windsurf
 mnemo version                        Show version
 ```
 
