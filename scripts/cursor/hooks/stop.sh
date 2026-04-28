@@ -17,6 +17,9 @@ WORKSPACE=$(echo "$INPUT" | mnemo json workspace_roots 0 2>/dev/null)
 [ -z "$CONVERSATION_ID" ] && exit 0
 [ -z "$WORKSPACE" ] && WORKSPACE="$(pwd)"
 
+PROJECT_ROOT=$(git -C "$WORKSPACE" rev-parse --show-toplevel 2>/dev/null || echo "$WORKSPACE")
+[ ! -f "${PROJECT_ROOT}/.mnemo" ] && exit 0
+
 PROJECT=$(realpath "$WORKSPACE" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
 [ -z "$PROJECT" ] && PROJECT=$(basename "$WORKSPACE" | tr '[:upper:]' '[:lower:]')
 

@@ -22,6 +22,12 @@ fi
 
 [ -z "$CWD" ] && CWD="$(pwd)"
 
+PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || echo "$CWD")
+if [ ! -f "${PROJECT_ROOT}/.mnemo" ]; then
+  printf '{"continue":true}\n'
+  exit 0
+fi
+
 REALPATH_CWD=$(realpath "$CWD" 2>/dev/null)
 PROJECT="${REALPATH_CWD#"$HOME/"}"
 PROJECT="${PROJECT#/}"

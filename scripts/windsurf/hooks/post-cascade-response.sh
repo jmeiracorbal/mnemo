@@ -16,6 +16,9 @@ TRANSCRIPT_PATH=$(echo "$INPUT" | mnemo json tool_info transcript_path 2>/dev/nu
 [ -z "$TRAJECTORY_ID" ] && exit 0
 
 WORKSPACE="$(pwd)"
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "$WORKSPACE")
+[ ! -f "${PROJECT_ROOT}/.mnemo" ] && exit 0
+
 PROJECT=$(realpath "$WORKSPACE" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
 [ -z "$PROJECT" ] && PROJECT=$(basename "$WORKSPACE" | tr '[:upper:]' '[:lower:]')
 
