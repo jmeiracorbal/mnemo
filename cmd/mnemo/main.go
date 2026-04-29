@@ -641,7 +641,7 @@ Usage:
   mnemo export [file]                  Export all memories to JSON
   mnemo import <file.json>             Import memories from JSON
   mnemo capture <content>              Extract learnings from text (passive capture)
-  mnemo init [--agent=AGENT]           Configure mnemo in the current project
+  mnemo init [--agent=AGENT] [--path=DIR]  Configure mnemo in the current project
   mnemo json KEY [KEY ...]             Extract field from JSON on stdin (used by hooks)
   mnemo json-merge <file>              Deep-merge JSON from stdin into file
   mnemo extract-transcript <file>      Extract assistant text from JSONL transcript
@@ -653,6 +653,7 @@ Agents for init:
   --agent=windsurf     .windsurf/hooks.json + .windsurf/rules/mnemo.md
   --agent=codex        AGENTS.md append
   --agent=all          All agents
+  --path=DIR           Target project directory (default: current directory)
 
 Tool profiles for mcp:
   --tools=agent    11 tools for AI agents (default when using plugin)

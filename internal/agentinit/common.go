@@ -91,9 +91,12 @@ func AppendSection(path, content string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = f.WriteString(section)
-	return err
+	_, writeErr := f.WriteString(section)
+	closeErr := f.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
 }
 
 // WriteFile writes data to path, creating parent directories. Overwrites if exists.
@@ -115,7 +118,7 @@ func prependToFile(path, content string) error {
 		if !strings.HasSuffix(combined, "\n") {
 			combined += "\n"
 		}
-		combined += "\n" + string(existing)
+		combined += string(existing)
 	}
 	return os.WriteFile(path, []byte(combined), 0644)
 }
