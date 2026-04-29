@@ -2,6 +2,7 @@ package agentinit
 
 import (
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,18 +28,24 @@ func InitCursor(root string) error {
 	if _, err := os.Stat(beforeSubmit); os.IsNotExist(err) {
 		return fmt.Errorf("cursor init: hook script not found: %s\nRun install.sh --agent=cursor first", beforeSubmit)
 	}
+	if _, err := os.Stat(stop); os.IsNotExist(err) {
+		return fmt.Errorf("cursor init: hook script not found: %s\nRun install.sh --agent=cursor first", stop)
+	}
 
-	hooksJSON := fmt.Sprintf(`{
-  "version": 1,
-  "hooks": {
-    "beforeSubmitPrompt": [{"command": "%s"}],
-    "stop": [{"command": "%s"}]
-  }
-}
-`, beforeSubmit, stop)
+	hooksData := map[string]any{
+		"version": 1,
+		"hooks": map[string]any{
+			"beforeSubmitPrompt": []map[string]string{{"command": beforeSubmit}},
+			"stop":               []map[string]string{{"command": stop}},
+		},
+	}
+	hooksJSON, err := json.MarshalIndent(hooksData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cursor init: marshal hooks.json: %w", err)
+	}
 
 	hooksPath := filepath.Join(root, ".cursor", "hooks.json")
-	if err := WriteFile(hooksPath, []byte(hooksJSON)); err != nil {
+	if err := WriteFile(hooksPath, append(hooksJSON, '\n')); err != nil {
 		return fmt.Errorf("cursor init: .cursor/hooks.json: %w", err)
 	}
 

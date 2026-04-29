@@ -2,6 +2,7 @@ package agentinit
 
 import (
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,17 +28,23 @@ func InitWindsurf(root string) error {
 	if _, err := os.Stat(prePrompt); os.IsNotExist(err) {
 		return fmt.Errorf("windsurf init: hook script not found: %s\nRun install.sh --agent=windsurf first", prePrompt)
 	}
+	if _, err := os.Stat(postCascade); os.IsNotExist(err) {
+		return fmt.Errorf("windsurf init: hook script not found: %s\nRun install.sh --agent=windsurf first", postCascade)
+	}
 
-	hooksJSON := fmt.Sprintf(`{
-  "hooks": {
-    "pre_user_prompt": [{"command": "%s"}],
-    "post_cascade_response_with_transcript": [{"command": "%s"}]
-  }
-}
-`, prePrompt, postCascade)
+	hooksData := map[string]any{
+		"hooks": map[string]any{
+			"pre_user_prompt":                       []map[string]string{{"command": prePrompt}},
+			"post_cascade_response_with_transcript": []map[string]string{{"command": postCascade}},
+		},
+	}
+	hooksJSON, err := json.MarshalIndent(hooksData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("windsurf init: marshal hooks.json: %w", err)
+	}
 
 	hooksPath := filepath.Join(root, ".windsurf", "hooks.json")
-	if err := WriteFile(hooksPath, []byte(hooksJSON)); err != nil {
+	if err := WriteFile(hooksPath, append(hooksJSON, '\n')); err != nil {
 		return fmt.Errorf("windsurf init: .windsurf/hooks.json: %w", err)
 	}
 

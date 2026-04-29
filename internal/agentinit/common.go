@@ -2,6 +2,7 @@ package agentinit
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,7 +38,7 @@ func readMarker(root string) (*Marker, error) {
 	}
 	var m Marker
 	if err := json.Unmarshal(data, &m); err != nil {
-		return &Marker{Version: 1}, nil
+		return nil, fmt.Errorf("malformed .mnemo file: %w", err)
 	}
 	return &m, nil
 }

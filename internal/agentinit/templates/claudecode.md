@@ -23,6 +23,13 @@ Call `mem_save` IMMEDIATELY after ANY of these:
 - Starting work on something that might have been done before
 - User mentions a topic you have no context on
 
+### RECOVER CONTEXT with mem_context when:
+- A new session starts in a project you have worked on before
+- The context window was just compacted (PostCompact hook fires this automatically)
+- You need a broad overview of recent session history before acting
+
+`mem_context` returns the most recent observations and session summaries for the project. Use it to orient yourself at the start of a session before doing any significant work.
+
 ### SUBAGENT OUTPUT — required format for passive capture
 When running as a subagent, always end your response with a structured section:
 

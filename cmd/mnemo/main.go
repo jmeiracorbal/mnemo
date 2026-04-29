@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -600,10 +601,7 @@ func initAgent(root, agent string) error {
 }
 
 func absPath(dir string) (string, error) {
-	if dir == "." {
-		return os.Getwd()
-	}
-	return dir, nil
+	return filepath.Abs(dir)
 }
 
 // ─── json-merge ──────────────────────────────────────────────────────────────
