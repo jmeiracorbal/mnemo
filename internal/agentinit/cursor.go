@@ -25,11 +25,17 @@ func InitCursor(root string) error {
 	beforeSubmit := filepath.Join(hooksDir, "before-submit-prompt.sh")
 	stop := filepath.Join(hooksDir, "stop.sh")
 
-	if _, err := os.Stat(beforeSubmit); os.IsNotExist(err) {
-		return fmt.Errorf("cursor init: hook script not found: %s\nRun install.sh --agent=cursor first", beforeSubmit)
+	if _, err := os.Stat(beforeSubmit); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("cursor init: hook script not found: %s\nRun install.sh --agent=cursor first", beforeSubmit)
+		}
+		return fmt.Errorf("cursor init: stat %s: %w", beforeSubmit, err)
 	}
-	if _, err := os.Stat(stop); os.IsNotExist(err) {
-		return fmt.Errorf("cursor init: hook script not found: %s\nRun install.sh --agent=cursor first", stop)
+	if _, err := os.Stat(stop); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("cursor init: hook script not found: %s\nRun install.sh --agent=cursor first", stop)
+		}
+		return fmt.Errorf("cursor init: stat %s: %w", stop, err)
 	}
 
 	hooksData := map[string]any{

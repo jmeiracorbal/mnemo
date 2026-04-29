@@ -25,11 +25,17 @@ func InitWindsurf(root string) error {
 	prePrompt := filepath.Join(hooksDir, "pre-user-prompt.sh")
 	postCascade := filepath.Join(hooksDir, "post-cascade-response.sh")
 
-	if _, err := os.Stat(prePrompt); os.IsNotExist(err) {
-		return fmt.Errorf("windsurf init: hook script not found: %s\nRun install.sh --agent=windsurf first", prePrompt)
+	if _, err := os.Stat(prePrompt); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("windsurf init: hook script not found: %s\nRun install.sh --agent=windsurf first", prePrompt)
+		}
+		return fmt.Errorf("windsurf init: stat %s: %w", prePrompt, err)
 	}
-	if _, err := os.Stat(postCascade); os.IsNotExist(err) {
-		return fmt.Errorf("windsurf init: hook script not found: %s\nRun install.sh --agent=windsurf first", postCascade)
+	if _, err := os.Stat(postCascade); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("windsurf init: hook script not found: %s\nRun install.sh --agent=windsurf first", postCascade)
+		}
+		return fmt.Errorf("windsurf init: stat %s: %w", postCascade, err)
 	}
 
 	hooksData := map[string]any{
