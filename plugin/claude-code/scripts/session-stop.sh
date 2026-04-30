@@ -3,8 +3,13 @@
 
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | mnemo json session_id 2>/dev/null)
+CWD=$(echo "$INPUT" | mnemo json cwd 2>/dev/null)
+[ -z "$CWD" ] && CWD="$(pwd)"
 
 [ -z "$SESSION_ID" ] && exit 0
+
+PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || echo "$CWD")
+[ ! -f "${PROJECT_ROOT}/.mnemo" ] && exit 0
 
 OBS_COUNT=$(mnemo session obs-count "$SESSION_ID" 2>/dev/null)
 
