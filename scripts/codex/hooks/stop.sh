@@ -36,7 +36,7 @@ if [ -f "${PROJECT_ROOT}/.mnemo" ]; then
     fi
 
     if [ -n "$CONTENT" ]; then
-      mnemo capture "$CONTENT" --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null || true
+      printf '%s' "$CONTENT" | mnemo capture - --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null || true
     fi
   fi
 fi
