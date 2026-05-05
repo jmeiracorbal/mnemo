@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/jmeiracorbal/mnemo/internal/agentinit"
 	mcpserver "github.com/jmeiracorbal/mnemo/internal/mcp"
 	"github.com/jmeiracorbal/mnemo/internal/jsonmerge"
 	"github.com/jmeiracorbal/mnemo/internal/store"
@@ -32,6 +34,9 @@ func main() {
 		return
 	case "extract-transcript":
 		runExtractTranscript()
+		return
+	case "init":
+		runInit()
 		return
 	case "--version", "version":
 		fmt.Printf("mnemo %s\n", version)
@@ -543,6 +548,62 @@ func runExtractTranscript() {
 	fmt.Println(strings.Join(lines, "\n"))
 }
 
+// ─── init ────────────────────────────────────────────────────────────────────
+
+// runInit configures mnemo for one or more agents in the current project.
+func runInit() {
+	agent := "claudecode"
+	dir := "."
+
+	for _, arg := range os.Args[2:] {
+		switch {
+		case strings.HasPrefix(arg, "--agent="):
+			agent = arg[len("--agent="):]
+		case strings.HasPrefix(arg, "--path="):
+			dir = arg[len("--path="):]
+		}
+	}
+
+	abs, err := absPath(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo init: %v\n", err)
+		os.Exit(1)
+	}
+	root := agentinit.ProjectRoot(abs)
+
+	agents := []string{agent}
+	if agent == "all" {
+		agents = []string{"claudecode", "cursor", "windsurf", "codex"}
+	}
+
+	for _, a := range agents {
+		if err := initAgent(root, a); err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo init: %s: %v\n", a, err)
+			os.Exit(1)
+		}
+		fmt.Printf("mnemo init: %s configured in %s\n", a, root)
+	}
+}
+
+func initAgent(root, agent string) error {
+	switch agent {
+	case "claudecode":
+		return agentinit.InitClaudeCode(root)
+	case "cursor":
+		return agentinit.InitCursor(root)
+	case "windsurf":
+		return agentinit.InitWindsurf(root)
+	case "codex":
+		return agentinit.InitCodex(root)
+	default:
+		return fmt.Errorf("unknown agent %q — valid: claudecode | cursor | windsurf | codex | all", agent)
+	}
+}
+
+func absPath(dir string) (string, error) {
+	return filepath.Abs(dir)
+}
+
 // ─── json-merge ──────────────────────────────────────────────────────────────
 
 // runJSONMerge reads a JSON patch from stdin and deep-merges it into FILE.
@@ -580,10 +641,19 @@ Usage:
   mnemo export [file]                  Export all memories to JSON
   mnemo import <file.json>             Import memories from JSON
   mnemo capture <content>              Extract learnings from text (passive capture)
+  mnemo init [--agent=AGENT] [--path=DIR]  Configure mnemo in the current project
   mnemo json KEY [KEY ...]             Extract field from JSON on stdin (used by hooks)
   mnemo json-merge <file>              Deep-merge JSON from stdin into file
   mnemo extract-transcript <file>      Extract assistant text from JSONL transcript
   mnemo version                        Show version
+
+Agents for init:
+  --agent=claudecode   AGENTS.md + CLAUDE.md symlink (default)
+  --agent=cursor       .cursor/hooks.json + .cursor/rules/mnemo.mdc
+  --agent=windsurf     .windsurf/hooks.json + .windsurf/rules/mnemo.md
+  --agent=codex        AGENTS.md append
+  --agent=all          All agents
+  --path=DIR           Target project directory (default: current directory)
 
 Tool profiles for mcp:
   --tools=agent    11 tools for AI agents (default when using plugin)

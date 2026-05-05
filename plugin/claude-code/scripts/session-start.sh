@@ -12,8 +12,11 @@ CWD=$(echo "$INPUT" | mnemo json cwd 2>/dev/null)
 [ -z "$SESSION_ID" ] && exit 0
 [ -z "$CWD" ] && CWD="$(pwd)"
 
-PROJECT=$(realpath "$CWD" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-[ -z "$PROJECT" ] && PROJECT=$(basename "$CWD" | tr '[:upper:]' '[:lower:]')
+PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || echo "$CWD")
+[ ! -f "${PROJECT_ROOT}/.mnemo" ] && exit 0
+
+PROJECT=$(realpath "$PROJECT_ROOT" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+[ -z "$PROJECT" ] && PROJECT=$(basename "$PROJECT_ROOT" | tr '[:upper:]' '[:lower:]')
 
 IS_RESUME=$(mnemo session exists "$SESSION_ID" 2>/dev/null)
 
