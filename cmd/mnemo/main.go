@@ -651,7 +651,7 @@ Usage:
   mnemo stats                          Show memory statistics
   mnemo export [file]                  Export all memories to JSON
   mnemo import <file.json>             Import memories from JSON
-  mnemo capture <content>              Extract learnings from text (passive capture)
+  mnemo capture <content>|-            Extract learnings from text (passive capture; "-" reads stdin)
   mnemo init [--agent=AGENT] [--path=DIR]  Configure mnemo in the current project
   mnemo json KEY [KEY ...]             Extract field from JSON on stdin (used by hooks)
   mnemo json-merge <file>              Deep-merge JSON from stdin into file
