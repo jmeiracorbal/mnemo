@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -385,11 +386,21 @@ func runImport(s *store.Store) {
 func runCapture(s *store.Store) {
 	args := os.Args[2:]
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: mnemo capture <content> [--session SESSION_ID] [--project PROJECT]")
+		fmt.Fprintln(os.Stderr, "usage: mnemo capture <content>|- [--session SESSION_ID] [--project PROJECT]")
 		os.Exit(1)
 	}
 
-	content := args[0]
+	var content string
+	if args[0] == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo: failed to read stdin: %v\n", err)
+			os.Exit(1)
+		}
+		content = string(data)
+	} else {
+		content = args[0]
+	}
 	sessionID := ""
 	project := ""
 
@@ -640,7 +651,7 @@ Usage:
   mnemo stats                          Show memory statistics
   mnemo export [file]                  Export all memories to JSON
   mnemo import <file.json>             Import memories from JSON
-  mnemo capture <content>              Extract learnings from text (passive capture)
+  mnemo capture <content>|-            Extract learnings from text (passive capture; "-" reads stdin)
   mnemo init [--agent=AGENT] [--path=DIR]  Configure mnemo in the current project
   mnemo json KEY [KEY ...]             Extract field from JSON on stdin (used by hooks)
   mnemo json-merge <file>              Deep-merge JSON from stdin into file

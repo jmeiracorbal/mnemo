@@ -28,7 +28,7 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
   CONTENT=$(mnemo extract-transcript "$TRANSCRIPT_PATH" 2>/dev/null)
 
   if [ -n "$CONTENT" ]; then
-    mnemo capture "$CONTENT" --session "$CONVERSATION_ID" --project "$PROJECT" 2>/dev/null || true
+    printf '%s' "$CONTENT" | mnemo capture - --session "$CONVERSATION_ID" --project "$PROJECT" 2>/dev/null || true
   fi
 fi
 
