@@ -212,25 +212,17 @@ download_scripts() {
 setup_claudecode() {
   local mnemo_bin="$1"
   local claude_dir="$HOME/.claude"
-  local mnemo_md="$claude_dir/mnemo.md"
-  local claude_md="$claude_dir/CLAUDE.md"
-  local reference="@mnemo.md"
+  local mcp_json="$claude_dir/.mcp.json"
 
   info "Configuring Claude Code..."
   mkdir -p "$claude_dir"
 
-  cp "$TMP_SCRIPTS/claudecode/mnemo.md" "$mnemo_md"
-  ok "~/.claude/mnemo.md written"
+  local result
+  result=$(printf '{"mcpServers":{"mnemo":{"command":"%s","args":["mcp","--tools=agent"]}}}' \
+    "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
+  ok "~/.claude/.mcp.json: ${result}"
 
-  if [ -f "$claude_md" ] && grep -qF "$reference" "$claude_md" 2>/dev/null; then
-    ok "~/.claude/CLAUDE.md already up to date"
-  else
-    if [ -f "$claude_md" ] && [ -s "$claude_md" ]; then
-      tail -c1 "$claude_md" | grep -q $'\n' || printf '\n' >> "$claude_md"
-    fi
-    printf '%s\n' "$reference" >> "$claude_md"
-    ok "~/.claude/CLAUDE.md updated"
-  fi
+  ok "Run 'mnemo init --agent=claudecode' from each project to enable mnemo there."
 }
 
 # ── setup: Cursor ──────────────────────────────────────────────────────────────
@@ -255,13 +247,7 @@ setup_cursor() {
     "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
   ok "~/.cursor/mcp.json: ${result}"
 
-  result=$(printf '{"version":1,"hooks":{"beforeSubmitPrompt":[{"command":"%s/before-submit-prompt.sh"}],"stop":[{"command":"%s/stop.sh"}]}}' \
-    "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
-  ok "~/.cursor/hooks.json: ${result}"
-
-  mkdir -p "$rules_dir"
-  cp "$TMP_SCRIPTS/cursor/rules/mnemo.mdc" "$rules_dir/"
-  ok "~/.cursor/rules/mnemo.mdc written"
+  ok "Run 'mnemo init --agent=cursor' from each project to enable hooks and rules there."
 }
 
 # ── setup: Codex ──────────────────────────────────────────────────────────────
@@ -333,16 +319,7 @@ setup_codex() {
     "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
   ok "~/.codex/hooks.json: ${result}"
 
-  if [ -f "$agents_md" ] && grep -qF "$marker" "$agents_md" 2>/dev/null; then
-    ok "~/.codex/AGENTS.md already up to date"
-  else
-    if [ -f "$agents_md" ] && [ -s "$agents_md" ]; then
-      tail -c1 "$agents_md" | grep -q $'\n' || printf '\n' >> "$agents_md"
-      printf '\n' >> "$agents_md"
-    fi
-    cat "$TMP_SCRIPTS/codex/AGENTS.md" >> "$agents_md"
-    ok "~/.codex/AGENTS.md updated"
-  fi
+  ok "Run 'mnemo init --agent=codex' from each project to enable mnemo there."
 }
 
 # ── setup: Windsurf ────────────────────────────────────────────────────────────
@@ -369,21 +346,7 @@ setup_windsurf() {
     "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
   ok "~/.codeium/windsurf/mcp_config.json: ${result}"
 
-  result=$(printf '{"hooks":{"pre_user_prompt":[{"command":"%s/pre-user-prompt.sh"}],"post_cascade_response_with_transcript":[{"command":"%s/post-cascade-response.sh"}]}}' \
-    "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
-  ok "~/.codeium/windsurf/hooks.json: ${result}"
-
-  mkdir -p "$memories_dir"
-  if [ -f "$global_rules" ] && grep -qF "$marker" "$global_rules" 2>/dev/null; then
-    ok "~/.codeium/windsurf/memories/global_rules.md already up to date"
-  else
-    if [ -f "$global_rules" ] && [ -s "$global_rules" ]; then
-      tail -c1 "$global_rules" | grep -q $'\n' || printf '\n' >> "$global_rules"
-      printf '\n' >> "$global_rules"
-    fi
-    cat "$TMP_SCRIPTS/windsurf/templates/global_rules.md" >> "$global_rules"
-    ok "~/.codeium/windsurf/memories/global_rules.md updated"
-  fi
+  ok "Run 'mnemo init --agent=windsurf' from each project to enable hooks and rules there."
 }
 
 # ── main ───────────────────────────────────────────────────────────────────────
@@ -432,26 +395,26 @@ main() {
   case "$AGENT" in
     claudecode)
       setup_claudecode "$mnemo_bin"
-      ok "Done. Restart Claude Code to activate mnemo."
+      ok "Done. Run 'mnemo init --agent=claudecode' from each project to activate mnemo there."
       ;;
     cursor)
       setup_cursor "$mnemo_bin"
-      ok "Done. Restart Cursor to activate mnemo."
+      ok "Done. Run 'mnemo init --agent=cursor' from each project to activate mnemo there."
       ;;
     windsurf)
       setup_windsurf "$mnemo_bin"
-      ok "Done. Restart Windsurf to activate mnemo."
+      ok "Done. Run 'mnemo init --agent=windsurf' from each project to activate mnemo there."
       ;;
     codex)
       setup_codex "$mnemo_bin"
-      ok "Done. Restart Codex to activate mnemo."
+      ok "Done. Run 'mnemo init --agent=codex' from each project to activate mnemo there."
       ;;
     all)
       setup_claudecode "$mnemo_bin"
       setup_cursor "$mnemo_bin"
       setup_windsurf "$mnemo_bin"
       setup_codex "$mnemo_bin"
-      ok "Done. Restart your editors to activate mnemo."
+      ok "Done. Run 'mnemo init --agent=all' from each project to activate mnemo there."
       ;;
     *)
       err "Unknown agent: ${AGENT}. Valid options: claudecode | cursor | windsurf | codex | all"

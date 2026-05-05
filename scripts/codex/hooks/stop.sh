@@ -22,21 +22,22 @@ fi
 
 [ -z "$CWD" ] && CWD="$(pwd)"
 
-REALPATH_CWD=$(realpath "$CWD" 2>/dev/null)
-PROJECT="${REALPATH_CWD#"$HOME/"}"
-PROJECT="${PROJECT#/}"
-PROJECT=$(printf '%s' "$PROJECT" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-[ -z "$PROJECT" ] && PROJECT=$(basename "$CWD" | tr '[:upper:]' '[:lower:]')
+PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || echo "$CWD")
 
-# Passive capture from transcript if available
-if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-  CONTENT=$(mnemo extract-transcript "$TRANSCRIPT_PATH" 2>/dev/null)
-  if [ -z "$CONTENT" ]; then
-    CONTENT=$(cat "$TRANSCRIPT_PATH" 2>/dev/null)
-  fi
+PROJECT=$(realpath "$PROJECT_ROOT" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
+[ -z "$PROJECT" ] && PROJECT=$(basename "$PROJECT_ROOT" | tr '[:upper:]' '[:lower:]')
 
-  if [ -n "$CONTENT" ]; then
-    mnemo capture "$CONTENT" --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null || true
+# Passive capture only if project has mnemo configured
+if [ -f "${PROJECT_ROOT}/.mnemo" ]; then
+  if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
+    CONTENT=$(mnemo extract-transcript "$TRANSCRIPT_PATH" 2>/dev/null)
+    if [ -z "$CONTENT" ]; then
+      CONTENT=$(cat "$TRANSCRIPT_PATH" 2>/dev/null)
+    fi
+
+    if [ -n "$CONTENT" ]; then
+      mnemo capture "$CONTENT" --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null || true
+    fi
   fi
 fi
 
