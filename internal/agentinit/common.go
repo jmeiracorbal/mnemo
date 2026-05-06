@@ -142,19 +142,3 @@ func WriteFile(path string, data []byte) error {
 	}
 	return os.WriteFile(path, data, 0644)
 }
-
-// prependToFile prepends content before the existing content of path.
-func prependToFile(path, content string) error {
-	existing, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	combined := content
-	if len(existing) > 0 {
-		if !strings.HasSuffix(combined, "\n") {
-			combined += "\n"
-		}
-		combined += string(existing)
-	}
-	return os.WriteFile(path, []byte(combined), 0644)
-}
