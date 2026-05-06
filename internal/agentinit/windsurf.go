@@ -1,15 +1,13 @@
 package agentinit
 
 import (
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-)
 
-//go:embed templates/windsurf.md
-var windsurfProtocol []byte
+	"github.com/jmeiracorbal/mnemo/templates"
+)
 
 // InitWindsurf configures mnemo for Windsurf in the given project root.
 //
@@ -55,7 +53,7 @@ func InitWindsurf(root string) error {
 	}
 
 	rulesPath := filepath.Join(root, ".windsurf", "rules", "mnemo.md")
-	if err := WriteFile(rulesPath, windsurfProtocol); err != nil {
+	if err := WriteFile(rulesPath, []byte(templates.Windsurf)); err != nil {
 		return fmt.Errorf("windsurf init: .windsurf/rules/mnemo.md: %w", err)
 	}
 
