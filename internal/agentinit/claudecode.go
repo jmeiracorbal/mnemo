@@ -25,13 +25,16 @@ func InitClaudeCode(root string) error {
 
 	info, err := os.Lstat(claudePath)
 	if err == nil {
-		if info.IsDir() {
+		mode := info.Mode()
+		if mode.IsDir() {
 			return fmt.Errorf("CLAUDE.md: is a directory")
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		if mode&os.ModeSymlink != 0 {
 			if err := os.Remove(claudePath); err != nil {
 				return fmt.Errorf("CLAUDE.md: remove symlink: %w", err)
 			}
+		} else if !mode.IsRegular() {
+			return fmt.Errorf("CLAUDE.md: unexpected file type %v", mode.Type())
 		}
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("CLAUDE.md: stat: %w", err)
