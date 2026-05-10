@@ -1,15 +1,13 @@
 package agentinit
 
 import (
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-)
 
-//go:embed templates/cursor.mdc
-var cursorProtocol []byte
+	"github.com/jmeiracorbal/mnemo/templates"
+)
 
 // InitCursor configures mnemo for Cursor in the given project root.
 //
@@ -56,7 +54,7 @@ func InitCursor(root string) error {
 	}
 
 	rulesPath := filepath.Join(root, ".cursor", "rules", "mnemo.mdc")
-	if err := WriteFile(rulesPath, cursorProtocol); err != nil {
+	if err := WriteFile(rulesPath, []byte(templates.Cursor)); err != nil {
 		return fmt.Errorf("cursor init: .cursor/rules/mnemo.mdc: %w", err)
 	}
 

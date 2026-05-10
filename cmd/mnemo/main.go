@@ -659,7 +659,7 @@ Usage:
   mnemo version                        Show version
 
 Agents for init:
-  --agent=claudecode   AGENTS.md + CLAUDE.md symlink (default)
+  --agent=claudecode   AGENTS.md (generic) + CLAUDE.md with Claude-specific additions (default)
   --agent=cursor       .cursor/hooks.json + .cursor/rules/mnemo.mdc
   --agent=windsurf     .windsurf/hooks.json + .windsurf/rules/mnemo.md
   --agent=codex        AGENTS.md append

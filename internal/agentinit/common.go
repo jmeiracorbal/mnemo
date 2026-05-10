@@ -12,6 +12,8 @@ import (
 const markerName = ".mnemo"
 const sectionStart = "<!-- mnemo:start -->"
 const sectionEnd = "<!-- mnemo:end -->"
+const claudeSectionStart = "<!-- mnemo:claude-start -->"
+const claudeSectionEnd = "<!-- mnemo:claude-end -->"
 
 // Marker is the .mnemo file format.
 type Marker struct {
@@ -99,26 +101,44 @@ func AppendSection(path, content string) error {
 	return closeErr
 }
 
+// AppendClaudeSection appends an @AGENTS.md include and the Claude-specific mnemo
+// section to path, creating the file if needed. Idempotent: does nothing if the
+// Claude section marker is already present.
+func AppendClaudeSection(path, content string) error {
+	existing, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	if strings.Contains(string(existing), claudeSectionStart) {
+		return nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+
+	section := "\n@AGENTS.md\n\n" + claudeSectionStart + "\n" + content + "\n" + claudeSectionEnd + "\n"
+	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
+		section = "\n" + section
+	}
+
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	_, writeErr := f.WriteString(section)
+	closeErr := f.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
+}
+
 // WriteFile writes data to path, creating parent directories. Overwrites if exists.
 func WriteFile(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, 0644)
-}
-
-// prependToFile prepends content before the existing content of path.
-func prependToFile(path, content string) error {
-	existing, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	combined := content
-	if len(existing) > 0 {
-		if !strings.HasSuffix(combined, "\n") {
-			combined += "\n"
-		}
-		combined += string(existing)
-	}
-	return os.WriteFile(path, []byte(combined), 0644)
 }
