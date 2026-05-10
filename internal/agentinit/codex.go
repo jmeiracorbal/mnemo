@@ -1,13 +1,11 @@
 package agentinit
 
 import (
-	_ "embed"
 	"fmt"
 	"path/filepath"
-)
 
-//go:embed templates/codex.md
-var codexProtocol string
+	"github.com/jmeiracorbal/mnemo/templates"
+)
 
 // InitCodex configures mnemo for Codex in the given project root.
 //
@@ -15,7 +13,7 @@ var codexProtocol string
 // (registered by install.sh); they check for the .mnemo marker at runtime.
 func InitCodex(root string) error {
 	agentsPath := filepath.Join(root, "AGENTS.md")
-	if err := AppendSection(agentsPath, codexProtocol); err != nil {
+	if err := AppendSection(agentsPath, templates.Generic); err != nil {
 		return fmt.Errorf("codex init: AGENTS.md: %w", err)
 	}
 	return AddAgent(root, "codex")
