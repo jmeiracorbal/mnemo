@@ -4132,7 +4132,7 @@ func sanitizeFTS(query string) string {
 		w = strings.Trim(w, `"`)
 		words[i] = `"` + w + `"`
 	}
-	return strings.Join(words, " ")
+	return strings.Join(words, " OR ")
 }
 
 // ─── Passive Capture ─────────────────────────────────────────────────────────
