@@ -7,9 +7,25 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 const markerName = ".mnemo"
+
+// mnemoNamespace is the UUID v5 namespace for mnemo project identifiers.
+// Fixed forever — changing this would invalidate all existing project IDs.
+var mnemoNamespace = uuid.MustParse("6f3e4b2a-1c5d-4e7f-8a9b-0c1d2e3f4a5b")
+
+// ProjectUUIDFromPath returns the deterministic UUID v5 for an absolute project path.
+// Same path always produces the same UUID. Used by both init and migrate.
+// Panics if absPath is not absolute to prevent non-deterministic IDs.
+func ProjectUUIDFromPath(absPath string) string {
+	if !filepath.IsAbs(absPath) {
+		panic("ProjectUUIDFromPath: path must be absolute, got: " + absPath)
+	}
+	return uuid.NewSHA1(mnemoNamespace, []byte(absPath)).String()
+}
 const sectionStart = "<!-- mnemo:start -->"
 const sectionEnd = "<!-- mnemo:end -->"
 const claudeSectionStart = "<!-- mnemo:claude-start -->"
@@ -18,6 +34,7 @@ const claudeSectionEnd = "<!-- mnemo:claude-end -->"
 // Marker is the .mnemo file format.
 type Marker struct {
 	Version int      `json:"version"`
+	ID      string   `json:"id,omitempty"`
 	Agents  []string `json:"agents"`
 }
 
@@ -51,6 +68,58 @@ func writeMarker(root string, m *Marker) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(root, markerName), append(data, '\n'), 0644)
+}
+
+// EnsureProjectID returns the project UUID from .mnemo. If not set, derives it
+// deterministically from the absolute path, persists it, and returns it.
+func EnsureProjectID(root string) (string, error) {
+	m, err := readMarker(root)
+	if err != nil {
+		return "", err
+	}
+	if m.ID != "" {
+		return m.ID, nil
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve path: %w", err)
+	}
+	m.ID = ProjectUUIDFromPath(abs)
+	if err := writeMarker(root, m); err != nil {
+		return "", fmt.Errorf("write project ID to .mnemo: %w", err)
+	}
+	return m.ID, nil
+}
+
+// ReadProjectID returns the project UUID from .mnemo.
+// Errors if .mnemo does not exist or has no ID set.
+func ReadProjectID(root string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(root, markerName))
+	if os.IsNotExist(err) {
+		return "", fmt.Errorf(".mnemo not found in %s — run mnemo init first", root)
+	}
+	if err != nil {
+		return "", err
+	}
+	var m Marker
+	if err := json.Unmarshal(data, &m); err != nil {
+		return "", fmt.Errorf("malformed .mnemo: %w", err)
+	}
+	if m.ID == "" {
+		return "", fmt.Errorf(".mnemo has no project ID in %s — run mnemo init", root)
+	}
+	return m.ID, nil
+}
+
+// EnsureMarkerWithID writes id into the .mnemo at root, preserving existing
+// fields. Creates the file if absent. Used by migrate-projects.
+func EnsureMarkerWithID(root, id string) error {
+	m, err := readMarker(root)
+	if err != nil {
+		return err
+	}
+	m.ID = id
+	return writeMarker(root, m)
 }
 
 // AddAgent adds agent to the .mnemo marker, creating it if needed. Idempotent.

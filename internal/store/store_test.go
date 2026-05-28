@@ -409,26 +409,47 @@ func TestNewMigratesLegacyObservationIDSchema(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
+	// Observation ID schema migration (NULL ids, duplicates) runs automatically
+	// in New(). Legacy data stays under the old project key "mnemo" until the
+	// user runs explicit migration.
 	obs, err := s.AllObservations("mnemo", "", 20)
 	if err != nil {
-		t.Fatalf("all observations after migration: %v", err)
+		t.Fatalf("all observations after open: %v", err)
 	}
 	if len(obs) != 3 {
-		t.Fatalf("expected 3 migrated observations, got %d", len(obs))
+		t.Fatalf("expected 3 observations under legacy key, got %d", len(obs))
 	}
 
 	seen := make(map[int64]bool)
 	for _, o := range obs {
 		if o.ID <= 0 {
-			t.Fatalf("expected migrated observation id > 0, got %d", o.ID)
+			t.Fatalf("expected observation id > 0, got %d", o.ID)
 		}
 		if seen[o.ID] {
-			t.Fatalf("expected unique migrated ids, duplicate %d", o.ID)
+			t.Fatalf("expected unique ids, duplicate %d", o.ID)
 		}
 		seen[o.ID] = true
 	}
 
-	results, err := s.Search("legacy", SearchOptions{Project: "mnemo", Limit: 10})
+	// Explicit migration: rekey legacy "mnemo" data to a UUID.
+	newUUID := "11111111-2222-3333-4444-555555555555"
+	result, err := s.MigrateProject("mnemo", newUUID)
+	if err != nil {
+		t.Fatalf("MigrateProject: %v", err)
+	}
+	if !result.Migrated {
+		t.Fatal("expected MigrateProject to report migration occurred")
+	}
+
+	obs, err = s.AllObservations(newUUID, "", 20)
+	if err != nil {
+		t.Fatalf("all observations after MigrateProject: %v", err)
+	}
+	if len(obs) != 3 {
+		t.Fatalf("expected 3 observations after rekey, got %d", len(obs))
+	}
+
+	results, err := s.Search("legacy", SearchOptions{Project: newUUID, Limit: 10})
 	if err != nil {
 		t.Fatalf("search after migration: %v", err)
 	}
@@ -441,7 +462,7 @@ func TestNewMigratesLegacyObservationIDSchema(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "post migration",
 		Content:   "new row should get id",
-		Project:   "mnemo",
+		Project:   newUUID,
 		Scope:     "project",
 	})
 	if err != nil {
@@ -2011,7 +2032,7 @@ func TestMigrationInternalErrorAndNoopBranches(t *testing.T) {
 
 		origExec := s.hooks.exec
 		s.hooks.exec = func(db execer, query string, args ...any) (sql.Result, error) {
-			if strings.Contains(query, "CREATE TRIGGER obs_fts_insert") {
+			if strings.Contains(query, "CREATE TRIGGER IF NOT EXISTS obs_fts_insert") {
 				return nil, errors.New("forced obs trigger failure")
 			}
 			return origExec(db, query, args...)
@@ -2353,12 +2374,12 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 			"UPDATE observations SET duplicate_count = 1",
 			"UPDATE observations SET updated_at = created_at",
 			"UPDATE user_prompts SET project = ''",
-			"CREATE TRIGGER prompt_fts_insert",
+			"CREATE TRIGGER IF NOT EXISTS prompt_fts_insert",
 		}
 		for _, needle := range failCases {
 			t.Run(needle, func(t *testing.T) {
 				s := newTestStore(t)
-				if strings.Contains(needle, "CREATE TRIGGER prompt_fts_insert") {
+				if strings.Contains(needle, "CREATE TRIGGER IF NOT EXISTS prompt_fts_insert") {
 					if _, err := s.db.Exec(`
 						DROP TRIGGER IF EXISTS prompt_fts_insert;
 						DROP TRIGGER IF EXISTS prompt_fts_update;
@@ -6112,3 +6133,4 @@ func TestRelatedTagsIncludeFlags(t *testing.T) {
 		t.Error("sess-only should not appear when IncludeSessions=false")
 	}
 }
+

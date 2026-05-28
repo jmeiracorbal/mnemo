@@ -19,10 +19,8 @@ PROMPT=$(echo "$INPUT" | mnemo json prompt 2>/dev/null)
 [ -z "$WORKSPACE" ] && WORKSPACE="$(pwd)"
 
 PROJECT_ROOT=$(git -C "$WORKSPACE" rev-parse --show-toplevel 2>/dev/null || echo "$WORKSPACE")
-[ ! -f "${PROJECT_ROOT}/.mnemo" ] && exit 0
-
-PROJECT=$(realpath "$PROJECT_ROOT" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-[ -z "$PROJECT" ] && PROJECT=$(basename "$PROJECT_ROOT" | tr '[:upper:]' '[:lower:]')
+PROJECT=$(mnemo json id < "${PROJECT_ROOT}/.mnemo" 2>/dev/null)
+[ -z "$PROJECT" ] && exit 0
 
 # Only act on the first prompt of a conversation (session start)
 IS_KNOWN=$(mnemo session exists "$CONVERSATION_ID" 2>/dev/null)

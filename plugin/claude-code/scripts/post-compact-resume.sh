@@ -13,10 +13,8 @@ CWD=$(echo "$INPUT" | mnemo json cwd 2>/dev/null)
 [ -z "$CWD" ] && CWD="$(pwd)"
 
 PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || echo "$CWD")
-[ ! -f "${PROJECT_ROOT}/.mnemo" ] && exit 0
-
-PROJECT=$(realpath "$PROJECT_ROOT" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-[ -z "$PROJECT" ] && PROJECT=$(basename "$PROJECT_ROOT" | tr '[:upper:]' '[:lower:]')
+PROJECT=$(mnemo json id < "${PROJECT_ROOT}/.mnemo" 2>/dev/null)
+[ -z "$PROJECT" ] && exit 0
 
 printf "\n[mnemo] Context restored after compaction (project: %s)\n" "$PROJECT"
 

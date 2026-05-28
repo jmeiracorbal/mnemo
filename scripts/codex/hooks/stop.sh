@@ -23,21 +23,20 @@ fi
 [ -z "$CWD" ] && CWD="$(pwd)"
 
 PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || echo "$CWD")
+PROJECT=$(mnemo json id < "${PROJECT_ROOT}/.mnemo" 2>/dev/null)
+if [ -z "$PROJECT" ]; then
+  printf '{"continue":true}\n'
+  exit 0
+fi
 
-PROJECT=$(realpath "$PROJECT_ROOT" 2>/dev/null | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-[ -z "$PROJECT" ] && PROJECT=$(basename "$PROJECT_ROOT" | tr '[:upper:]' '[:lower:]')
+if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
+  CONTENT=$(mnemo extract-transcript "$TRANSCRIPT_PATH" 2>/dev/null)
+  if [ -z "$CONTENT" ]; then
+    CONTENT=$(cat "$TRANSCRIPT_PATH" 2>/dev/null)
+  fi
 
-# Passive capture only if project has mnemo configured
-if [ -f "${PROJECT_ROOT}/.mnemo" ]; then
-  if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-    CONTENT=$(mnemo extract-transcript "$TRANSCRIPT_PATH" 2>/dev/null)
-    if [ -z "$CONTENT" ]; then
-      CONTENT=$(cat "$TRANSCRIPT_PATH" 2>/dev/null)
-    fi
-
-    if [ -n "$CONTENT" ]; then
-      printf '%s' "$CONTENT" | mnemo capture - --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null || true
-    fi
+  if [ -n "$CONTENT" ]; then
+    printf '%s' "$CONTENT" | mnemo capture - --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null || true
   fi
 fi
 

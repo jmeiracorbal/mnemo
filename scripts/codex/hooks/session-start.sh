@@ -22,16 +22,11 @@ fi
 [ -z "$CWD" ] && CWD="$(pwd)"
 
 PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || echo "$CWD")
-if [ ! -f "${PROJECT_ROOT}/.mnemo" ]; then
+PROJECT=$(mnemo json id < "${PROJECT_ROOT}/.mnemo" 2>/dev/null)
+if [ -z "$PROJECT" ]; then
   printf '{"continue":true}\n'
   exit 0
 fi
-
-REALPATH_CWD=$(realpath "$CWD" 2>/dev/null)
-PROJECT="${REALPATH_CWD#"$HOME/"}"
-PROJECT="${PROJECT#/}"
-PROJECT=$(printf '%s' "$PROJECT" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-[ -z "$PROJECT" ] && PROJECT=$(basename "$CWD" | tr '[:upper:]' '[:lower:]')
 
 IS_RESUME=$(mnemo session exists "$SESSION_ID" 2>/dev/null)
 
