@@ -605,6 +605,10 @@ func runInit(s *store.Store) {
 		}
 		fmt.Printf("mnemo init: %s configured in %s\n", a, root)
 	}
+	if err := agentinit.EnsureGitignore(root); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo init: gitignore: %v\n", err)
+		os.Exit(1)
+	}
 	fmt.Printf("mnemo init: project ID %s\n", projectID)
 }
 
@@ -653,11 +657,16 @@ func runMigrateProjects(s *store.Store) {
 		os.Exit(1)
 	}
 
+	if err := agentinit.EnsureGitignore(root); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo migrate: gitignore: %v\n", err)
+		os.Exit(1)
+	}
+
 	if result.Migrated {
-		fmt.Printf("migrated: %s → %s (%d obs, %d sessions)\n",
+		fmt.Printf("migrated: %s -> %s (%d obs, %d sessions)\n",
 			legacyKey, projectID, result.ObservationsUpdated, result.SessionsUpdated)
 	} else {
-		fmt.Printf("no legacy data found for %s — project registered as %s\n", legacyKey, projectID)
+		fmt.Printf("no legacy data found for %s, project registered as %s\n", legacyKey, projectID)
 	}
 }
 

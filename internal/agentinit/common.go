@@ -122,6 +122,32 @@ func EnsureMarkerWithID(root, id string) error {
 	return writeMarker(root, m)
 }
 
+// EnsureGitignore adds .mnemo to the project .gitignore if not already present.
+// Creates .gitignore if it does not exist. Idempotent.
+func EnsureGitignore(root string) error {
+	path := filepath.Join(root, ".gitignore")
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == ".mnemo" {
+			return nil
+		}
+	}
+	entry := ".mnemo\n"
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		entry = "\n" + entry
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.WriteString(entry)
+	return err
+}
+
 // AddAgent adds agent to the .mnemo marker, creating it if needed. Idempotent.
 func AddAgent(root, agent string) error {
 	m, err := readMarker(root)
