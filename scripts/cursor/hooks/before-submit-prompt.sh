@@ -19,7 +19,8 @@ PROMPT=$(echo "$INPUT" | mnemo json prompt 2>/dev/null)
 [ -z "$WORKSPACE" ] && WORKSPACE="$(pwd)"
 
 PROJECT_ROOT=$(git -C "$WORKSPACE" rev-parse --show-toplevel 2>/dev/null || echo "$WORKSPACE")
-PROJECT=$(mnemo json id < "${PROJECT_ROOT}/.mnemo" 2>/dev/null)
+MNEMO_FILE="${PROJECT_ROOT}/.mnemo"
+[ -f "$MNEMO_FILE" ] && PROJECT=$(mnemo json id < "$MNEMO_FILE" 2>/dev/null)
 [ -z "$PROJECT" ] && exit 0
 
 # Only act on the first prompt of a conversation (session start)

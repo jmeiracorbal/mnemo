@@ -12,7 +12,8 @@ OUTPUT=$(echo "$INPUT" | mnemo json stdout 2>/dev/null)
 [ -z "$CWD" ] && CWD="$(pwd)"
 
 PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || echo "$CWD")
-PROJECT=$(mnemo json id < "${PROJECT_ROOT}/.mnemo" 2>/dev/null)
+MNEMO_FILE="${PROJECT_ROOT}/.mnemo"
+[ -f "$MNEMO_FILE" ] && PROJECT=$(mnemo json id < "$MNEMO_FILE" 2>/dev/null)
 [ -z "$PROJECT" ] && exit 0
 
 mnemo capture "$OUTPUT" --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null || true
