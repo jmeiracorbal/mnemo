@@ -27,6 +27,12 @@ var openDB = sql.Open
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type Project struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+}
+
 type Session struct {
 	ID        string   `json:"id"`
 	Project   string   `json:"project"`
@@ -722,67 +728,106 @@ func (s *Store) migrate() error {
 		return err
 	}
 
-	// Create triggers to keep FTS in sync (idempotent check)
-	var name string
-	err := s.db.QueryRow(
-		"SELECT name FROM sqlite_master WHERE type='trigger' AND name='obs_fts_insert'",
-	).Scan(&name)
-
-	if err == sql.ErrNoRows {
-		triggers := `
-			CREATE TRIGGER obs_fts_insert AFTER INSERT ON observations BEGIN
-				INSERT INTO observations_fts(rowid, title, content, tool_name, type, project)
-				VALUES (new.id, new.title, new.content, new.tool_name, new.type, new.project);
-			END;
-
-			CREATE TRIGGER obs_fts_delete AFTER DELETE ON observations BEGIN
-				INSERT INTO observations_fts(observations_fts, rowid, title, content, tool_name, type, project)
-				VALUES ('delete', old.id, old.title, old.content, old.tool_name, old.type, old.project);
-			END;
-
-			CREATE TRIGGER obs_fts_update AFTER UPDATE ON observations BEGIN
-				INSERT INTO observations_fts(observations_fts, rowid, title, content, tool_name, type, project)
-				VALUES ('delete', old.id, old.title, old.content, old.tool_name, old.type, old.project);
-				INSERT INTO observations_fts(rowid, title, content, tool_name, type, project)
-				VALUES (new.id, new.title, new.content, new.tool_name, new.type, new.project);
-			END;
-		`
-		if _, err := s.execHook(s.db, triggers); err != nil {
-			return err
-		}
+	if err := s.ensureFTSTriggers(); err != nil {
+		return err
 	}
 
-	// Prompts FTS triggers (separate idempotent check)
-	var promptTrigger string
-	err = s.db.QueryRow(
-		"SELECT name FROM sqlite_master WHERE type='trigger' AND name='prompt_fts_insert'",
-	).Scan(&promptTrigger)
-
-	if err == sql.ErrNoRows {
-		promptTriggers := `
-			CREATE TRIGGER prompt_fts_insert AFTER INSERT ON user_prompts BEGIN
-				INSERT INTO prompts_fts(rowid, content, project)
-				VALUES (new.id, new.content, new.project);
-			END;
-
-			CREATE TRIGGER prompt_fts_delete AFTER DELETE ON user_prompts BEGIN
-				INSERT INTO prompts_fts(prompts_fts, rowid, content, project)
-				VALUES ('delete', old.id, old.content, old.project);
-			END;
-
-			CREATE TRIGGER prompt_fts_update AFTER UPDATE ON user_prompts BEGIN
-				INSERT INTO prompts_fts(prompts_fts, rowid, content, project)
-				VALUES ('delete', old.id, old.content, old.project);
-				INSERT INTO prompts_fts(rowid, content, project)
-				VALUES (new.id, new.content, new.project);
-			END;
-		`
-		if _, err := s.execHook(s.db, promptTriggers); err != nil {
-			return err
-		}
+	if _, err := s.execHook(s.db, `
+		CREATE TABLE IF NOT EXISTS projects (
+			id         TEXT PRIMARY KEY,
+			name       TEXT NOT NULL,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+	`); err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// ensureFTSTriggers creates FTS5 sync triggers using IF NOT EXISTS — idempotent.
+func (s *Store) ensureFTSTriggers() error {
+	_, err := s.execHook(s.db, `
+		CREATE TRIGGER IF NOT EXISTS obs_fts_insert AFTER INSERT ON observations BEGIN
+			INSERT INTO observations_fts(rowid, title, content, tool_name, type, project)
+			VALUES (new.id, new.title, new.content, new.tool_name, new.type, new.project);
+		END;
+
+		CREATE TRIGGER IF NOT EXISTS obs_fts_delete AFTER DELETE ON observations BEGIN
+			INSERT INTO observations_fts(observations_fts, rowid, title, content, tool_name, type, project)
+			VALUES ('delete', old.id, old.title, old.content, old.tool_name, old.type, old.project);
+		END;
+
+		CREATE TRIGGER IF NOT EXISTS obs_fts_update AFTER UPDATE ON observations BEGIN
+			INSERT INTO observations_fts(observations_fts, rowid, title, content, tool_name, type, project)
+			VALUES ('delete', old.id, old.title, old.content, old.tool_name, old.type, old.project);
+			INSERT INTO observations_fts(rowid, title, content, tool_name, type, project)
+			VALUES (new.id, new.title, new.content, new.tool_name, new.type, new.project);
+		END;
+
+		CREATE TRIGGER IF NOT EXISTS prompt_fts_insert AFTER INSERT ON user_prompts BEGIN
+			INSERT INTO prompts_fts(rowid, content, project)
+			VALUES (new.id, new.content, new.project);
+		END;
+
+		CREATE TRIGGER IF NOT EXISTS prompt_fts_delete AFTER DELETE ON user_prompts BEGIN
+			INSERT INTO prompts_fts(prompts_fts, rowid, content, project)
+			VALUES ('delete', old.id, old.content, old.project);
+		END;
+
+		CREATE TRIGGER IF NOT EXISTS prompt_fts_update AFTER UPDATE ON user_prompts BEGIN
+			INSERT INTO prompts_fts(prompts_fts, rowid, content, project)
+			VALUES ('delete', old.id, old.content, old.project);
+			INSERT INTO prompts_fts(rowid, content, project)
+			VALUES (new.id, new.content, new.project);
+		END;
+	`)
+	return err
+}
+
+// ─── Projects ────────────────────────────────────────────────────────────────
+
+// EnsureProject inserts a project row if it does not already exist. Idempotent.
+func (s *Store) EnsureProject(id, name string) error {
+	_, err := s.execHook(s.db,
+		`INSERT OR IGNORE INTO projects (id, name) VALUES (?, ?)`,
+		id, name,
+	)
+	return err
+}
+
+// GetProjectByID returns the project with the given ID, or nil if not found.
+func (s *Store) GetProjectByID(id string) (*Project, error) {
+	row := s.db.QueryRow(
+		`SELECT id, name, created_at FROM projects WHERE id = ?`, id,
+	)
+	var p Project
+	if err := row.Scan(&p.ID, &p.Name, &p.CreatedAt); err == sql.ErrNoRows {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// ListProjects returns all projects ordered by creation time.
+func (s *Store) ListProjects() ([]Project, error) {
+	rows, err := s.queryItHook(s.db,
+		`SELECT id, name, created_at FROM projects ORDER BY created_at ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var projects []Project
+	for rows.Next() {
+		var p Project
+		if err := rows.Scan(&p.ID, &p.Name, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		projects = append(projects, p)
+	}
+	return projects, rows.Err()
 }
 
 // ─── Sessions ────────────────────────────────────────────────────────────────
@@ -2838,10 +2883,11 @@ func (s *Store) IsProjectEnrolled(project string) (bool, error) {
 // ─── Project Migration ───────────────────────────────────────────────────────
 
 type MigrateResult struct {
-	Migrated            bool  `json:"migrated"`
-	ObservationsUpdated int64 `json:"observations_updated"`
-	SessionsUpdated     int64 `json:"sessions_updated"`
-	PromptsUpdated      int64 `json:"prompts_updated"`
+	Migrated             bool  `json:"migrated"`
+	ObservationsUpdated  int64 `json:"observations_updated"`
+	SessionsUpdated      int64 `json:"sessions_updated"`
+	PromptsUpdated       int64 `json:"prompts_updated"`
+	SyncMutationsUpdated int64 `json:"sync_mutations_updated"`
 }
 
 func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) {
@@ -2858,7 +2904,11 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 			SELECT 1 FROM sessions WHERE project = ?
 			UNION ALL
 			SELECT 1 FROM user_prompts WHERE project = ?
-		)`, oldName, oldName, oldName,
+			UNION ALL
+			SELECT 1 FROM sync_mutations WHERE project = ?
+			UNION ALL
+			SELECT 1 FROM sync_enrolled_projects WHERE project = ?
+		)`, oldName, oldName, oldName, oldName, oldName,
 	).Scan(&exists)
 	if err != nil {
 		return nil, fmt.Errorf("check old project: %w", err)
@@ -2888,6 +2938,25 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 			return fmt.Errorf("migrate prompts: %w", err)
 		}
 		result.PromptsUpdated, _ = res.RowsAffected()
+
+		res, err = s.execHook(tx,
+			`UPDATE sync_mutations SET project = ?, payload = json_set(payload, '$.project', ?) WHERE project = ?`,
+			newName, newName, oldName)
+		if err != nil {
+			return fmt.Errorf("migrate sync_mutations: %w", err)
+		}
+		result.SyncMutationsUpdated, _ = res.RowsAffected()
+
+		if _, err = s.execHook(tx,
+			`INSERT OR IGNORE INTO sync_enrolled_projects (project, enrolled_at)
+			 SELECT ?, enrolled_at FROM sync_enrolled_projects WHERE project = ?`,
+			newName, oldName); err != nil {
+			return fmt.Errorf("migrate sync_enrolled_projects insert: %w", err)
+		}
+		if _, err = s.execHook(tx,
+			`DELETE FROM sync_enrolled_projects WHERE project = ?`, oldName); err != nil {
+			return fmt.Errorf("migrate sync_enrolled_projects delete: %w", err)
+		}
 
 		return nil
 	})

@@ -36,9 +36,6 @@ func main() {
 	case "extract-transcript":
 		runExtractTranscript()
 		return
-	case "init":
-		runInit()
-		return
 	case "--version", "version":
 		fmt.Printf("mnemo %s\n", version)
 		return
@@ -57,11 +54,14 @@ func main() {
 	defer s.Close()
 
 	switch os.Args[1] {
+	case "init":
+		runInit(s)
+	case "migrate":
+		runMigrateProjects(s)
 	case "mcp":
 		runMCP(s)
 	case "save":
 		runSave(s)
-
 	case "search":
 		runSearch(s)
 	case "context":
@@ -562,7 +562,7 @@ func runExtractTranscript() {
 // ─── init ────────────────────────────────────────────────────────────────────
 
 // runInit configures mnemo for one or more agents in the current project.
-func runInit() {
+func runInit(s *store.Store) {
 	agent := "claudecode"
 	dir := "."
 
@@ -582,6 +582,17 @@ func runInit() {
 	}
 	root := agentinit.ProjectRoot(abs)
 
+	projectID, err := agentinit.EnsureProjectID(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo init: project ID: %v\n", err)
+		os.Exit(1)
+	}
+	name := filepath.Base(root)
+	if err := s.EnsureProject(projectID, name); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo init: register project: %v\n", err)
+		os.Exit(1)
+	}
+
 	agents := []string{agent}
 	if agent == "all" {
 		agents = []string{"claudecode", "cursor", "windsurf", "codex"}
@@ -594,6 +605,89 @@ func runInit() {
 		}
 		fmt.Printf("mnemo init: %s configured in %s\n", a, root)
 	}
+	if err := agentinit.EnsureGitignore(root); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo init: gitignore: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("mnemo init: project ID %s\n", projectID)
+}
+
+// runMigrateProjects migrates a project from a legacy path-derived key to a
+// UUID-based ID. Run once per project after upgrading to project-ID-based tracking.
+//
+// Steps:
+//  1. Resolve the current project root.
+//  2. Compute the deterministic UUID v5 from the absolute path.
+//  3. Compute what the legacy derived key would have been for this path.
+//  4. Rekey existing observations/sessions from legacy key → UUID.
+//  5. Register the project in the projects table.
+//  6. Write the UUID to .mnemo.
+func runMigrateProjects(s *store.Store) {
+	dir := "."
+	for _, arg := range os.Args[2:] {
+		if strings.HasPrefix(arg, "--path=") {
+			dir = arg[len("--path="):]
+		}
+	}
+
+	abs, err := absPath(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo migrate: %v\n", err)
+		os.Exit(1)
+	}
+	root := agentinit.ProjectRoot(abs)
+
+	legacyRoot := root
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		legacyRoot = resolved
+	}
+
+	projectID := agentinit.ProjectUUIDFromPath(root)
+	legacyKey := deriveLegacyKey(legacyRoot)
+	name := filepath.Base(root)
+
+	result, err := s.MigrateProject(legacyKey, projectID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo migrate: rekey: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := s.EnsureProject(projectID, name); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo migrate: register: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := agentinit.EnsureMarkerWithID(root, projectID); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo migrate: write marker: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := agentinit.EnsureGitignore(root); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo migrate: gitignore: %v\n", err)
+		os.Exit(1)
+	}
+
+	if result.Migrated {
+		fmt.Printf("migrated: %s -> %s (%d obs, %d sessions)\n",
+			legacyKey, projectID, result.ObservationsUpdated, result.SessionsUpdated)
+	} else {
+		fmt.Printf("no legacy data found for %s, project registered as %s\n", legacyKey, projectID)
+	}
+}
+
+// deriveLegacyKey computes what the path-derived project key would have been
+// for the given absolute path under the old hook derivation logic:
+//
+//	realpath | sed "s|^$HOME/||; s|^/||" | tr '/' '-' | tr '[:upper:]' '[:lower:]'
+func deriveLegacyKey(absPath string) string {
+	home, _ := os.UserHomeDir()
+	rel := absPath
+	if home != "" && strings.HasPrefix(rel, home+"/") {
+		rel = rel[len(home)+1:]
+	} else if strings.HasPrefix(rel, "/") {
+		rel = rel[1:]
+	}
+	return strings.ToLower(strings.ReplaceAll(rel, "/", "-"))
 }
 
 func initAgent(root, agent string) error {
@@ -653,6 +747,7 @@ Usage:
   mnemo import <file.json>             Import memories from JSON
   mnemo capture <content>|-            Extract learnings from text (passive capture; "-" reads stdin)
   mnemo init [--agent=AGENT] [--path=DIR]  Configure mnemo in the current project
+  mnemo migrate [--path=DIR]              Migrate project from legacy key to UUID-based identity
   mnemo json KEY [KEY ...]             Extract field from JSON on stdin (used by hooks)
   mnemo json-merge <file>              Deep-merge JSON from stdin into file
   mnemo extract-transcript <file>      Extract assistant text from JSONL transcript
