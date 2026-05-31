@@ -637,8 +637,13 @@ func runMigrateProjects(s *store.Store) {
 	}
 	root := agentinit.ProjectRoot(abs)
 
+	legacyRoot := root
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		legacyRoot = resolved
+	}
+
 	projectID := agentinit.ProjectUUIDFromPath(root)
-	legacyKey := deriveLegacyKey(root)
+	legacyKey := deriveLegacyKey(legacyRoot)
 	name := filepath.Base(root)
 
 	result, err := s.MigrateProject(legacyKey, projectID)

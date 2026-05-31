@@ -2883,10 +2883,11 @@ func (s *Store) IsProjectEnrolled(project string) (bool, error) {
 // ─── Project Migration ───────────────────────────────────────────────────────
 
 type MigrateResult struct {
-	Migrated            bool  `json:"migrated"`
-	ObservationsUpdated int64 `json:"observations_updated"`
-	SessionsUpdated     int64 `json:"sessions_updated"`
-	PromptsUpdated      int64 `json:"prompts_updated"`
+	Migrated             bool  `json:"migrated"`
+	ObservationsUpdated  int64 `json:"observations_updated"`
+	SessionsUpdated      int64 `json:"sessions_updated"`
+	PromptsUpdated       int64 `json:"prompts_updated"`
+	SyncMutationsUpdated int64 `json:"sync_mutations_updated"`
 }
 
 func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) {
@@ -2903,7 +2904,11 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 			SELECT 1 FROM sessions WHERE project = ?
 			UNION ALL
 			SELECT 1 FROM user_prompts WHERE project = ?
-		)`, oldName, oldName, oldName,
+			UNION ALL
+			SELECT 1 FROM sync_mutations WHERE project = ?
+			UNION ALL
+			SELECT 1 FROM sync_enrolled_projects WHERE project = ?
+		)`, oldName, oldName, oldName, oldName, oldName,
 	).Scan(&exists)
 	if err != nil {
 		return nil, fmt.Errorf("check old project: %w", err)
@@ -2933,6 +2938,25 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 			return fmt.Errorf("migrate prompts: %w", err)
 		}
 		result.PromptsUpdated, _ = res.RowsAffected()
+
+		res, err = s.execHook(tx,
+			`UPDATE sync_mutations SET project = ?, payload = json_set(payload, '$.project', ?) WHERE project = ?`,
+			newName, newName, oldName)
+		if err != nil {
+			return fmt.Errorf("migrate sync_mutations: %w", err)
+		}
+		result.SyncMutationsUpdated, _ = res.RowsAffected()
+
+		if _, err = s.execHook(tx,
+			`INSERT OR IGNORE INTO sync_enrolled_projects (project, enrolled_at)
+			 SELECT ?, enrolled_at FROM sync_enrolled_projects WHERE project = ?`,
+			newName, oldName); err != nil {
+			return fmt.Errorf("migrate sync_enrolled_projects insert: %w", err)
+		}
+		if _, err = s.execHook(tx,
+			`DELETE FROM sync_enrolled_projects WHERE project = ?`, oldName); err != nil {
+			return fmt.Errorf("migrate sync_enrolled_projects delete: %w", err)
+		}
 
 		return nil
 	})
