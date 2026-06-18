@@ -36,12 +36,12 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
   fi
 
   if [ -n "$CONTENT" ]; then
-    printf '%s' "$CONTENT" | mnemo capture - --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null || true
+    printf '%s' "$CONTENT" | mnemo capture - --session "$SESSION_ID" --project "$PROJECT" >/dev/null 2>&1 || true
   fi
 fi
 
 OBS_COUNT=$(mnemo session obs-count "$SESSION_ID" 2>/dev/null)
-mnemo session end "$SESSION_ID" 2>/dev/null || true
+mnemo session end "$SESSION_ID" >/dev/null 2>&1 || true
 
 if [ "${OBS_COUNT:-0}" = "0" ]; then
   printf '{"continue":true,"systemMessage":"[mnemo] warning: session ended with 0 memories saved."}\n'
