@@ -48,3 +48,4 @@ jobs:
 
       - name: Run govulncheck
         run: govulncheck -scan module
+        working-directory: cmd/mnemo
