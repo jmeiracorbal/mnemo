@@ -619,8 +619,8 @@ func printSkillRecommendation(w io.Writer, home string) {
 	if agentinit.GlobalSkillInstalled(home) {
 		return
 	}
-	fmt.Fprintln(w, "mnemo init: for a better agent experience, install the global mnemo-memory skill:")
-	fmt.Fprintln(w, "  npx skills add jmeiracorbal/mnemo --skill mnemo-memory --global")
+	_, _ = fmt.Fprintln(w, "mnemo init: for a better agent experience, install the global mnemo-memory skill:")
+	_, _ = fmt.Fprintln(w, "  npx skills add jmeiracorbal/mnemo --skill mnemo-memory --global")
 }
 
 // runMigrateProjects migrates a project from a legacy path-derived key to a
