@@ -26,10 +26,12 @@ func ProjectUUIDFromPath(absPath string) string {
 	}
 	return uuid.NewSHA1(mnemoNamespace, []byte(absPath)).String()
 }
+
 const sectionStart = "<!-- mnemo:start -->"
 const sectionEnd = "<!-- mnemo:end -->"
 const claudeSectionStart = "<!-- mnemo:claude-start -->"
 const claudeSectionEnd = "<!-- mnemo:claude-end -->"
+const globalSkillName = "mnemo-memory"
 
 // Marker is the .mnemo file format.
 type Marker struct {
@@ -163,71 +165,95 @@ func AddAgent(root, agent string) error {
 	return writeMarker(root, m)
 }
 
-// AppendSection appends a mnemo protocol section to path, creating the file if
-// needed. Idempotent: does nothing if the section marker is already present.
-func AppendSection(path, content string) error {
-	existing, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
-	if strings.Contains(string(existing), sectionStart) {
-		return nil
-	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-
-	section := "\n" + sectionStart + "\n" + content + "\n" + sectionEnd + "\n"
-	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
-		section = "\n" + section
-	}
-
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		return err
-	}
-	_, writeErr := f.WriteString(section)
-	closeErr := f.Close()
-	if writeErr != nil {
-		return writeErr
-	}
-	return closeErr
+// GlobalSkillPath returns the canonical path used by the skills CLI for a
+// globally installed mnemo-memory skill.
+func GlobalSkillPath(home string) string {
+	return filepath.Join(home, ".agents", "skills", globalSkillName, "SKILL.md")
 }
 
-// AppendClaudeSection appends an @AGENTS.md include and the Claude-specific mnemo
-// section to path, creating the file if needed. Idempotent: does nothing if the
-// Claude section marker is already present.
+// GlobalSkillInstalled reports whether the canonical global skill file exists.
+func GlobalSkillInstalled(home string) bool {
+	info, err := os.Stat(GlobalSkillPath(home))
+	return err == nil && !info.IsDir()
+}
+
+// AppendSection creates or updates the managed mnemo protocol section in path.
+// Content outside the markers is preserved.
+func AppendSection(path, content string) error {
+	return upsertManagedSection(path, sectionStart, sectionEnd, content, "")
+}
+
+// AppendClaudeSection creates or updates the Claude-specific managed section.
+// It also adds @AGENTS.md once when creating the section.
 func AppendClaudeSection(path, content string) error {
+	return upsertManagedSection(path, claudeSectionStart, claudeSectionEnd, content, "@AGENTS.md")
+}
+
+func upsertManagedSection(path, startMarker, endMarker, content, prelude string) error {
 	existing, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
-	if strings.Contains(string(existing), claudeSectionStart) {
+	current := string(existing)
+	startCount := strings.Count(current, startMarker)
+	endCount := strings.Count(current, endMarker)
+	if startCount != endCount || startCount > 1 {
+		return fmt.Errorf(
+			"malformed managed section: found %d %q marker(s) and %d %q marker(s)",
+			startCount, startMarker, endCount, endMarker,
+		)
+	}
+
+	block := startMarker + "\n" + strings.TrimRight(content, "\n") + "\n" + endMarker
+	var updated string
+
+	if startCount == 1 {
+		start := strings.Index(current, startMarker)
+		end := strings.Index(current, endMarker)
+		if end < start {
+			return fmt.Errorf("malformed managed section: %q appears before %q", endMarker, startMarker)
+		}
+		end += len(endMarker)
+		updated = current[:start] + block + current[end:]
+	} else {
+		addition := block
+		if prelude != "" && !containsLine(current, prelude) {
+			addition = prelude + "\n\n" + addition
+		}
+		updated = appendSection(current, addition)
+	}
+
+	if updated == current {
 		return nil
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
+	return os.WriteFile(path, []byte(updated), 0644)
+}
 
-	section := "\n@AGENTS.md\n\n" + claudeSectionStart + "\n" + content + "\n" + claudeSectionEnd + "\n"
-	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
-		section = "\n" + section
+func containsLine(content, target string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == target {
+			return true
+		}
 	}
+	return false
+}
 
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		return err
+func appendSection(existing, addition string) string {
+	if existing == "" {
+		return addition + "\n"
 	}
-	_, writeErr := f.WriteString(section)
-	closeErr := f.Close()
-	if writeErr != nil {
-		return writeErr
+	if strings.HasSuffix(existing, "\n\n") {
+		return existing + addition + "\n"
 	}
-	return closeErr
+	if strings.HasSuffix(existing, "\n") {
+		return existing + "\n" + addition + "\n"
+	}
+	return existing + "\n\n" + addition + "\n"
 }
 
 // WriteFile writes data to path, creating parent directories. Overwrites if exists.

@@ -68,3 +68,54 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 		t.Fatalf("no script references were validated from hooks.json")
 	}
 }
+
+func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
+	files := []string{
+		filepath.Join("..", "..", "templates", "rules", "generic.md"),
+		filepath.Join("..", "..", "templates", "rules", "cursor.mdc"),
+		filepath.Join("..", "..", "templates", "rules", "windsurf.md"),
+		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "mnemo.md"),
+		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "session-start-protocol.md"),
+		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "post-compact-protocol-header.md"),
+		filepath.Join("..", "..", "scripts", "codex", "hooks", "mnemo-protocol.md"),
+		filepath.Join("..", "..", "scripts", "cursor", "rules", "mnemo.mdc"),
+		filepath.Join("..", "..", "scripts", "windsurf", "templates", "global_rules.md"),
+	}
+
+	for _, path := range files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("read %s: %v", path, err)
+			continue
+		}
+		content := string(data)
+		if !strings.Contains(content, "mnemo is the ONLY persistent memory system") {
+			t.Errorf("%s does not declare mnemo as the only persistent memory", path)
+		}
+		if !strings.Contains(content, "plaintext files as a memory fallback") {
+			t.Errorf("%s does not forbid plaintext memory fallback", path)
+		}
+	}
+}
+
+func TestShippedMnemoMemorySkill(t *testing.T) {
+	path := filepath.Join("..", "..", "skills", "mnemo-memory", "SKILL.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read shipped skill: %v", err)
+	}
+	content := string(data)
+	required := []string{
+		"name: mnemo-memory",
+		"description:",
+		"<root>/.mnemo",
+		"non-empty `id`",
+		"Never create `MEMORY.md`",
+		"`mem_session_summary`",
+	}
+	for _, value := range required {
+		if !strings.Contains(content, value) {
+			t.Errorf("shipped skill missing %q", value)
+		}
+	}
+}
