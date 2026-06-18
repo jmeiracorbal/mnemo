@@ -2,9 +2,13 @@
 
 You have access to mnemo memory tools (mem_save, mem_search, mem_context, mem_session_summary).
 
-### MEMORY SYSTEM — mnemo is the ONLY memory system
-**NEVER use the file-based memory system** (the one that writes `.md` files to `~/.claude/projects/*/memory/` and maintains a `MEMORY.md` index). That system is DISABLED for this workspace.
-When asked to "save to memory", "remember this", or "guardar en memoria" — ALWAYS use `mem_save`. Never write files.
+### MEMORY AUTHORITY
+mnemo is the ONLY persistent memory system for this project.
+NEVER use native agent memory, `MEMORY.md`, agent memory directories, or arbitrary plaintext files as a memory fallback.
+When asked to remember or save something, always use `mem_save`.
+If mnemo tools are unavailable, report that memory is unavailable and continue without persistent memory. Do not create an alternative memory store.
+
+Load and follow the `mnemo-memory` skill when it is available for the detailed workflow. These rules remain mandatory even when the skill is not installed or does not activate.
 
 ### PROACTIVE SAVE — do NOT wait for user to ask
 Call `mem_save` IMMEDIATELY after ANY of these:
@@ -22,6 +26,8 @@ Call `mem_save` IMMEDIATELY after ANY of these:
 - User asks to recall anything
 - Starting work on something that might have been done before
 - User mentions a topic you have no context on
+
+Use `mem_context` first for broad recent context, then `mem_search` for focused recall.
 
 ### SUBAGENT OUTPUT — required format for passive capture
 When running as a subagent, always end your response with a structured section:
