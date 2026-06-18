@@ -903,6 +903,22 @@ func (s *Store) ObsCount(sessionID string) (int, error) {
 	return count, err
 }
 
+// ObsCountForSession counts all non-deleted observations saved for the session's
+// project on or after the session started. This catches observations saved via MCP
+// tools with a different session_id than the system session_id.
+func (s *Store) ObsCountForSession(sessionID string) (int, error) {
+	var count int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM observations o
+		JOIN sessions ss ON ss.id = ?
+		WHERE o.project = ss.project
+		  AND o.created_at >= ss.started_at
+		  AND o.deleted_at IS NULL`,
+		sessionID,
+	).Scan(&count)
+	return count, err
+}
+
 func (s *Store) RecentSessions(project string, limit int) ([]SessionSummary, error) {
 	if limit <= 0 {
 		limit = 5
