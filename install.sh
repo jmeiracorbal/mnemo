@@ -297,23 +297,6 @@ setup_codex() {
     ok "$HOME/.codex/config.toml: mnemo MCP configured"
   fi
 
-  if grep -q '^codex_hooks\s*=' "$codex_config" 2>/dev/null; then
-    ok "$HOME/.codex/config.toml: codex_hooks already set"
-  elif grep -q '^\[features\]' "$codex_config" 2>/dev/null; then
-    local tmp
-    tmp=$(mktemp)
-    awk '/^\[features\]/{print; print "codex_hooks = true"; next} 1' "$codex_config" > "$tmp"
-    if mv "$tmp" "$codex_config"; then
-      ok "$HOME/.codex/config.toml: codex_hooks enabled"
-    else
-      rm -f "$tmp"
-      err "Failed to update $HOME/.codex/config.toml"
-    fi
-  else
-    printf '\n[features]\ncodex_hooks = true\n' >> "$codex_config"
-    ok "$HOME/.codex/config.toml: codex_hooks enabled"
-  fi
-
   local result
   result=$(printf '{"hooks":{"SessionStart":[{"matcher":"startup|resume","hooks":[{"type":"command","command":"%s/session-start.sh","statusMessage":"Loading mnemo memory...","timeout":10}]}],"Stop":[{"matcher":"","hooks":[{"type":"command","command":"%s/stop.sh","timeout":10}]}]}}' \
     "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
