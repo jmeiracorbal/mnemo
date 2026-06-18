@@ -1,0 +1,4 @@
+interface:
+  display_name: "mnemo Memory"
+  short_description: "Use persistent memory safely across sessions"
+  default_prompt: "Use $mnemo-memory to recover relevant context and persist important learnings for this project."

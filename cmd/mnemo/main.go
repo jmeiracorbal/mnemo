@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
-	mcpserver "github.com/jmeiracorbal/mnemo/internal/mcp"
 	"github.com/jmeiracorbal/mnemo/internal/jsonmerge"
+	mcpserver "github.com/jmeiracorbal/mnemo/internal/mcp"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -610,6 +610,17 @@ func runInit(s *store.Store) {
 		os.Exit(1)
 	}
 	fmt.Printf("mnemo init: project ID %s\n", projectID)
+	if home, err := os.UserHomeDir(); err == nil {
+		printSkillRecommendation(os.Stdout, home)
+	}
+}
+
+func printSkillRecommendation(w io.Writer, home string) {
+	if agentinit.GlobalSkillInstalled(home) {
+		return
+	}
+	_, _ = fmt.Fprintln(w, "mnemo init: for a better agent experience, install the global mnemo-memory skill:")
+	_, _ = fmt.Fprintln(w, "  npx skills add jmeiracorbal/mnemo --skill mnemo-memory --global")
 }
 
 // runMigrateProjects migrates a project from a legacy path-derived key to a
@@ -762,7 +773,7 @@ Agents for init:
   --path=DIR           Target project directory (default: current directory)
 
 Tool profiles for mcp:
-  --tools=agent    11 tools for AI agents (default when using plugin)
+  --tools=agent    15 tools for AI agents (default when using plugin)
   --tools=admin    3 tools for curation (delete, stats, timeline)
   --tools=all      All tools
 

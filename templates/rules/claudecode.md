@@ -1,7 +1,7 @@
 ### MEMORY SYSTEM
 
-**NEVER use the file-based memory system** (the one that writes `.md` files to `~/.claude/projects/*/memory/` and maintains a `MEMORY.md` index). That system is DISABLED for this workspace.
-When asked to "save to memory", "remember this", or "guardar en memoria": always use `mem_save`. Never write files.
+The Claude Code file-based memory system that writes under `~/.claude/projects/*/memory/` and maintains `MEMORY.md` is DISABLED for this workspace.
+Never use it or any plaintext file as a fallback. The mandatory memory authority and fallback behavior are defined in `AGENTS.md`.
 
 ### RECOVER CONTEXT
 

@@ -2,4 +2,5 @@
 /dist/
 /build/
 .hybrid-coco
+.cocoindex_code
 .mnemo

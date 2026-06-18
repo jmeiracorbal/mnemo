@@ -2,6 +2,14 @@
 
 You have access to mnemo MCP tools: mem_save, mem_search, mem_context, mem_session_summary.
 
+### MEMORY AUTHORITY
+mnemo is the ONLY persistent memory system for this project.
+NEVER use native agent memory, `MEMORY.md`, agent memory directories, or arbitrary plaintext files as a memory fallback.
+When asked to remember or save something, always use `mem_save`.
+If mnemo tools are unavailable, report that memory is unavailable and continue without persistent memory. Do not create an alternative memory store.
+
+Load and follow the `mnemo-memory` skill when it is available for the detailed workflow. These rules remain mandatory even when the skill is not installed or does not activate.
+
 ### PROACTIVE SAVE — do NOT wait for user to ask
 Call `mem_save` IMMEDIATELY after ANY of these:
 - Decision made (architecture, convention, workflow, tool choice)
@@ -18,6 +26,8 @@ Call `mem_save` IMMEDIATELY after ANY of these:
 - User asks to recall anything
 - Starting work on something that might have been done before
 - User mentions a topic you have no context on
+
+Use `mem_context` first for broad recent context, then `mem_search` for focused recall.
 
 ### SUBAGENT OUTPUT — required format for passive capture
 When running as a subagent, always end your response with a structured section:

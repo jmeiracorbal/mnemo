@@ -46,13 +46,14 @@ mnemo --version
 - **Session hooks:** starts/ends sessions and injects memory context at the beginning of every conversation
 - **18 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_tag_stats`, and more, available directly inside your editor
 - **Passive capture:** extracts learnings from conversation transcripts automatically at session end
+- **Portable Agent Skill:** teaches compatible agents the complete mnemo workflow without weakening the always-active safety rules
 - **Full CLI:** save, search, export, import, and inspect memories from the terminal
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
 - **Claude Code + Cursor + Windsurf + Codex:** native integration for all four agents via their respective hook systems
 
-## Setup: two phases
+## Setup
 
-**Phase 1 — install globally (once per machine):**
+### 1. Install the binary and agent integration
 
 ```bash
 # Claude Code (via plugin — recommended)
@@ -68,7 +69,21 @@ curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh |
 
 This installs hook scripts to the agent's global directory and registers the MCP server. Hooks are wired up once here, but they will do nothing in projects without a `.mnemo` marker.
 
-**Phase 2 — enable per project (once per project):**
+### 2. Install the Agent Skill globally
+
+For the best agent behavior, install the portable `mnemo-memory` skill:
+
+```bash
+npx skills add jmeiracorbal/mnemo --skill mnemo-memory --global
+```
+
+The [skills CLI](https://github.com/vercel-labs/skills) keeps the canonical copy at `~/.agents/skills/mnemo-memory/`. Codex and Cursor read that universal location directly; agent-specific consumers such as Claude Code and Windsurf receive symlinks to it.
+
+The skill is global, but it is guarded by the project marker. Its first step is to locate and validate `.mnemo`; outside an initialized project it performs no memory operation and never falls back to native or plaintext memory.
+
+The skill is recommended rather than required. Hooks, MCP, and the always-active project protocol remain functional without it. `mnemo init` prints the installation command when the canonical global skill is missing.
+
+### 3. Enable mnemo per project
 
 Run from the project root:
 
@@ -86,8 +101,9 @@ Not all agents support per-project hook configuration. The table below shows wha
 |---|---|---|---|---|
 | **Hook scripts (global)** | via plugin | `~/.cursor/hooks/` | `~/.codeium/windsurf/hooks/` | `~/.codex/hooks/` |
 | **MCP (always global)** | `~/.claude/.mcp.json` | `~/.cursor/mcp.json` | `~/.codeium/windsurf/mcp_config.json` | `~/.codex/config.toml` |
-| **Per-project hook config** | `.claude/settings.json` | `.cursor/hooks.json` | `.windsurf/hooks.json` | ❌ global only |
-| **Per-project protocol** | `AGENTS.md` + `CLAUDE.md` symlink | `.cursor/rules/mnemo.mdc` | `.windsurf/rules/mnemo.md` | `AGENTS.md` |
+| **Per-project hook config** | plugin hooks check `.mnemo` | `.cursor/hooks.json` | `.windsurf/hooks.json` | global hooks check `.mnemo` |
+| **Per-project protocol** | `AGENTS.md` + `CLAUDE.md` | `.cursor/rules/mnemo.mdc` | `.windsurf/rules/mnemo.md` | `AGENTS.md` |
+| **Global skill access** | symlink at `~/.claude/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` | symlink at `~/.codeium/windsurf/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` |
 
 Codex does not support per-project hook configuration. Its hooks are registered globally in `~/.codex/hooks.json` and check for `.mnemo` at runtime before acting.
 
@@ -97,14 +113,12 @@ Codex does not support per-project hook configuration. Its hooks are registered 
 
 ```
 project/
-├── .mnemo                   ← {"version":1,"agents":["claudecode"]}
+├── .mnemo                   ← project ID + configured agents
 ├── AGENTS.md                ← mnemo protocol section appended here
-├── CLAUDE.md -> AGENTS.md   ← symlink (existing content migrated to AGENTS.md)
-└── .claude/
-    └── settings.json        ← hook entries (SessionStart, Stop, PostCompact, SubagentStop)
+└── CLAUDE.md                ← @AGENTS.md include + Claude-specific additions
 ```
 
-`CLAUDE.md` becomes a symlink to `AGENTS.md`. If `CLAUDE.md` already exists as a regular file, its content is moved to `AGENTS.md` before the symlink is created. This keeps all project config in a single file that works for both Claude Code and Codex.
+`CLAUDE.md` is a regular file. Existing user content is preserved, and mnemo manages only its marked section. Session hooks come from the globally installed Claude Code plugin and activate only when `.mnemo` exists.
 
 ### Cursor
 
@@ -149,13 +163,14 @@ The `.mnemo` file at the project root is what activates mnemo for a project. It 
 ```json
 {
   "version": 1,
+  "id": "8ec0f7ec-7cf8-5f6c-a4dc-bb247f75c543",
   "agents": ["claudecode", "cursor"]
 }
 ```
 
-`agents` lists which agents have been configured via `mnemo init`. All hooks — including the global-only Codex hooks — read this file before acting. If the file is absent, the hook exits silently.
+`id` is the deterministic project identifier used by every integration. `agents` lists which agents have been configured via `mnemo init`. All hooks, including the global-only Codex hooks, read this file before acting. If the file is absent or has no ID, the hook exits silently.
 
-`mnemo init` creates and updates this file automatically. You can commit it to the repository if you want the rest of your team to know mnemo is in use.
+`mnemo init` creates and updates this file automatically and adds it to `.gitignore`. Do not commit it: each clone derives its own identifier from its local path.
 
 ## Claude Code plugin notes
 
@@ -212,7 +227,7 @@ Restart Claude Code after updating.
 | `SessionStart` (startup/resume) | Session starts or resumes | Registers session, injects memory context via `systemMessage` |
 | `Stop` | Agent stops | Reads transcript for passive capture, closes session |
 
-On session start, mnemo derives the project identifier from the git root and emits relevant memories from previous sessions into the context. All hooks derive the project the same way — from the git root, not the current working directory — so the project ID is consistent regardless of which subdirectory the editor opens.
+On session start, every hook resolves the Git root and reads the project identifier from its `.mnemo` marker. This keeps the same identity regardless of which subdirectory the editor opens.
 
 ## MCP tools
 
@@ -287,7 +302,7 @@ mnemo version                        Show version
 Agents for `mnemo init`:
 
 ```
---agent=claudecode   AGENTS.md + CLAUDE.md symlink + .claude/settings.json (default)
+--agent=claudecode   AGENTS.md + CLAUDE.md managed sections (default)
 --agent=cursor       .cursor/hooks.json + .cursor/rules/mnemo.mdc
 --agent=windsurf     .windsurf/hooks.json + .windsurf/rules/mnemo.md
 --agent=codex        AGENTS.md append only (hooks stay global)
@@ -328,13 +343,23 @@ After installing globally, confirm the binary is accessible:
 mnemo --version
 ```
 
+Confirm the canonical Agent Skill and agent symlinks:
+
+```bash
+test -f ~/.agents/skills/mnemo-memory/SKILL.md
+ls -l ~/.claude/skills/mnemo-memory \
+  ~/.codeium/windsurf/skills/mnemo-memory
+```
+
+Only symlinks for agent-specific consumers selected during `npx skills add` are expected to exist. Codex and Cursor use the canonical `.agents/skills` path directly.
+
 After running `mnemo init`, check the project files exist:
 
 ```bash
 # Claude Code
 cat .mnemo                          # must contain agents list
-ls -la CLAUDE.md                    # must be a symlink to AGENTS.md
-grep "mnemo" .claude/settings.json  # must have hook entries
+grep "@AGENTS.md" CLAUDE.md         # must include shared project instructions
+grep "mnemo:claude-start" CLAUDE.md # must contain the managed Claude section
 
 # Cursor
 cat .cursor/hooks.json              # must have beforeSubmitPrompt + stop
@@ -354,7 +379,7 @@ Validate the Claude Code plugin:
 claude plugin validate plugin/claude-code
 ```
 
-Check idempotency — running `mnemo init` again in the same project must produce no duplicates in `AGENTS.md` and must not overwrite the symlink:
+Check idempotency. Running `mnemo init` again must refresh the managed sections without duplicating them or changing surrounding user content:
 
 ```bash
 mnemo init --agent=claudecode
