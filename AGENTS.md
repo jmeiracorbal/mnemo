@@ -149,5 +149,4 @@ Fields: Goal, Discoveries, Accomplished, Next Steps, Relevant Files.
 If nothing was accomplished: call it anyway with Goal and Next Steps.
 If the user says goodbye: call it before responding.
 No session ends without `mem_session_summary`.
-
 <!-- mnemo:end -->
