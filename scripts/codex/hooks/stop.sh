@@ -40,7 +40,7 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
   fi
 fi
 
-OBS_COUNT=$(mnemo session obs-count "$SESSION_ID" 2>/dev/null)
+OBS_COUNT=$(mnemo session project-obs-count "$SESSION_ID" 2>/dev/null)
 mnemo session end "$SESSION_ID" >/dev/null 2>&1 || true
 
 if [ "${OBS_COUNT:-0}" = "0" ]; then

@@ -302,6 +302,14 @@ func runSession(s *store.Store) {
 		}
 		fmt.Println(n)
 
+	case "project-obs-count":
+		n, err := s.ObsCountForSession(id)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo: project-obs-count failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(n)
+
 	default:
 		fmt.Fprintf(os.Stderr, "mnemo: unknown session subcommand %q\n", subcmd)
 		os.Exit(1)
