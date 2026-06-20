@@ -185,11 +185,14 @@ Requires the `mnemo` binary in PATH. Restart Claude Code after installing. Then 
 
 **Updating the plugin:**
 
-The marketplace cache can go stale. If `claude plugin update mnemo@mnemo` says the plugin is already up to date but the binary is newer, refresh first:
+```bash
+claude plugin update mnemo@mnemo
+```
+
+If that reports up to date but the binary is newer, the marketplace cache is stale. Reinstall:
 
 ```bash
-claude plugin marketplace update mnemo
-claude plugin update mnemo@mnemo
+claude plugin uninstall mnemo && claude plugin install mnemo@mnemo
 ```
 
 Restart Claude Code after updating.
