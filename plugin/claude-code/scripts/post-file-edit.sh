@@ -17,7 +17,7 @@ MNEMO_FILE="${PROJECT_ROOT}/.mnemo"
 [ -z "$PROJECT" ] && exit 0
 
 BASENAME=$(basename "$FILE_PATH")
-REL_PATH="${FILE_PATH#${PROJECT_ROOT}/}"
+REL_PATH="${FILE_PATH#"${PROJECT_ROOT}/"}"
 TOPIC="file-change/${REL_PATH}"
 
 mnemo save \
