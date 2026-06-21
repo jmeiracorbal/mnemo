@@ -61,7 +61,9 @@ func (s *Store) GetSession(id string) (*Session, error) {
 		ID: row.ID, Project: row.Project, Directory: row.Directory, StartedAt: row.StartedAt,
 		EndedAt: nullablePtr(row.EndedAt), Summary: nullablePtr(row.Summary),
 	}
-	s.loadTagsForSession(&sess)
+	if err := s.loadTagsForSession(&sess); err != nil {
+		return nil, err
+	}
 	return &sess, nil
 }
 
@@ -125,7 +127,9 @@ func (s *Store) SessionObservations(sessionID string, limit int) ([]Observation,
 	for _, row := range rows {
 		results = append(results, observationFromSessionRow(row))
 	}
-	s.loadTagsForObservations(results)
+	if err := s.loadTagsForObservations(results); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 

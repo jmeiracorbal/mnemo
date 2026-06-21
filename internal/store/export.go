@@ -22,7 +22,9 @@ func (s *Store) Export() (*ExportData, error) {
 			ID: row.ID, Project: row.Project, Directory: row.Directory, StartedAt: row.StartedAt,
 			EndedAt: nullablePtr(row.EndedAt), Summary: nullablePtr(row.Summary),
 		}
-		s.loadTagsForSession(&sess)
+		if err := s.loadTagsForSession(&sess); err != nil {
+			return nil, fmt.Errorf("export sessions: load tags: %w", err)
+		}
 		data.Sessions = append(data.Sessions, sess)
 	}
 
@@ -36,7 +38,9 @@ func (s *Store) Export() (*ExportData, error) {
 			row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
 		data.Observations = append(data.Observations, o)
 	}
-	s.loadTagsForObservations(data.Observations)
+	if err := s.loadTagsForObservations(data.Observations); err != nil {
+		return nil, fmt.Errorf("export observations: load tags: %w", err)
+	}
 
 	promptRows, err := s.q.ExportPrompts(context.Background())
 	if err != nil {

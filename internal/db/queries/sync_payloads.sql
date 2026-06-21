@@ -21,7 +21,7 @@ WHERE ifnull(observations.project, '') = sqlc.arg('project_name')
     SELECT 1 FROM sync_mutations sm
     WHERE sm.target_key = sqlc.arg('target_key')
       AND sm.entity = sqlc.arg('entity')
-      AND sm.entity_key = observations.sync_id
+      AND sm.entity_key = ifnull(observations.sync_id, '')
       AND sm.source = sqlc.arg('source')
   )
 ORDER BY id ASC;
@@ -34,7 +34,7 @@ WHERE ifnull(user_prompts.project, '') = sqlc.arg('project_name')
     SELECT 1 FROM sync_mutations sm
     WHERE sm.target_key = sqlc.arg('target_key')
       AND sm.entity = sqlc.arg('entity')
-      AND sm.entity_key = user_prompts.sync_id
+      AND sm.entity_key = ifnull(user_prompts.sync_id, '')
       AND sm.source = sqlc.arg('source')
   )
 ORDER BY id ASC;

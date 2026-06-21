@@ -104,7 +104,7 @@ WHERE ifnull(observations.project, '') = ?1
     SELECT 1 FROM sync_mutations sm
     WHERE sm.target_key = ?2
       AND sm.entity = ?3
-      AND sm.entity_key = observations.sync_id
+      AND sm.entity_key = ifnull(observations.sync_id, '')
       AND sm.source = ?4
   )
 ORDER BY id ASC
@@ -177,7 +177,7 @@ WHERE ifnull(user_prompts.project, '') = ?1
     SELECT 1 FROM sync_mutations sm
     WHERE sm.target_key = ?2
       AND sm.entity = ?3
-      AND sm.entity_key = user_prompts.sync_id
+      AND sm.entity_key = ifnull(user_prompts.sync_id, '')
       AND sm.source = ?4
   )
 ORDER BY id ASC

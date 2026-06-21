@@ -26,7 +26,9 @@ func (s *Store) AllObservations(project, scope string, limit int, tags ...string
 	for _, row := range rows {
 		results = append(results, observationFromListRow(row))
 	}
-	s.loadTagsForObservations(results)
+	if err := s.loadTagsForObservations(results); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 
@@ -145,7 +147,9 @@ func (s *Store) recentObservations(project, scope string, limit int, opts Contex
 	for _, row := range rows {
 		results = append(results, observationFromRecentRow(row))
 	}
-	s.loadTagsForObservations(results)
+	if err := s.loadTagsForObservations(results); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 
@@ -157,7 +161,9 @@ func (s *Store) GetObservation(id int64) (*Observation, error) {
 	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 		row.ToolName, row.Project, row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
 		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
-	s.loadTagsForObservation(&o)
+	if err := s.loadTagsForObservation(&o); err != nil {
+		return nil, err
+	}
 	return &o, nil
 }
 
@@ -220,7 +226,9 @@ func (s *Store) UpdateObservation(id int64, p UpdateObservationParams) (*Observa
 	if err != nil {
 		return nil, err
 	}
-	s.loadTagsForObservation(updated)
+	if err := s.loadTagsForObservation(updated); err != nil {
+		return nil, err
+	}
 	return updated, nil
 }
 
@@ -356,7 +364,9 @@ func (s *Store) searchByFilter(opts SearchOptions, limit int) ([]SearchResult, e
 	for _, row := range rows {
 		results = append(results, searchResultFromFilterRow(row))
 	}
-	s.loadTagsForSearchResults(results)
+	if err := s.loadTagsForSearchResults(results); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 
@@ -376,7 +386,9 @@ func (s *Store) searchFTS(query string, opts SearchOptions, limit int) ([]Search
 	for _, row := range rows {
 		results = append(results, searchResultFromFTSRow(row))
 	}
-	s.loadTagsForSearchResults(results)
+	if err := s.loadTagsForSearchResults(results); err != nil {
+		return nil, err
+	}
 	return results, nil
 }
 
@@ -482,7 +494,9 @@ func (s *Store) getObservationTx(tx *sql.Tx, id int64) (*Observation, error) {
 	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 		row.ToolName, row.Project, row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
 		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
-	s.loadTagsForObservationTx(tx, &o)
+	if err := s.loadTagsForObservationTx(tx, &o); err != nil {
+		return nil, err
+	}
 	return &o, nil
 }
 

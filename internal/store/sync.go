@@ -169,9 +169,15 @@ func (s *Store) ApplyPulledMutation(targetKey string, mutation SyncMutation) err
 		if mutation.Seq <= state.LastPulledSeq {
 			return nil
 		}
+		if state.LastPulledSeq > 0 && mutation.Seq != state.LastPulledSeq+1 {
+			return fmt.Errorf("sync: seq gap: expected %d, got %d", state.LastPulledSeq+1, mutation.Seq)
+		}
 
 		switch mutation.Entity {
 		case SyncEntitySession:
+			if mutation.Op != SyncOpUpsert {
+				return fmt.Errorf("sync: unsupported op %q for %q", mutation.Op, mutation.Entity)
+			}
 			var payload syncSessionPayload
 			if err := decodeSyncPayload([]byte(mutation.Payload), &payload); err != nil {
 				return err
@@ -194,6 +200,9 @@ func (s *Store) ApplyPulledMutation(targetKey string, mutation SyncMutation) err
 				}
 			}
 		case SyncEntityPrompt:
+			if mutation.Op != SyncOpUpsert {
+				return fmt.Errorf("sync: unsupported op %q for %q", mutation.Op, mutation.Entity)
+			}
 			var payload syncPromptPayload
 			if err := decodeSyncPayload([]byte(mutation.Payload), &payload); err != nil {
 				return err
@@ -278,7 +287,9 @@ func (s *Store) backfillSessionSyncMutationsTx(tx *sql.Tx, project string) error
 		}
 		var sess Session
 		sess.ID = payload.ID
-		s.loadTagsForSession(&sess)
+		if err := s.loadTagsForSessionTx(tx, &sess); err != nil {
+			return fmt.Errorf("backfill session tags: %w", err)
+		}
 		tags := sess.Tags
 		if tags == nil {
 			tags = []string{}
@@ -308,7 +319,9 @@ func (s *Store) backfillObservationSyncMutationsTx(tx *sql.Tx, project string) e
 		}
 		var o Observation
 		o.ID = obsID
-		s.loadTagsForObservationTx(tx, &o)
+		if err := s.loadTagsForObservationTx(tx, &o); err != nil {
+			return fmt.Errorf("backfill observation tags: %w", err)
+		}
 		tags := o.Tags
 		if tags == nil {
 			tags = []string{}

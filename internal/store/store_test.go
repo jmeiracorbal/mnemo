@@ -5934,11 +5934,40 @@ func TestSQLCQueriesTreatInjectionPayloadsAsData(t *testing.T) {
 		t.Fatalf("add observation: %v", err)
 	}
 
-	if _, err := s.Search(`" OR 1=1 --`, SearchOptions{Project: project, Tags: []string{tag}}); err != nil {
+	// Control row: different project and tag; must not appear in filtered results.
+	if err := s.CreateSession("sqlc-control", "safe-project", "/tmp/safe"); err != nil {
+		t.Fatalf("create control session: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sqlc-control",
+		Type:      "security",
+		Title:     "control row",
+		Content:   "control content should not leak into injection-project results",
+		Project:   "safe-project",
+		Tags:      []string{"safe-tag"},
+	}); err != nil {
+		t.Fatalf("add control observation: %v", err)
+	}
+
+	searchResults, err := s.Search(`" OR 1=1 --`, SearchOptions{Project: project, Tags: []string{tag}})
+	if err != nil {
 		t.Fatalf("search injection payload: %v", err)
 	}
-	if _, err := s.AllObservations(project, "project", 10, tag); err != nil {
+	for _, r := range searchResults {
+		if r.Project != nil && *r.Project != project {
+			t.Errorf("search: result from wrong project %q leaked into injection-project results", *r.Project)
+		}
+	}
+
+	allResults, err := s.AllObservations(project, "project", 10, tag)
+	if err != nil {
 		t.Fatalf("filter injection payload: %v", err)
+	}
+	if len(allResults) != 1 {
+		t.Fatalf("AllObservations with injection project/tag filter: expected 1 result, got %d", len(allResults))
+	}
+	if allResults[0].Project == nil || *allResults[0].Project != project {
+		t.Errorf("AllObservations: expected project %q, got %v", project, allResults[0].Project)
 	}
 
 	var count int

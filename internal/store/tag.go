@@ -322,7 +322,9 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 		for _, r := range obsList {
 			var o Observation
 			o.ID = r.id
-			s.loadTagsForObservationTx(tx, &o)
+			if err := s.loadTagsForObservationTx(tx, &o); err != nil {
+				return fmt.Errorf("merge: load observation tags: %w", err)
+			}
 			tags := o.Tags
 			if tags == nil {
 				tags = []string{}
@@ -336,7 +338,9 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 		for _, r := range sessList {
 			var sess Session
 			sess.ID = r.payload.ID
-			s.loadTagsForSessionTx(tx, &sess)
+			if err := s.loadTagsForSessionTx(tx, &sess); err != nil {
+				return fmt.Errorf("merge: load session tags: %w", err)
+			}
 			tags := sess.Tags
 			if tags == nil {
 				tags = []string{}
@@ -361,11 +365,14 @@ func (s *Store) SetSessionTags(id string, tags []string) error {
 		if err != nil {
 			return err
 		}
-		normalizedTags := make([]string, 0, len(tags))
-		for _, raw := range tags {
-			if t := normalizeTag(raw); t != "" {
-				normalizedTags = append(normalizedTags, t)
-			}
+		var sess Session
+		sess.ID = id
+		if err := s.loadTagsForSessionTx(tx, &sess); err != nil {
+			return err
+		}
+		storedTags := sess.Tags
+		if storedTags == nil {
+			storedTags = []string{}
 		}
 		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
 			ID:        id,
@@ -373,7 +380,7 @@ func (s *Store) SetSessionTags(id string, tags []string) error {
 			Directory: row.Directory,
 			EndedAt:   nullablePtr(row.EndedAt),
 			Summary:   nullablePtr(row.Summary),
-			Tags:      &normalizedTags,
+			Tags:      &storedTags,
 		})
 	})
 }
@@ -404,9 +411,9 @@ func (s *Store) setTagsForObservationTx(tx *sql.Tx, obsID int64, tags []string) 
 	return nil
 }
 
-func (s *Store) loadTagsForObservations(obs []Observation) {
+func (s *Store) loadTagsForObservations(obs []Observation) error {
 	if len(obs) == 0 {
-		return
+		return nil
 	}
 	ids := make([]int64, len(obs))
 	for i := range obs {
@@ -414,7 +421,7 @@ func (s *Store) loadTagsForObservations(obs []Observation) {
 	}
 	rows, err := s.q.ListTagsForObservationIDs(context.Background(), ids)
 	if err != nil {
-		return
+		return fmt.Errorf("load tags for observations: %w", err)
 	}
 	tagMap := make(map[int64][]string)
 	for _, row := range rows {
@@ -425,22 +432,25 @@ func (s *Store) loadTagsForObservations(obs []Observation) {
 			obs[i].Tags = tags
 		}
 	}
+	return nil
 }
 
-func (s *Store) loadTagsForObservationTx(tx *sql.Tx, o *Observation) {
+func (s *Store) loadTagsForObservationTx(tx *sql.Tx, o *Observation) error {
 	rows, err := s.q.WithTx(tx).ListObservationTags(context.Background(), o.ID)
 	if err != nil {
-		return
+		return fmt.Errorf("load observation tags: %w", err)
 	}
 	o.Tags = append(o.Tags, rows...)
+	return nil
 }
 
-func (s *Store) loadTagsForObservation(o *Observation) {
+func (s *Store) loadTagsForObservation(o *Observation) error {
 	rows, err := s.q.ListObservationTags(context.Background(), o.ID)
 	if err != nil {
-		return
+		return fmt.Errorf("load observation tags: %w", err)
 	}
 	o.Tags = append(o.Tags, rows...)
+	return nil
 }
 
 func (s *Store) setTagsForSessionTx(tx *sql.Tx, sessionID string, tags []string) error {
@@ -469,25 +479,27 @@ func (s *Store) setTagsForSessionTx(tx *sql.Tx, sessionID string, tags []string)
 	return nil
 }
 
-func (s *Store) loadTagsForSession(sess *Session) {
+func (s *Store) loadTagsForSession(sess *Session) error {
 	rows, err := s.q.ListSessionTags(context.Background(), sess.ID)
 	if err != nil {
-		return
+		return fmt.Errorf("load session tags: %w", err)
 	}
 	sess.Tags = append(sess.Tags, rows...)
+	return nil
 }
 
-func (s *Store) loadTagsForSessionTx(tx *sql.Tx, sess *Session) {
+func (s *Store) loadTagsForSessionTx(tx *sql.Tx, sess *Session) error {
 	rows, err := s.q.WithTx(tx).ListSessionTags(context.Background(), sess.ID)
 	if err != nil {
-		return
+		return fmt.Errorf("load session tags: %w", err)
 	}
 	sess.Tags = append(sess.Tags, rows...)
+	return nil
 }
 
-func (s *Store) loadTagsForSearchResults(results []SearchResult) {
+func (s *Store) loadTagsForSearchResults(results []SearchResult) error {
 	if len(results) == 0 {
-		return
+		return nil
 	}
 	ids := make([]int64, len(results))
 	for i := range results {
@@ -495,7 +507,7 @@ func (s *Store) loadTagsForSearchResults(results []SearchResult) {
 	}
 	rows, err := s.q.ListTagsForObservationIDs(context.Background(), ids)
 	if err != nil {
-		return
+		return fmt.Errorf("load tags for search results: %w", err)
 	}
 	tagMap := make(map[int64][]string)
 	for _, row := range rows {
@@ -506,6 +518,7 @@ func (s *Store) loadTagsForSearchResults(results []SearchResult) {
 			results[i].Tags = tags
 		}
 	}
+	return nil
 }
 
 func parseTagTimestamp(s string) (time.Time, error) {
