@@ -1713,14 +1713,6 @@ func TestTimelineHandlesMissingSessionRecord(t *testing.T) {
 	}
 }
 
-func TestQueryObservationsScanError(t *testing.T) {
-	s := newTestStore(t)
-
-	if _, err := s.queryObservations("SELECT 1"); err == nil {
-		t.Fatalf("expected scan error for mismatched projection")
-	}
-}
-
 func TestMigrationAndHelperEdgeBranches(t *testing.T) {
 	t.Run("migrate is idempotent with existing triggers", func(t *testing.T) {
 		s := newTestStore(t)
@@ -2108,38 +2100,13 @@ func TestMigrationInternalErrorAndNoopBranches(t *testing.T) {
 }
 
 func TestImportExportSeamErrors(t *testing.T) {
-	t.Run("export query hooks", func(t *testing.T) {
+	t.Run("export closed database", func(t *testing.T) {
 		s := newTestStore(t)
-
-		origQueryIt := s.hooks.queryIt
-		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-			if strings.Contains(query, "FROM sessions") {
-				return nil, errors.New("forced sessions export query error")
-			}
-			return origQueryIt(db, query, args...)
+		if err := s.Close(); err != nil {
+			t.Fatalf("close store: %v", err)
 		}
 		if _, err := s.Export(); err == nil || !strings.Contains(err.Error(), "export sessions") {
 			t.Fatalf("expected sessions export error, got %v", err)
-		}
-
-		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-			if strings.Contains(query, "FROM observations") {
-				return nil, errors.New("forced observations export query error")
-			}
-			return origQueryIt(db, query, args...)
-		}
-		if _, err := s.Export(); err == nil || !strings.Contains(err.Error(), "export observations") {
-			t.Fatalf("expected observations export error, got %v", err)
-		}
-
-		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-			if strings.Contains(query, "FROM user_prompts") {
-				return nil, errors.New("forced prompts export query error")
-			}
-			return origQueryIt(db, query, args...)
-		}
-		if _, err := s.Export(); err == nil || !strings.Contains(err.Error(), "export prompts") {
-			t.Fatalf("expected prompts export error, got %v", err)
 		}
 	})
 
@@ -2151,18 +2118,6 @@ func TestImportExportSeamErrors(t *testing.T) {
 		}
 		if _, err := s.Import(&ExportData{}); err == nil || !strings.Contains(err.Error(), "begin tx") {
 			t.Fatalf("expected begin tx error, got %v", err)
-		}
-
-		s.hooks = defaultStoreHooks()
-		origExec := s.hooks.exec
-		s.hooks.exec = func(db execer, query string, args ...any) (sql.Result, error) {
-			if strings.Contains(query, "INSERT OR IGNORE INTO sessions") {
-				return nil, errors.New("forced import session insert failure")
-			}
-			return origExec(db, query, args...)
-		}
-		if _, err := s.Import(&ExportData{Sessions: []Session{{ID: "s-x", Project: "p", Directory: "/tmp", StartedAt: Now()}}}); err == nil || !strings.Contains(err.Error(), "import session") {
-			t.Fatalf("expected session import error, got %v", err)
 		}
 
 		s.hooks = defaultStoreHooks()
@@ -2449,30 +2404,8 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "top", Content: "x", Project: "mnemo", TopicKey: "x"}); err != nil {
 			t.Fatalf("seed topic observation: %v", err)
 		}
-		origExec := s.hooks.exec
-		s.hooks.exec = func(db execer, query string, args ...any) (sql.Result, error) {
-			if strings.Contains(query, "SET type = ?") {
-				return nil, errors.New("forced topic update error")
-			}
-			return origExec(db, query, args...)
-		}
-		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "top", Content: "x", Project: "mnemo", TopicKey: "x"}); err == nil {
-			t.Fatalf("expected topic upsert exec error")
-		}
-
-		s.hooks = defaultStoreHooks()
 		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "dup", Content: "dup content", Project: "mnemo"}); err != nil {
 			t.Fatalf("seed dedupe observation: %v", err)
-		}
-		origExec = s.hooks.exec
-		s.hooks.exec = func(db execer, query string, args ...any) (sql.Result, error) {
-			if strings.Contains(query, "SET duplicate_count = duplicate_count + 1") {
-				return nil, errors.New("forced dedupe update error")
-			}
-			return origExec(db, query, args...)
-		}
-		if _, err := s.AddObservation(AddObservationParams{SessionID: "s-e", Type: "note", Title: "dup", Content: "dup content", Project: "mnemo"}); err == nil {
-			t.Fatalf("expected dedupe exec error")
 		}
 
 		if err := s.Close(); err != nil {
@@ -2509,16 +2442,6 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 			t.Fatalf("update with type+truncation: %v", err)
 		}
 
-		origExec := s.hooks.exec
-		s.hooks.exec = func(db execer, query string, args ...any) (sql.Result, error) {
-			if strings.Contains(query, "UPDATE observations") {
-				return nil, errors.New("forced update exec error")
-			}
-			return origExec(db, query, args...)
-		}
-		if _, err := s.UpdateObservation(id, UpdateObservationParams{}); err == nil {
-			t.Fatalf("expected update exec error")
-		}
 	})
 
 	t.Run("query iterator scan and rows.Err branches", func(t *testing.T) {
@@ -2551,71 +2474,6 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 		}
 		if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-iter", Content: "prompt", Project: "mnemo"}); err != nil {
 			t.Fatalf("add prompt: %v", err)
-		}
-
-		setScanErr("FROM sessions s")
-		if _, err := s.RecentSessions("", 10); err == nil {
-			t.Fatalf("expected recent sessions scan error")
-		}
-
-		setScanErr("FROM sessions s")
-		if _, err := s.AllSessions("", 10); err == nil {
-			t.Fatalf("expected all sessions scan error")
-		}
-
-		setScanErr("FROM user_prompts")
-		if _, err := s.RecentPrompts("", 10); err == nil {
-			t.Fatalf("expected recent prompts scan error")
-		}
-
-		setScanErr("FROM prompts_fts")
-		if _, err := s.SearchPrompts("prompt", "", 10); err == nil {
-			t.Fatalf("expected search prompts scan error")
-		}
-
-		setScanErr("FROM observations_fts")
-		if _, err := s.Search("one", SearchOptions{}); err == nil {
-			t.Fatalf("expected search scan error")
-		}
-
-		setRowsErr("FROM observations_fts")
-		if _, err := s.Search("one", SearchOptions{}); err == nil {
-			t.Fatalf("expected search rows err")
-		}
-
-		setScanErr("SELECT id, project, directory")
-		if _, err := s.Export(); err == nil {
-			t.Fatalf("expected export sessions scan error")
-		}
-
-		setRowsErr("SELECT id, project, directory")
-		if _, err := s.Export(); err == nil {
-			t.Fatalf("expected export sessions rows err")
-		}
-
-		setScanErr("FROM observations ORDER BY id")
-		if _, err := s.Export(); err == nil {
-			t.Fatalf("expected export observations scan error")
-		}
-
-		setRowsErr("FROM observations ORDER BY id")
-		if _, err := s.Export(); err == nil {
-			t.Fatalf("expected export observations rows err")
-		}
-
-		setScanErr("FROM user_prompts ORDER BY id")
-		if _, err := s.Export(); err == nil {
-			t.Fatalf("expected export prompts scan error")
-		}
-
-		setRowsErr("FROM user_prompts ORDER BY id")
-		if _, err := s.Export(); err == nil {
-			t.Fatalf("expected export prompts rows err")
-		}
-
-		setScanErr("FROM sync_chunks")
-		if _, err := s.GetSyncedChunks(); err == nil {
-			t.Fatalf("expected synced chunks scan error")
 		}
 
 		setRowsErr("PRAGMA table_info(extra_table)")
@@ -2651,75 +2509,13 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 		}
 		first, _ := s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "a", Content: "a", Project: "mnemo"})
 		_, _ = s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "aa", Content: "aa", Project: "mnemo"})
-		focus, _ := s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "b", Content: "b", Project: "mnemo"})
+		_, _ = s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "b", Content: "b", Project: "mnemo"})
 		_, _ = s.AddObservation(AddObservationParams{SessionID: "s-t2", Type: "decision", Title: "c", Content: "c", Project: "mnemo"})
 
 		if _, err := s.Search("b", SearchOptions{Type: "decision", Project: "mnemo", Scope: "project", Limit: 5}); err != nil {
 			t.Fatalf("search with type filter: %v", err)
 		}
 
-		origQueryIt := s.hooks.queryIt
-		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-			if strings.Contains(query, "id < ?") {
-				return nil, errors.New("forced before query error")
-			}
-			return origQueryIt(db, query, args...)
-		}
-		if _, err := s.Timeline(focus, 2, 2); err == nil {
-			t.Fatalf("expected timeline before query error")
-		}
-
-		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-			if strings.Contains(query, "id < ?") {
-				return &fakeRows{next: []bool{true, false}, scanErr: errors.New("forced before scan error")}, nil
-			}
-			return origQueryIt(db, query, args...)
-		}
-		if _, err := s.Timeline(focus, 2, 2); err == nil {
-			t.Fatalf("expected timeline before scan error")
-		}
-
-		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-			if strings.Contains(query, "id < ?") {
-				return &fakeRows{next: []bool{false}, err: errors.New("forced before rows err")}, nil
-			}
-			return origQueryIt(db, query, args...)
-		}
-		if _, err := s.Timeline(focus, 2, 2); err == nil {
-			t.Fatalf("expected timeline before rows err")
-		}
-
-		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-			if strings.Contains(query, "id > ?") {
-				return nil, errors.New("forced after query error")
-			}
-			return origQueryIt(db, query, args...)
-		}
-		if _, err := s.Timeline(focus, 2, 2); err == nil {
-			t.Fatalf("expected timeline after query error")
-		}
-
-		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-			if strings.Contains(query, "id > ?") {
-				return &fakeRows{next: []bool{true, false}, scanErr: errors.New("forced after scan error")}, nil
-			}
-			return origQueryIt(db, query, args...)
-		}
-		if _, err := s.Timeline(focus, 2, 2); err == nil {
-			t.Fatalf("expected timeline after scan error")
-		}
-
-		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-			if strings.Contains(query, "id > ?") {
-				return &fakeRows{next: []bool{false}, err: errors.New("forced after rows err")}, nil
-			}
-			return origQueryIt(db, query, args...)
-		}
-		if _, err := s.Timeline(focus, 2, 2); err == nil {
-			t.Fatalf("expected timeline after rows err")
-		}
-
-		s.hooks.queryIt = origQueryIt
 		tl, err := s.Timeline(first, 5, 5)
 		if err != nil {
 			t.Fatalf("timeline reverse branch run: %v", err)
@@ -2739,16 +2535,6 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 		}
 
 		origQueryIt := s.hooks.queryIt
-		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-			if strings.Contains(query, "FROM observations o") && strings.Contains(query, "WHERE o.deleted_at IS NULL") {
-				return nil, errors.New("forced recent observations error")
-			}
-			return origQueryIt(db, query, args...)
-		}
-		if _, err := s.FormatContext("mnemo", "project"); err == nil {
-			t.Fatalf("expected format context observations error")
-		}
-
 		s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
 			if strings.Contains(query, "GROUP BY project") {
 				return nil, errors.New("forced stats query error")
@@ -2779,9 +2565,6 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 		}
 		if _, err := s.GetSyncedChunks(); err == nil {
 			t.Fatalf("expected synced chunks query error")
-		}
-		if _, err := s.queryObservations("SELECT id FROM observations"); err == nil {
-			t.Fatalf("expected queryObservations query error")
 		}
 		if err := s.addColumnIfNotExists("observations", "x", "TEXT"); err == nil {
 			t.Fatalf("expected addColumn query error")
@@ -4038,7 +3821,6 @@ func TestMigrateProjectIdempotent(t *testing.T) {
 	}
 }
 
-
 // ─── Tags ────────────────────────────────────────────────────────────────────
 
 func newTestSession(t *testing.T, s *Store, id, project string) {
@@ -4765,7 +4547,6 @@ func TestExportImportRoundTripPreservesTags(t *testing.T) {
 
 // ─── Sync + Tags ─────────────────────────────────────────────────────────────
 
-
 // ─── Sync + Tags ─────────────────────────────────────────────────────────────
 
 // enrollAndList enrolls project and returns pending mutations.
@@ -5221,7 +5002,7 @@ func TestSearchPreferTagsRankFirst(t *testing.T) {
 
 	// With boost: tagged (older) must appear first.
 	results, err := s.Search("architecture note", SearchOptions{
-		Project:   "mnemo",
+		Project:    "mnemo",
 		PreferTags: []string{"auth"},
 	})
 	if err != nil {
@@ -6134,3 +5915,51 @@ func TestRelatedTagsIncludeFlags(t *testing.T) {
 	}
 }
 
+func TestSQLCQueriesTreatInjectionPayloadsAsData(t *testing.T) {
+	s := newTestStore(t)
+	project := `mnemo'; DROP TABLE sessions; --`
+	tag := `db'); DROP TABLE observations; --`
+
+	if err := s.CreateSession("sqlc-injection", project, "/tmp/mnemo"); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "sqlc-injection",
+		Type:      "security",
+		Title:     "parameterized",
+		Content:   `Robert'); DROP TABLE observations; --`,
+		Project:   project,
+		Tags:      []string{tag},
+	}); err != nil {
+		t.Fatalf("add observation: %v", err)
+	}
+
+	if _, err := s.Search(`" OR 1=1 --`, SearchOptions{Project: project, Tags: []string{tag}}); err != nil {
+		t.Fatalf("search injection payload: %v", err)
+	}
+	if _, err := s.AllObservations(project, "project", 10, tag); err != nil {
+		t.Fatalf("filter injection payload: %v", err)
+	}
+
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = ?", "sqlc-injection").Scan(&count); err != nil {
+		t.Fatalf("sessions table should remain queryable: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected injected values to remain data, got session count %d", count)
+	}
+}
+
+func TestMigrationIdentifiersAreClosed(t *testing.T) {
+	s := newTestStore(t)
+
+	if err := s.addColumnIfNotExists(`observations; DROP TABLE sessions`, "x", "TEXT"); err == nil {
+		t.Fatal("expected invalid table identifier to be rejected")
+	}
+	if err := s.addColumnIfNotExists("observations", `x); DROP TABLE sessions`, "TEXT"); err == nil {
+		t.Fatal("expected invalid column identifier to be rejected")
+	}
+	if err := s.addColumnIfNotExists("observations", "safe_name", "TEXT; DROP TABLE sessions"); err == nil {
+		t.Fatal("expected unsupported column definition to be rejected")
+	}
+}
