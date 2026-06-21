@@ -23,7 +23,7 @@ jobs:
 
       - name: Reject runtime SQL construction
         run: |
-          if grep -R -n -E '(^|[[:space:]])(query|q|sql)[[:space:]]*\+=' internal/store --include='*.go'; then
+          if grep -R -n -E '(^|[[:space:]])(query|q|sql)[[:space:]]*(\+=|(:=|=)[^;]*\+)' internal/store --include='*.go'; then
             echo "runtime SQL concatenation is forbidden; add a sqlc query instead"
             exit 1
           fi
