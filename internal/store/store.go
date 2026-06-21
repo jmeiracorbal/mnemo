@@ -443,6 +443,18 @@ func (s *Store) migrate() error {
 		return err
 	}
 
+	if _, err := s.execHook(s.db, `
+		CREATE UNIQUE INDEX IF NOT EXISTS ux_observations_sync_id
+		ON observations(sync_id)
+		WHERE sync_id IS NOT NULL AND sync_id <> '';
+
+		CREATE UNIQUE INDEX IF NOT EXISTS ux_user_prompts_sync_id
+		ON user_prompts(sync_id)
+		WHERE sync_id IS NOT NULL AND sync_id <> '';
+	`); err != nil {
+		return err
+	}
+
 	return nil
 }
 

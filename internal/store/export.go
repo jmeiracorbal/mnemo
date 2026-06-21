@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
@@ -57,6 +58,9 @@ func (s *Store) Export() (*ExportData, error) {
 }
 
 func (s *Store) Import(data *ExportData) (*ImportResult, error) {
+	if data == nil {
+		return nil, fmt.Errorf("import: nil export data")
+	}
 	tx, err := s.beginTxHook()
 	if err != nil {
 		return nil, fmt.Errorf("import: begin tx: %w", err)
@@ -83,14 +87,24 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 	}
 
 	for _, obs := range data.Observations {
+		if obs.SyncID != "" {
+			_, err := q.GetObservationBySyncIDIncludingDeleted(context.Background(), sqlNullString(obs.SyncID))
+			if err == nil {
+				continue
+			}
+			if err != sql.ErrNoRows {
+				return nil, fmt.Errorf("import observation check %d: %w", obs.ID, err)
+			}
+		} else {
+			count, err := q.CountObservationsByHash(context.Background(), sqlNullString(hashNormalized(obs.Content)))
+			if err != nil {
+				return nil, fmt.Errorf("import observation check %d: %w", obs.ID, err)
+			}
+			if count > 0 {
+				continue
+			}
+		}
 		hash := hashNormalized(obs.Content)
-		exists, err := q.CountObservationsByHash(context.Background(), sqlNullString(hash))
-		if err != nil {
-			return nil, fmt.Errorf("import observation check %d: %w", obs.ID, err)
-		}
-		if exists > 0 {
-			continue
-		}
 		newID, err := q.ImportObservation(context.Background(), dbgen.ImportObservationParams{
 			SyncID:    sqlNullString(normalizeExistingSyncID(obs.SyncID, "obs")),
 			SessionID: obs.SessionID, Type: obs.Type, Title: obs.Title, Content: obs.Content,
