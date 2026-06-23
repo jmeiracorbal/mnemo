@@ -392,6 +392,14 @@ mnemo init --agent=claudecode  # second run: no changes
 ## Storage
 
 mnemo uses `~/.mnemo/memory.db`, created automatically on first run. The schema uses SQLite with FTS5 for full-text search.
+Runtime queries are defined under `internal/db/queries` and compiled into type-safe Go code with sqlc.
+After changing the schema or a query, regenerate and test with:
+
+```bash
+go tool sqlc generate
+git diff --exit-code -- internal/db/generated
+go test ./...
+```
 
 ## License
 
