@@ -16,8 +16,26 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Verify sqlc generated code
+        run: |
+          go tool sqlc generate
+          git diff --exit-code -- internal/db/generated
+
+      - name: Reject runtime SQL construction
+        run: |
+          if grep -R -n -E '(^|[[:space:]])(query|q|sql)[[:space:]]*(\+=|(:=|=)[^;]*\+)' internal/store --include='*.go'; then
+            echo "runtime SQL concatenation is forbidden; add a sqlc query instead"
+            exit 1
+          fi
+
       - name: Test
         run: go test ./...
+
+      - name: Race test
+        run: go test -race ./...
+
+      - name: Build
+        run: go build ./...
 
   lint:
     runs-on: ubuntu-latest

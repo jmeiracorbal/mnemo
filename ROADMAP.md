@@ -16,3 +16,10 @@ Planned responsibilities:
 - produce a concise curation report.
 
 The skill must require a valid `.mnemo` marker, default to read-only analysis, and request explicit confirmation before deletion or broad mutation.
+
+## mnemo-trace
+
+Add project trace related with the agent session before action will be excecuted to inspect that commands will be related with a agent's actions.
+
+- relate commands and actions with a project.
+- commands executed for every project.
