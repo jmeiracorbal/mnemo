@@ -7,6 +7,7 @@
 [![Cursor](https://img.shields.io/badge/Cursor-2.6%2B-000000?logo=cursor&logoColor=white)](https://cursor.com)
 [![Windsurf](https://img.shields.io/badge/Windsurf-supported-0066CC)](https://codeium.com/windsurf)
 [![Codex](https://img.shields.io/badge/Codex-supported-412991?logo=openai&logoColor=white)](https://openai.com/codex)
+[![OpenCode](https://img.shields.io/badge/OpenCode-plugin-6D28D9)](https://opencode.ai)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey)](https://github.com/jmeiracorbal/mnemo)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
@@ -49,7 +50,7 @@ mnemo --version
 - **Portable Agent Skill:** teaches compatible agents the complete mnemo workflow without weakening the always-active safety rules
 - **Full CLI:** save, search, export, import, and inspect memories from the terminal
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
-- **Claude Code + Cursor + Windsurf + Codex:** native integration for all four agents via their respective hook systems
+- **Claude Code + Cursor + Windsurf + Codex + OpenCode:** native integration for all five agents via their respective hook systems
 
 ## Setup
 
@@ -65,6 +66,7 @@ curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh |
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=cursor
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=windsurf
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=codex
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=opencode
 ```
 
 This installs hook scripts to the agent's global directory and registers the MCP server. Hooks are wired up once here, but they will do nothing in projects without a `.mnemo` marker.
@@ -97,15 +99,15 @@ This creates a `.mnemo` marker, writes the agent protocol file, and configures p
 
 Not all agents support per-project hook configuration. The table below shows what each phase can configure per agent.
 
-| | Claude Code | Cursor | Windsurf | Codex |
-|---|---|---|---|---|
-| **Hook scripts (global)** | via plugin | `~/.cursor/hooks/` | `~/.codeium/windsurf/hooks/` | `~/.codex/hooks/` |
-| **MCP (always global)** | `~/.claude/.mcp.json` | `~/.cursor/mcp.json` | `~/.codeium/windsurf/mcp_config.json` | `~/.codex/config.toml` |
-| **Per-project hook config** | plugin hooks check `.mnemo` | `.cursor/hooks.json` | `.windsurf/hooks.json` | global hooks check `.mnemo` |
-| **Per-project protocol** | `AGENTS.md` + `CLAUDE.md` | `.cursor/rules/mnemo.mdc` | `.windsurf/rules/mnemo.md` | `AGENTS.md` |
-| **Global skill access** | symlink at `~/.claude/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` | symlink at `~/.codeium/windsurf/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` |
+| | Claude Code | Cursor | Windsurf | Codex | OpenCode |
+|---|---|---|---|---|---|
+| **Hook scripts (global)** | via plugin | `~/.cursor/hooks/` | `~/.codeium/windsurf/hooks/` | `~/.codex/hooks/` | `~/.config/opencode/plugins/` |
+| **MCP (always global)** | `~/.claude/.mcp.json` | `~/.cursor/mcp.json` | `~/.codeium/windsurf/mcp_config.json` | `~/.codex/config.toml` | `~/.config/opencode/opencode.json` |
+| **Per-project hook config** | plugin hooks check `.mnemo` | `.cursor/hooks.json` | `.windsurf/hooks.json` | global hooks check `.mnemo` | global plugin checks `.mnemo` |
+| **Per-project protocol** | `AGENTS.md` + `CLAUDE.md` | `.cursor/rules/mnemo.mdc` | `.windsurf/rules/mnemo.md` | `AGENTS.md` | `AGENTS.md` |
+| **Global skill access** | symlink at `~/.claude/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` | symlink at `~/.codeium/windsurf/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` |
 
-Codex does not support per-project hook configuration. Its hooks are registered globally in `~/.codex/hooks.json` and check for `.mnemo` at runtime before acting.
+Codex and OpenCode do not support per-project hook configuration. Their hooks are registered globally and check for `.mnemo` at runtime before acting.
 
 ## What `mnemo init` creates per agent
 
@@ -155,6 +157,16 @@ project/
 ```
 
 Hooks remain in `~/.codex/hooks.json`. The session-start and stop scripts check for `.mnemo` at runtime and skip if the marker is absent.
+
+### OpenCode
+
+```
+project/
+├── .mnemo                        ← marker (agents includes "opencode")
+└── AGENTS.md                     ← mnemo protocol section appended here
+```
+
+The plugin (`mnemo.ts`) is a TypeScript module that runs under Bun and is installed globally at `~/.config/opencode/plugins/`. It checks for `.mnemo` at runtime and does nothing if the marker is absent. MCP is registered in `~/.config/opencode/opencode.json`.
 
 ## The `.mnemo` marker
 
@@ -229,6 +241,14 @@ Restart Claude Code after updating.
 |---|---|---|
 | `SessionStart` (startup/resume) | Session starts or resumes | Registers session, injects memory context via `systemMessage` |
 | `Stop` | Agent stops | Reads transcript for passive capture, closes session |
+
+### OpenCode
+
+| Hook | Trigger | Action |
+|---|---|---|
+| `session.created` | New session created | Registers session with mnemo |
+| `experimental.chat.system.transform` | First prompt of a conversation | Injects memory context into the system prompt |
+| `experimental.session.compacting` | Context compaction | Refreshes context from mnemo, re-arms context injection |
 
 On session start, every hook resolves the Git root and reads the project identifier from its `.mnemo` marker. This keeps the same identity regardless of which subdirectory the editor opens.
 
@@ -309,6 +329,7 @@ Agents for `mnemo init`:
 --agent=cursor       .cursor/hooks.json + .cursor/rules/mnemo.mdc
 --agent=windsurf     .windsurf/hooks.json + .windsurf/rules/mnemo.md
 --agent=codex        AGENTS.md append only (hooks stay global)
+--agent=opencode     AGENTS.md append only (plugin stays global)
 --agent=all          All agents
 ```
 
@@ -374,6 +395,12 @@ ls .windsurf/rules/mnemo.md
 
 # Codex
 grep "mnemo" AGENTS.md             # must have the protocol section
+
+# OpenCode
+ls ~/.config/opencode/plugins/mnemo.ts        # plugin must exist
+ls ~/.config/opencode/plugins/mnemo-protocol.md
+grep "mnemo" ~/.config/opencode/opencode.json  # MCP must be registered
+grep "mnemo" AGENTS.md                         # must have the protocol section
 ```
 
 Validate the Claude Code plugin:
