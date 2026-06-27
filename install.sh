@@ -6,6 +6,7 @@
 #   bash -s -- --agent=cursor
 #   bash -s -- --agent=windsurf
 #   bash -s -- --agent=codex
+#   bash -s -- --agent=opencode
 #   bash -s -- --agent=all
 #
 # Environment overrides:
@@ -332,6 +333,28 @@ setup_windsurf() {
   ok "Run 'mnemo init --agent=windsurf' from each project to enable hooks and rules there."
 }
 
+# ── setup: OpenCode ────────────────────────────────────────────────────────────
+
+setup_opencode() {
+  local mnemo_bin="$1"
+  local plugins_dir="$HOME/.config/opencode/plugins"
+  local opencode_json="$HOME/.config/opencode/opencode.json"
+
+  info "Configuring OpenCode..."
+
+  mkdir -p "$plugins_dir"
+  cp "$TMP_SCRIPTS/opencode/plugins/mnemo.ts" "$plugins_dir/"
+  cp "$TMP_SCRIPTS/opencode/plugins/mnemo-protocol.md" "$plugins_dir/"
+  ok "Plugin installed to ${plugins_dir}"
+
+  local result
+  result=$(printf '{"mcp":{"mnemo":{"type":"local","command":["%s","mcp","--tools=agent"]}}}' \
+    "$mnemo_bin" | "$mnemo_bin" json-merge "$opencode_json")
+  ok "~/.config/opencode/opencode.json: ${result}"
+
+  ok "Run 'mnemo init --agent=opencode' from each project to enable mnemo there."
+}
+
 # ── main ───────────────────────────────────────────────────────────────────────
 
 main() {
@@ -392,15 +415,20 @@ main() {
       setup_codex "$mnemo_bin"
       ok "Done. Run 'mnemo init --agent=codex' from each project to activate mnemo there."
       ;;
+    opencode)
+      setup_opencode "$mnemo_bin"
+      ok "Done. Run 'mnemo init --agent=opencode' from each project to activate mnemo there."
+      ;;
     all)
       setup_claudecode "$mnemo_bin"
       setup_cursor "$mnemo_bin"
       setup_windsurf "$mnemo_bin"
       setup_codex "$mnemo_bin"
+      setup_opencode "$mnemo_bin"
       ok "Done. Run 'mnemo init --agent=all' from each project to activate mnemo there."
       ;;
     *)
-      err "Unknown agent: ${AGENT}. Valid options: claudecode | cursor | windsurf | codex | all"
+      err "Unknown agent: ${AGENT}. Valid options: claudecode | cursor | windsurf | codex | opencode | all"
       ;;
   esac
 }

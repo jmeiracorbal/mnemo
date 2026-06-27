@@ -603,7 +603,7 @@ func runInit(s *store.Store) {
 
 	agents := []string{agent}
 	if agent == "all" {
-		agents = []string{"claudecode", "cursor", "windsurf", "codex"}
+		agents = []string{"claudecode", "cursor", "windsurf", "codex", "opencode"}
 	}
 
 	for _, a := range agents {
@@ -719,8 +719,10 @@ func initAgent(root, agent string) error {
 		return agentinit.InitWindsurf(root)
 	case "codex":
 		return agentinit.InitCodex(root)
+	case "opencode":
+		return agentinit.InitOpenCode(root)
 	default:
-		return fmt.Errorf("unknown agent %q — valid: claudecode | cursor | windsurf | codex | all", agent)
+		return fmt.Errorf("unknown agent %q — valid: claudecode | cursor | windsurf | codex | opencode | all", agent)
 	}
 }
 
