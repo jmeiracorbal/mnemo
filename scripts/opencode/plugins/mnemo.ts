@@ -71,8 +71,8 @@ export const Mnemo: Plugin = async (ctx) => {
       if (r.ok && r.out) {
         output.context.push(r.out)
         entry.context = r.out
-        entry.injected = false
       }
+      entry.injected = false
     },
   }
 }
