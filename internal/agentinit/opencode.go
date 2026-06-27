@@ -19,12 +19,18 @@ func InitOpenCode(root string) error {
 		return fmt.Errorf("opencode init: could not determine HOME: %w", err)
 	}
 
-	pluginPath := filepath.Join(home, ".config", "opencode", "plugins", "mnemo.ts")
-	if _, err := os.Stat(pluginPath); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("opencode init: plugin not found: %s\nRun install.sh --agent=opencode first", pluginPath)
+	pluginsDir := filepath.Join(home, ".config", "opencode", "plugins")
+	required := []string{
+		filepath.Join(pluginsDir, "mnemo.ts"),
+		filepath.Join(pluginsDir, "mnemo-protocol.md"),
+	}
+	for _, path := range required {
+		if _, err := os.Stat(path); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("opencode init: required file not found: %s\nRun install.sh --agent=opencode first", path)
+			}
+			return fmt.Errorf("opencode init: stat %s: %w", path, err)
 		}
-		return fmt.Errorf("opencode init: stat %s: %w", pluginPath, err)
 	}
 
 	agentsPath := filepath.Join(root, "AGENTS.md")

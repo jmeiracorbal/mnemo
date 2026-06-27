@@ -1,6 +1,6 @@
 ## mnemo — Persistent Memory Protocol
 
-You have access to mnemo MCP tools: mem_save, mem_search, mem_context, mem_session_summary.
+You have access to mnemo MCP tools. Key tools: mem_save, mem_search, mem_context, mem_session_summary, mem_update, mem_get_observation, mem_session_end, mem_suggest_topic_key.
 
 ### MEMORY AUTHORITY
 mnemo is the ONLY persistent memory system for this project.
