@@ -23,6 +23,7 @@ Agents for init:
   --agent=cursor       .cursor/hooks.json + .cursor/rules/mnemo.mdc
   --agent=windsurf     .windsurf/hooks.json + .windsurf/rules/mnemo.md
   --agent=codex        AGENTS.md append
+  --agent=opencode     AGENTS.md append only (plugin stays global)
   --agent=all          All agents
   --path=DIR           Target project directory (default: current directory)
 
