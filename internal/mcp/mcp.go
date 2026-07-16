@@ -14,6 +14,7 @@ package mcp
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"strings"
 	"time"
@@ -46,6 +47,48 @@ func parseTags(s string) []string {
 var loadMCPStats = func(s *store.Store) (*store.Stats, error) {
 	return s.Stats()
 }
+
+//go:embed descriptions/server.md
+var serverInstructions string
+
+//go:embed descriptions/mem_search.md
+var memSearchDescription string
+
+//go:embed descriptions/mem_save.md
+var memSaveDescription string
+
+//go:embed descriptions/mem_suggest_topic_key.md
+var memSuggestTopicKeyDescription string
+
+//go:embed descriptions/mem_save_prompt.md
+var memSavePromptDescription string
+
+//go:embed descriptions/mem_context.md
+var memContextDescription string
+
+//go:embed descriptions/mem_list_tags.md
+var memListTagsDescription string
+
+//go:embed descriptions/mem_merge_tags.md
+var memMergeTagsDescription string
+
+//go:embed descriptions/mem_tag_stats.md
+var memTagStatsDescription string
+
+//go:embed descriptions/mem_related_tags.md
+var memRelatedTagsDescription string
+
+//go:embed descriptions/mem_timeline.md
+var memTimelineDescription string
+
+//go:embed descriptions/mem_get_observation.md
+var memGetObservationDescription string
+
+//go:embed descriptions/mem_session_summary.md
+var memSessionSummaryDescription string
+
+//go:embed descriptions/mem_capture_passive.md
+var memCapturePassiveDescription string
 
 // ─── Tool Profiles ───────────────────────────────────────────────────────────
 
@@ -119,14 +162,6 @@ func NewServer(s *store.Store) *server.MCPServer {
 	return NewServerWithTools(s, nil)
 }
 
-const serverInstructions = `mnemo provides persistent memory that survives across sessions and context ` +
-	`compactions. Search these tools when you need to: save decisions, bugs, ` +
-	`architecture choices, or discoveries to memory; recall or search past work ` +
-	`from previous sessions; manage coding session lifecycle (start, end, ` +
-	`summarize); recover context after compaction. Key tools: mem_save, ` +
-	`mem_search, mem_context, mem_session_summary, mem_get_observation, ` +
-	`mem_suggest_topic_key.`
-
 // NewServerWithTools creates an MCP server registering only the tools in
 // the allowlist. If allowlist is nil, all tools are registered.
 func NewServerWithTools(s *store.Store, allowlist map[string]bool) *server.MCPServer {
@@ -134,7 +169,7 @@ func NewServerWithTools(s *store.Store, allowlist map[string]bool) *server.MCPSe
 		"mnemo",
 		"0.1.0",
 		server.WithToolCapabilities(true),
-		server.WithInstructions(serverInstructions),
+		server.WithInstructions(strings.TrimSpace(serverInstructions)),
 	)
 
 	registerTools(srv, s, allowlist)
@@ -153,7 +188,7 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 	if shouldRegister("mem_search", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_search",
-				mcp.WithDescription("Search your persistent memory across all sessions. Use this to find past decisions, bugs fixed, patterns used, files changed, or any context from previous coding sessions."),
+				mcp.WithDescription(strings.TrimSpace(memSearchDescription)),
 				mcp.WithTitleAnnotation("Search Memory"),
 				mcp.WithReadOnlyHintAnnotation(true),
 				mcp.WithDestructiveHintAnnotation(false),
@@ -197,32 +232,7 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 				mcp.WithDestructiveHintAnnotation(false),
 				mcp.WithIdempotentHintAnnotation(false),
 				mcp.WithOpenWorldHintAnnotation(false),
-				mcp.WithDescription(`Save an important observation to persistent memory. Call this PROACTIVELY after completing significant work — don't wait to be asked.
-
-WHEN to save (call this after each of these):
-- Architectural decisions or tradeoffs
-- Bug fixes (what was wrong, why, how you fixed it)
-- New patterns or conventions established
-- Configuration changes or environment setup
-- Important discoveries or gotchas
-- File structure changes
-
-FORMAT for content — use this structured format:
-  **What**: [concise description of what was done]
-  **Why**: [the reasoning, user request, or problem that drove it]
-  **Where**: [files/paths affected, e.g. src/auth/middleware.ts, internal/store/store.go]
-  **Learned**: [any gotchas, edge cases, or decisions made — omit if none]
-
-TITLE should be short and searchable, like: "JWT auth middleware", "FTS5 query sanitization", "Fixed N+1 in user list"
-
-Examples:
-  title: "Switched from sessions to JWT"
-  type: "decision"
-  content: "**What**: Replaced express-session with jsonwebtoken for auth\n**Why**: Session storage doesn't scale across multiple instances\n**Where**: src/middleware/auth.ts, src/routes/login.ts\n**Learned**: Must set httpOnly and secure flags on the cookie, refresh tokens need separate rotation logic"
-
-  title: "Fixed FTS5 syntax error on special chars"
-  type: "bugfix"
-  content: "**What**: Wrapped each search term in quotes before passing to FTS5 MATCH\n**Why**: Users typing queries like 'fix auth bug' would crash because FTS5 interprets special chars as operators\n**Where**: internal/store/store.go — sanitizeFTS() function\n**Learned**: FTS5 MATCH syntax is NOT the same as LIKE — always sanitize user input"`),
+				mcp.WithDescription(strings.TrimSpace(memSaveDescription)),
 				mcp.WithString("title",
 					mcp.Required(),
 					mcp.Description("Short, searchable title (e.g. 'JWT auth middleware', 'Fixed N+1 query')"),
@@ -299,7 +309,7 @@ Examples:
 	if shouldRegister("mem_suggest_topic_key", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_suggest_topic_key",
-				mcp.WithDescription("Suggest a stable topic_key for memory upserts. Use this before mem_save when you want evolving topics (like architecture decisions) to update a single observation over time."),
+				mcp.WithDescription(strings.TrimSpace(memSuggestTopicKeyDescription)),
 				mcp.WithDeferLoading(true),
 				mcp.WithTitleAnnotation("Suggest Topic Key"),
 				mcp.WithReadOnlyHintAnnotation(true),
@@ -347,7 +357,7 @@ Examples:
 	if shouldRegister("mem_save_prompt", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_save_prompt",
-				mcp.WithDescription("Save a user prompt to persistent memory. Use this to record what the user asked — their intent, questions, and requests — so future sessions have context about the user's goals."),
+				mcp.WithDescription(strings.TrimSpace(memSavePromptDescription)),
 				mcp.WithDeferLoading(true),
 				mcp.WithTitleAnnotation("Save User Prompt"),
 				mcp.WithReadOnlyHintAnnotation(false),
@@ -373,7 +383,7 @@ Examples:
 	if shouldRegister("mem_context", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_context",
-				mcp.WithDescription("Get recent memory context from previous sessions. Shows recent sessions and observations to understand what was done before."),
+				mcp.WithDescription(strings.TrimSpace(memContextDescription)),
 				mcp.WithTitleAnnotation("Get Memory Context"),
 				mcp.WithReadOnlyHintAnnotation(true),
 				mcp.WithDestructiveHintAnnotation(false),
@@ -406,7 +416,7 @@ Examples:
 	if shouldRegister("mem_list_tags", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_list_tags",
-				mcp.WithDescription("List all tags in use for a project, ordered by frequency. Use this to discover the tag vocabulary before filtering or searching."),
+				mcp.WithDescription(strings.TrimSpace(memListTagsDescription)),
 				mcp.WithTitleAnnotation("List Tags"),
 				mcp.WithReadOnlyHintAnnotation(true),
 				mcp.WithDestructiveHintAnnotation(false),
@@ -424,7 +434,7 @@ Examples:
 	if shouldRegister("mem_merge_tags", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_merge_tags",
-				mcp.WithDescription("Merge all occurrences of one tag into another. Use to consolidate aliases or plural/canonical variants (e.g. 'authentication' → 'auth'). The source tag is removed after merging."),
+				mcp.WithDescription(strings.TrimSpace(memMergeTagsDescription)),
 				mcp.WithTitleAnnotation("Merge Tags"),
 				mcp.WithReadOnlyHintAnnotation(false),
 				mcp.WithDestructiveHintAnnotation(false),
@@ -447,7 +457,7 @@ Examples:
 	if shouldRegister("mem_tag_stats", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_tag_stats",
-				mcp.WithDescription("Query tag observability for a project: top tags, low-frequency tags, or stale tags not used recently. Use min_count/max_count/unused_since as hard filters and sort_by to control ordering."),
+				mcp.WithDescription(strings.TrimSpace(memTagStatsDescription)),
 				mcp.WithTitleAnnotation("Tag Stats"),
 				mcp.WithReadOnlyHintAnnotation(true),
 				mcp.WithDestructiveHintAnnotation(false),
@@ -480,7 +490,7 @@ Examples:
 	if shouldRegister("mem_related_tags", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_related_tags",
-				mcp.WithDescription("Find tags that frequently co-occur with a given tag in observations or sessions. Useful for discovering related topics and navigating the tag graph."),
+				mcp.WithDescription(strings.TrimSpace(memRelatedTagsDescription)),
 				mcp.WithTitleAnnotation("Related Tags"),
 				mcp.WithReadOnlyHintAnnotation(true),
 				mcp.WithDestructiveHintAnnotation(false),
@@ -533,7 +543,7 @@ Examples:
 	if shouldRegister("mem_timeline", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_timeline",
-				mcp.WithDescription("Show chronological context around a specific observation. Use after mem_search to drill into the timeline of events surrounding a search result."),
+				mcp.WithDescription(strings.TrimSpace(memTimelineDescription)),
 				mcp.WithDeferLoading(true),
 				mcp.WithTitleAnnotation("Memory Timeline"),
 				mcp.WithReadOnlyHintAnnotation(true),
@@ -559,7 +569,7 @@ Examples:
 	if shouldRegister("mem_get_observation", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_get_observation",
-				mcp.WithDescription("Get the full content of a specific observation by ID. Use when you need the complete, untruncated content of an observation found via mem_search or mem_timeline."),
+				mcp.WithDescription(strings.TrimSpace(memGetObservationDescription)),
 				mcp.WithDeferLoading(true),
 				mcp.WithTitleAnnotation("Get Observation"),
 				mcp.WithReadOnlyHintAnnotation(true),
@@ -584,36 +594,7 @@ Examples:
 				mcp.WithDestructiveHintAnnotation(false),
 				mcp.WithIdempotentHintAnnotation(false),
 				mcp.WithOpenWorldHintAnnotation(false),
-				mcp.WithDescription(`Save a comprehensive end-of-session summary. Call this when a session is ending or when significant work is complete. This creates a structured summary that future sessions will use to understand what happened.
-
-FORMAT — use this exact structure in the content field:
-
-## Goal
-[One sentence: what were we building/working on in this session]
-
-## Instructions
-[User preferences, constraints, or context discovered during this session. Things a future agent needs to know about HOW the user wants things done. Skip if nothing notable.]
-
-## Discoveries
-- [Technical finding, gotcha, or learning 1]
-- [Technical finding 2]
-- [Important API behavior, config quirk, etc.]
-
-## Accomplished
-- ✅ [Completed task 1 — with key implementation details]
-- ✅ [Completed task 2 — mention files changed]
-- 🔲 [Identified but not yet done — for next session]
-
-## Relevant Files
-- path/to/file.ts — [what it does or what changed]
-- path/to/other.go — [role in the architecture]
-
-GUIDELINES:
-- Be CONCISE but don't lose important details (file paths, error messages, decisions)
-- Focus on WHAT and WHY, not HOW (the code itself is in the repo)
-- Include things that would save a future agent time
-- The Discoveries section is the most valuable — capture gotchas and non-obvious learnings
-- Relevant Files should only include files that were significantly changed or are important for context`),
+				mcp.WithDescription(strings.TrimSpace(memSessionSummaryDescription)),
 				mcp.WithString("content",
 					mcp.Required(),
 					mcp.Description("Full session summary using the Goal/Instructions/Discoveries/Accomplished/Files format"),
@@ -693,11 +674,7 @@ GUIDELINES:
 				mcp.WithDestructiveHintAnnotation(false),
 				mcp.WithIdempotentHintAnnotation(true),
 				mcp.WithOpenWorldHintAnnotation(false),
-				mcp.WithDescription(`Extract and save structured learnings from text output. Use this at the end of a task to capture knowledge automatically.
-
-The tool looks for sections like "## Key Learnings:" or "## Aprendizajes Clave:" and extracts numbered or bulleted items. Each item is saved as a separate observation.
-
-Duplicates are automatically detected and skipped — safe to call multiple times with the same content.`),
+				mcp.WithDescription(strings.TrimSpace(memCapturePassiveDescription)),
 				mcp.WithString("content",
 					mcp.Required(),
 					mcp.Description("The text output containing a '## Key Learnings:' section with numbered or bulleted items"),
@@ -731,13 +708,13 @@ func handleSearch(s *store.Store) server.ToolHandlerFunc {
 		boostTagsRaw, _ := req.GetArguments()["prefer_tags"].(string)
 
 		results, err := s.Search(query, store.SearchOptions{
-			Type:      typ,
-			Project:   project,
-			Scope:     scope,
-			TopicKey:  topicKey,
-			Tags:      parseTags(tagsRaw),
+			Type:       typ,
+			Project:    project,
+			Scope:      scope,
+			TopicKey:   topicKey,
+			Tags:       parseTags(tagsRaw),
 			PreferTags: parseTags(boostTagsRaw),
-			Limit:     limit,
+			Limit:      limit,
 		})
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Search error: %s. Try simpler keywords.", err)), nil
@@ -964,9 +941,9 @@ func handleContext(s *store.Store) server.ToolHandlerFunc {
 		boostTagsRaw, _ := req.GetArguments()["prefer_tags"].(string)
 
 		ctx2, err := s.FormatContextOpts(project, scope, store.ContextOptions{
-			Tags:      parseTags(tagsRaw),
+			Tags:       parseTags(tagsRaw),
 			PreferTags: parseTags(boostTagsRaw),
-			TopicKey:  topicKey,
+			TopicKey:   topicKey,
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to get context: " + err.Error()), nil
