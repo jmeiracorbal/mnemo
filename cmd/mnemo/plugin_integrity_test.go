@@ -72,7 +72,9 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
 	files := []string{
 		filepath.Join("..", "..", "templates", "rules", "generic.md"),
+		filepath.Join("..", "..", "templates", "rules", "global.md"),
 		filepath.Join("..", "..", "templates", "rules", "cursor.mdc"),
+		filepath.Join("..", "..", "templates", "rules", "cursor-global.mdc"),
 		filepath.Join("..", "..", "templates", "rules", "windsurf.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "mnemo.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "session-start-protocol.md"),
