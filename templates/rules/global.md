@@ -1,0 +1,13 @@
+## mnemo
+
+In repositories initialized with mnemo (a valid `.mnemo` file exists at the project root), mnemo is the ONLY persistent memory system for that project.
+
+When `.mnemo` exists and contains a non-empty `id`:
+- Use mnemo MCP tools: `mem_save`, `mem_search`, `mem_context`, `mem_session_summary`, and related mnemo tools.
+- Load and follow the `mnemo-memory` skill when it is available.
+- Never use native agent memory, `MEMORY.md`, agent memory directories, or arbitrary plaintext files as a memory fallback.
+- Call `mem_context` when starting work or recovering context.
+- Call `mem_save` immediately after decisions, bug fixes, conventions, discoveries, patterns, preferences, or non-obvious implementation details.
+- Call `mem_session_summary` before any response that ends or completes the session.
+
+If `.mnemo` is missing, malformed, or has no `id`, skip mnemo entirely for that project and do not create fallback memory files.

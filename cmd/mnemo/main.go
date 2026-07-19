@@ -47,6 +47,9 @@ func main() {
 	case "extract-transcript":
 		runExtractTranscript()
 		return
+	case "install-instructions":
+		runInstallInstructions()
+		return
 	case "--version", "version":
 		fmt.Printf("mnemo %s\n", version)
 		return
@@ -578,9 +581,50 @@ func runExtractTranscript() {
 	fmt.Println(strings.Join(lines, "\n"))
 }
 
+// ─── install instructions ───────────────────────────────────────────────────
+
+func runInstallInstructions() {
+	agent, home, err := parseInstallInstructionsArgs(os.Args[2:], os.UserHomeDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo install-instructions: home: %v\n", err)
+		os.Exit(1)
+	}
+
+	agents, err := agentinit.ExpandAgents(agent)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo install-instructions: %v\n", err)
+		os.Exit(1)
+	}
+	for _, a := range agents {
+		path, err := agentinit.InstallGlobalInstructions(home, a)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo install-instructions: %s: %v\n", a, err)
+			os.Exit(1)
+		}
+		fmt.Printf("mnemo install-instructions: %s updated %s\n", a, path)
+	}
+}
+
+func parseInstallInstructionsArgs(args []string, userHomeDir func() (string, error)) (agent, home string, err error) {
+	agent = "all"
+	for _, arg := range args {
+		switch {
+		case strings.HasPrefix(arg, "--agent="):
+			agent = arg[len("--agent="):]
+		case strings.HasPrefix(arg, "--home="):
+			home = arg[len("--home="):]
+		}
+	}
+	if home != "" {
+		return agent, home, nil
+	}
+	home, err = userHomeDir()
+	return agent, home, err
+}
+
 // ─── init ────────────────────────────────────────────────────────────────────
 
-// runInit configures mnemo for one or more agents in the current project.
+// runInit activates mnemo for one or more agents in the current project.
 func runInit(s *store.Store) {
 	agent := "claudecode"
 	dir := "."
@@ -612,9 +656,10 @@ func runInit(s *store.Store) {
 		os.Exit(1)
 	}
 
-	agents := []string{agent}
-	if agent == "all" {
-		agents = []string{"claudecode", "cursor", "windsurf", "codex", "opencode"}
+	agents, err := agentinit.ExpandAgents(agent)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo init: %v\n", err)
+		os.Exit(1)
 	}
 
 	for _, a := range agents {
@@ -622,7 +667,7 @@ func runInit(s *store.Store) {
 			fmt.Fprintf(os.Stderr, "mnemo init: %s: %v\n", a, err)
 			os.Exit(1)
 		}
-		fmt.Printf("mnemo init: %s configured in %s\n", a, root)
+		fmt.Printf("mnemo init: %s activated in %s\n", a, root)
 	}
 	if err := agentinit.EnsureGitignore(root); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo init: gitignore: %v\n", err)

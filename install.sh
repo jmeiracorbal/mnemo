@@ -2,7 +2,8 @@
 # mnemo installer
 # Usage: curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
 #
-# Agent selection (default: claudecode):
+# Agent selection (default: auto-detect installed compatible agents):
+#   bash -s -- --agent=auto
 #   bash -s -- --agent=cursor
 #   bash -s -- --agent=windsurf
 #   bash -s -- --agent=codex
@@ -20,7 +21,7 @@ REPO="jmeiracorbal/mnemo"
 INSTALL_DIR="${MNEMO_INSTALL_DIR:-$HOME/.local/bin}"
 DRY_RUN="${MNEMO_DRY_RUN:-false}"
 MNEMO_VERSION="${MNEMO_VERSION:-}"
-AGENT="${MNEMO_AGENT:-claudecode}"
+AGENT="${MNEMO_AGENT:-auto}"
 TMP_SCRIPTS=""
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -223,7 +224,8 @@ setup_claudecode() {
     "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
   ok "~/.claude/.mcp.json: ${result}"
 
-  ok "Run 'mnemo init --agent=claudecode' from each project to enable mnemo there."
+  "$mnemo_bin" install-instructions --agent=claudecode
+  ok "Global Claude Code instructions installed. Run 'mnemo init --agent=claudecode' in projects that should use mnemo."
 }
 
 # ── setup: Cursor ──────────────────────────────────────────────────────────────
@@ -233,7 +235,6 @@ setup_cursor() {
   local hooks_dir="$HOME/.cursor/hooks"
   local mcp_json="$HOME/.cursor/mcp.json"
   local hooks_json="$HOME/.cursor/hooks.json"
-  local rules_dir="$HOME/.cursor/rules"
 
   info "Configuring Cursor..."
 
@@ -248,7 +249,12 @@ setup_cursor() {
     "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
   ok "~/.cursor/mcp.json: ${result}"
 
-  ok "Run 'mnemo init --agent=cursor' from each project to enable hooks and rules there."
+  result=$(printf '{"version":1,"hooks":{"beforeSubmitPrompt":[{"command":"%s/before-submit-prompt.sh"}],"stop":[{"command":"%s/stop.sh"}]}}' \
+    "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
+  ok "~/.cursor/hooks.json: ${result}"
+
+  "$mnemo_bin" install-instructions --agent=cursor
+  ok "Global Cursor hooks and instructions installed. Run 'mnemo init --agent=cursor' in projects that should use mnemo."
 }
 
 # ── setup: Codex ──────────────────────────────────────────────────────────────
@@ -259,9 +265,6 @@ setup_codex() {
   local hooks_dir="$codex_dir/hooks"
   local hooks_json="$codex_dir/hooks.json"
   local codex_config="$codex_dir/config.toml"
-  local agents_md="$codex_dir/AGENTS.md"
-  local marker="## mnemo — Persistent Memory Protocol"
-
   info "Configuring Codex..."
 
   mkdir -p "$hooks_dir"
@@ -303,7 +306,8 @@ setup_codex() {
     "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
   ok "~/.codex/hooks.json: ${result}"
 
-  ok "Run 'mnemo init --agent=codex' from each project to enable mnemo there."
+  "$mnemo_bin" install-instructions --agent=codex
+  ok "Global Codex hooks and instructions installed. Run 'mnemo init --agent=codex' in projects that should use mnemo."
 }
 
 # ── setup: Windsurf ────────────────────────────────────────────────────────────
@@ -313,10 +317,6 @@ setup_windsurf() {
   local hooks_dir="$HOME/.codeium/windsurf/hooks"
   local mcp_json="$HOME/.codeium/windsurf/mcp_config.json"
   local hooks_json="$HOME/.codeium/windsurf/hooks.json"
-  local memories_dir="$HOME/.codeium/windsurf/memories"
-  local global_rules="$memories_dir/global_rules.md"
-  local marker="## mnemo — Persistent Memory Protocol"
-
   info "Configuring Windsurf..."
 
   mkdir -p "$hooks_dir"
@@ -330,7 +330,12 @@ setup_windsurf() {
     "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
   ok "~/.codeium/windsurf/mcp_config.json: ${result}"
 
-  ok "Run 'mnemo init --agent=windsurf' from each project to enable hooks and rules there."
+  result=$(printf '{"hooks":{"pre_user_prompt":[{"command":"%s/pre-user-prompt.sh"}],"post_cascade_response_with_transcript":[{"command":"%s/post-cascade-response.sh"}]}}' \
+    "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
+  ok "~/.codeium/windsurf/hooks.json: ${result}"
+
+  "$mnemo_bin" install-instructions --agent=windsurf
+  ok "Global Windsurf hooks and instructions installed. Run 'mnemo init --agent=windsurf' in projects that should use mnemo."
 }
 
 # ── setup: OpenCode ────────────────────────────────────────────────────────────
@@ -352,7 +357,59 @@ setup_opencode() {
     "$mnemo_bin" | "$mnemo_bin" json-merge "$opencode_json")
   ok "~/.config/opencode/opencode.json: ${result}"
 
-  ok "Run 'mnemo init --agent=opencode' from each project to enable mnemo there."
+  "$mnemo_bin" install-instructions --agent=opencode
+  ok "Global OpenCode plugin and instructions installed. Run 'mnemo init --agent=opencode' in projects that should use mnemo."
+}
+
+
+# ── agent detection ───────────────────────────────────────────────────────────
+
+agent_detected() {
+  case "$1" in
+    claudecode)
+      command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ] || [ -f "$HOME/.claude.json" ]
+      ;;
+    cursor)
+      command -v cursor >/dev/null 2>&1 || [ -d "$HOME/.cursor" ]
+      ;;
+    windsurf)
+      command -v windsurf >/dev/null 2>&1 || [ -d "$HOME/.codeium/windsurf" ]
+      ;;
+    codex)
+      command -v codex >/dev/null 2>&1 || [ -d "$HOME/.codex" ]
+      ;;
+    opencode)
+      command -v opencode >/dev/null 2>&1 || [ -d "$HOME/.config/opencode" ]
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+detect_agents() {
+  local found=""
+  local agent
+  for agent in claudecode cursor windsurf codex opencode; do
+    if agent_detected "$agent"; then
+      found="$found $agent"
+    fi
+  done
+  # CodeGraph falls back to Claude when auto-detection finds nothing.
+  if [ -z "$found" ]; then
+    found=" claudecode"
+  fi
+  echo "$found"
+}
+
+setup_agent() {
+  local agent="$1" mnemo_bin="$2"
+  case "$agent" in
+    claudecode) setup_claudecode "$mnemo_bin" ;;
+    cursor) setup_cursor "$mnemo_bin" ;;
+    windsurf) setup_windsurf "$mnemo_bin" ;;
+    codex) setup_codex "$mnemo_bin" ;;
+    opencode) setup_opencode "$mnemo_bin" ;;
+    *) err "Unknown agent: ${agent}. Valid options: auto | claudecode | cursor | windsurf | codex | opencode | all" ;;
+  esac
 }
 
 # ── main ───────────────────────────────────────────────────────────────────────
@@ -399,36 +456,27 @@ main() {
   download_scripts "$version"
 
   case "$AGENT" in
-    claudecode)
-      setup_claudecode "$mnemo_bin"
-      ok "Done. Run 'mnemo init --agent=claudecode' from each project to activate mnemo there."
-      ;;
-    cursor)
-      setup_cursor "$mnemo_bin"
-      ok "Done. Run 'mnemo init --agent=cursor' from each project to activate mnemo there."
-      ;;
-    windsurf)
-      setup_windsurf "$mnemo_bin"
-      ok "Done. Run 'mnemo init --agent=windsurf' from each project to activate mnemo there."
-      ;;
-    codex)
-      setup_codex "$mnemo_bin"
-      ok "Done. Run 'mnemo init --agent=codex' from each project to activate mnemo there."
-      ;;
-    opencode)
-      setup_opencode "$mnemo_bin"
-      ok "Done. Run 'mnemo init --agent=opencode' from each project to activate mnemo there."
+    auto)
+      local detected
+      detected=$(detect_agents)
+      info "Auto-detected agents:${detected}"
+      for selected in $detected; do
+        setup_agent "$selected" "$mnemo_bin"
+      done
+      ok "Done. Run 'mnemo init --agent=all' in projects that should use mnemo."
       ;;
     all)
-      setup_claudecode "$mnemo_bin"
-      setup_cursor "$mnemo_bin"
-      setup_windsurf "$mnemo_bin"
-      setup_codex "$mnemo_bin"
-      setup_opencode "$mnemo_bin"
-      ok "Done. Run 'mnemo init --agent=all' from each project to activate mnemo there."
+      for selected in claudecode cursor windsurf codex opencode; do
+        setup_agent "$selected" "$mnemo_bin"
+      done
+      ok "Done. Run 'mnemo init --agent=all' in projects that should use mnemo."
+      ;;
+    claudecode|cursor|windsurf|codex|opencode)
+      setup_agent "$AGENT" "$mnemo_bin"
+      ok "Done. Run 'mnemo init --agent=${AGENT}' in projects that should use mnemo."
       ;;
     *)
-      err "Unknown agent: ${AGENT}. Valid options: claudecode | cursor | windsurf | codex | opencode | all"
+      err "Unknown agent: ${AGENT}. Valid options: auto | claudecode | cursor | windsurf | codex | opencode | all"
       ;;
   esac
 }
