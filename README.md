@@ -61,13 +61,16 @@ mnemo --version
 claude plugin marketplace add jmeiracorbal/mnemo
 claude plugin install mnemo@mnemo
 
-# or via install.sh for any agent:
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=claudecode
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=cursor
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=windsurf
+# or via install.sh; default is --agent=auto, CodeGraph-style detection
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
+
+# explicit targets are still supported
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=codex
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=opencode
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=all
 ```
+
+**Note:** The plugin integrations depend on the `mnemo` binary. Ensure that the installed binary is available in your system's `PATH`.
 
 This installs hook scripts to the agent's global directory and registers the MCP server. Hooks are wired up once here, but they will do nothing in projects without a `.mnemo` marker.
 
@@ -90,83 +93,33 @@ The skill is recommended rather than required. Hooks, MCP, and the always-active
 Run from the project root:
 
 ```bash
-mnemo init --agent=claudecode   # or cursor, windsurf, codex, all
+mnemo init --agent=claudecode   # or cursor, windsurf, codex, opencode, all
 ```
 
-This creates a `.mnemo` marker, writes the agent protocol file, and configures per-project hook settings where the agent supports it. From this point on, hooks will fire when working in this project.
+This creates a `.mnemo` marker and records the selected agent in it. Agent hooks, MCP configuration, and the short conditional protocol live globally after installation; they activate only when a project has a valid `.mnemo` file.
 
 ## Agent capabilities
 
-Not all agents support per-project hook configuration. The table below shows what each phase can configure per agent.
+mnemo follows a CodeGraph-style split: installation configures agents globally, while `mnemo init` only activates an individual project through `.mnemo`. The table below shows the global surfaces used by each agent.
 
 | | Claude Code | Cursor | Windsurf | Codex | OpenCode |
 |---|---|---|---|---|---|
 | **Hook scripts (global)** | via plugin | `~/.cursor/hooks/` | `~/.codeium/windsurf/hooks/` | `~/.codex/hooks/` | `~/.config/opencode/plugins/` |
 | **MCP (always global)** | `~/.claude/.mcp.json` | `~/.cursor/mcp.json` | `~/.codeium/windsurf/mcp_config.json` | `~/.codex/config.toml` | `~/.config/opencode/opencode.json` |
-| **Per-project hook config** | plugin hooks check `.mnemo` | `.cursor/hooks.json` | `.windsurf/hooks.json` | global hooks check `.mnemo` | global plugin checks `.mnemo` |
-| **Per-project protocol** | `AGENTS.md` + `CLAUDE.md` | `.cursor/rules/mnemo.mdc` | `.windsurf/rules/mnemo.md` | `AGENTS.md` | `AGENTS.md` |
+| **Hook config** | plugin hooks check `.mnemo` | `~/.cursor/hooks.json` | `~/.codeium/windsurf/hooks.json` | `~/.codex/hooks.json` checks `.mnemo` | global plugin checks `.mnemo` |
+| **Global protocol** | `~/.claude/CLAUDE.md` | `~/.cursor/rules/mnemo.mdc` | `~/.codeium/windsurf/memories/global_rules.md` | `~/.codex/AGENTS.md` | `~/.config/opencode/AGENTS.md` |
 | **Global skill access** | symlink at `~/.claude/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` | symlink at `~/.codeium/windsurf/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` |
 
-Codex and OpenCode do not support per-project hook configuration. Their hooks are registered globally and check for `.mnemo` at runtime before acting.
+All supported agents now use global hook/configuration surfaces where available. Their global instructions are intentionally conditional: if `.mnemo` is missing or invalid, agents skip mnemo entirely and do not create fallback memory files.
 
-## What `mnemo init` creates per agent
-
-### Claude Code
+## What `mnemo init` creates
 
 ```
 project/
-├── .mnemo                   ← project ID + configured agents
-├── AGENTS.md                ← mnemo protocol section appended here
-└── CLAUDE.md                ← @AGENTS.md include + Claude-specific additions
+└── .mnemo                        ← project ID + configured agents
 ```
 
-`CLAUDE.md` is a regular file. Existing user content is preserved, and mnemo manages only its marked section. Session hooks come from the globally installed Claude Code plugin and activate only when `.mnemo` exists.
-
-### Cursor
-
-```
-project/
-├── .mnemo                        ← marker (agents includes "cursor")
-└── .cursor/
-    ├── hooks.json                ← beforeSubmitPrompt + stop hooks
-    └── rules/
-        └── mnemo.mdc             ← protocol as a Cursor rule (alwaysApply: true)
-```
-
-`hooks.json` references the global scripts installed to `~/.cursor/hooks/` with their absolute paths.
-
-### Windsurf
-
-```
-project/
-├── .mnemo                        ← marker (agents includes "windsurf")
-└── .windsurf/
-    ├── hooks.json                ← pre_user_prompt + post_cascade_response_with_transcript hooks
-    └── rules/
-        └── mnemo.md              ← protocol as a Windsurf workspace rule
-```
-
-`hooks.json` references the global scripts installed to `~/.codeium/windsurf/hooks/`.
-
-### Codex
-
-```
-project/
-├── .mnemo                        ← marker (agents includes "codex")
-└── AGENTS.md                     ← mnemo protocol section appended here
-```
-
-Hooks remain in `~/.codex/hooks.json`. The session-start and stop scripts check for `.mnemo` at runtime and skip if the marker is absent.
-
-### OpenCode
-
-```
-project/
-├── .mnemo                        ← marker (agents includes "opencode")
-└── AGENTS.md                     ← mnemo protocol section appended here
-```
-
-The plugin (`mnemo.ts`) is a TypeScript module that runs under Bun and is installed globally at `~/.config/opencode/plugins/`. It checks for `.mnemo` at runtime and does nothing if the marker is absent. MCP is registered in `~/.config/opencode/opencode.json`.
+`mnemo init` no longer appends mnemo protocol sections to project `AGENTS.md`, `CLAUDE.md`, Cursor rules, or Windsurf rules. Those instructions are installed globally by `install.sh` / `mnemo install-instructions` and are activated by the `.mnemo` marker.
 
 ## The `.mnemo` marker
 
@@ -180,7 +133,7 @@ The `.mnemo` file at the project root is what activates mnemo for a project. It 
 }
 ```
 
-`id` is the deterministic project identifier used by every integration. `agents` lists which agents have been configured via `mnemo init`. All hooks, including the global-only Codex hooks, read this file before acting. If the file is absent or has no ID, the hook exits silently.
+`id` is the deterministic project identifier used by every integration. `agents` lists which agents have been activated via `mnemo init`. All global hooks and plugins read this file before acting. If the file is absent or has no ID, the integration exits silently.
 
 `mnemo init` creates and updates this file automatically and adds it to `.gitignore`. Do not commit it: each clone derives its own identifier from its local path.
 
@@ -305,7 +258,8 @@ claude mcp add -s user mnemo-admin -- ~/.local/bin/mnemo mcp --tools=admin
 
 ```
 mnemo mcp [--tools=PROFILE]          Start MCP server (stdio)
-mnemo init [--agent=AGENT]           Configure mnemo in the current project
+mnemo init [--agent=AGENT]           Activate mnemo in the current project (.mnemo)
+mnemo install-instructions [--agent=AGENT]  Install global agent instructions
 mnemo save <title> <content>         Save a memory
 mnemo search <query>                 Search memories
 mnemo context [project]              Show context from previous sessions
@@ -322,14 +276,14 @@ mnemo extract-transcript <file>      Extract assistant text blocks from a JSONL 
 mnemo version                        Show version
 ```
 
-Agents for `mnemo init`:
+Agents for `mnemo init` / `mnemo install-instructions`:
 
 ```
---agent=claudecode   AGENTS.md + CLAUDE.md managed sections (default)
---agent=cursor       .cursor/hooks.json + .cursor/rules/mnemo.mdc
---agent=windsurf     .windsurf/hooks.json + .windsurf/rules/mnemo.md
---agent=codex        AGENTS.md append only (hooks stay global)
---agent=opencode     AGENTS.md append only (plugin stays global)
+--agent=claudecode   Claude Code global CLAUDE.md instructions / .mnemo activation (default for init)
+--agent=cursor       Cursor global rule / .mnemo activation
+--agent=windsurf     Windsurf global rule / .mnemo activation
+--agent=codex        Codex global AGENTS.md instructions / .mnemo activation
+--agent=opencode     OpenCode global AGENTS.md instructions / .mnemo activation
 --agent=all          All agents
 ```
 
@@ -377,30 +331,21 @@ ls -l ~/.claude/skills/mnemo-memory \
 
 Only symlinks for agent-specific consumers selected during `npx skills add` are expected to exist. Codex and Cursor use the canonical `.agents/skills` path directly.
 
-After running `mnemo init`, check the project files exist:
+After running the installer, check global agent files exist; after `mnemo init`, check only the project marker:
 
 ```bash
-# Claude Code
-cat .mnemo                          # must contain agents list
-grep "@AGENTS.md" CLAUDE.md         # must include shared project instructions
-grep "mnemo:claude-start" CLAUDE.md # must contain the managed Claude section
+# Project activation
+cat .mnemo                          # must contain id + agents list
 
-# Cursor
-cat .cursor/hooks.json              # must have beforeSubmitPrompt + stop
-head -3 .cursor/rules/mnemo.mdc    # must have: alwaysApply: true
+# Global instructions
+grep "mnemo:start" ~/.codex/AGENTS.md ~/.claude/CLAUDE.md 2>/dev/null
+head -3 ~/.cursor/rules/mnemo.mdc   # should have: alwaysApply: true
+grep "mnemo:start" ~/.codeium/windsurf/memories/global_rules.md 2>/dev/null
+grep "mnemo:start" ~/.config/opencode/AGENTS.md 2>/dev/null
 
-# Windsurf
-cat .windsurf/hooks.json            # must have pre_user_prompt + post_cascade_response_with_transcript
-ls .windsurf/rules/mnemo.md
-
-# Codex
-grep "mnemo" AGENTS.md             # must have the protocol section
-
-# OpenCode
-ls ~/.config/opencode/plugins/mnemo.ts        # plugin must exist
-ls ~/.config/opencode/plugins/mnemo-protocol.md
-grep "mnemo" ~/.config/opencode/opencode.json  # MCP must be registered
-grep "mnemo" AGENTS.md                         # must have the protocol section
+# Global hooks/config
+grep "mnemo" ~/.cursor/hooks.json ~/.codeium/windsurf/hooks.json ~/.codex/hooks.json 2>/dev/null
+ls ~/.config/opencode/plugins/mnemo.ts ~/.config/opencode/plugins/mnemo-protocol.md
 ```
 
 Validate the Claude Code plugin:
@@ -409,11 +354,13 @@ Validate the Claude Code plugin:
 claude plugin validate plugin/claude-code
 ```
 
-Check idempotency. Running `mnemo init` again must refresh the managed sections without duplicating them or changing surrounding user content:
+Check idempotency. Running `mnemo install-instructions` or `mnemo init` again must not duplicate managed sections or marker entries:
 
 ```bash
+mnemo install-instructions --agent=codex
+mnemo install-instructions --agent=codex  # second run: no duplicate block
 mnemo init --agent=claudecode
-mnemo init --agent=claudecode  # second run: no changes
+mnemo init --agent=claudecode             # second run: no duplicate agent entry
 ```
 
 ## Storage

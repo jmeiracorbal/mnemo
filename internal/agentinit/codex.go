@@ -1,20 +1,7 @@
 package agentinit
 
-import (
-	"fmt"
-	"path/filepath"
-
-	"github.com/jmeiracorbal/mnemo/templates"
-)
-
-// InitCodex configures mnemo for Codex in the given project root.
-//
-// Appends the mnemo protocol section to AGENTS.md. Hooks for Codex are global
-// (registered by install.sh); they check for the .mnemo marker at runtime.
+// InitCodex activates mnemo for Codex in the given project root.
+// Global hooks and instructions check for .mnemo at runtime.
 func InitCodex(root string) error {
-	agentsPath := filepath.Join(root, "AGENTS.md")
-	if err := AppendSection(agentsPath, templates.Generic); err != nil {
-		return fmt.Errorf("codex init: AGENTS.md: %w", err)
-	}
 	return AddAgent(root, "codex")
 }

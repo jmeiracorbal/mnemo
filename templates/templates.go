@@ -13,3 +13,9 @@ var Cursor string
 
 //go:embed rules/windsurf.md
 var Windsurf string
+
+//go:embed rules/global.md
+var Global string
+
+//go:embed rules/cursor-global.mdc
+var CursorGlobal string
