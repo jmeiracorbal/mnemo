@@ -4,29 +4,6 @@ This document tracks planned capabilities that are not yet released. Released be
 
 ## Diagnostics
 
-### mnemo doctor
-
-Add read-only operational diagnostics for mnemo installations.
-
-Planned checks:
-
-- project `.mnemo` marker exists, parses, and contains a non-empty `id`;
-- `mnemo` binary is available on `PATH` for agent/plugin integrations;
-- global agent instructions are installed for selected agents;
-- MCP configuration exists and points to `mnemo mcp --tools=agent`;
-- global hook/plugin files exist and are executable where relevant;
-- SQLite store opens successfully and exposes basic stats;
-- output supports both human-readable text and a stable JSON envelope.
-
-Target CLI shape:
-
-```bash
-mnemo doctor
-mnemo doctor --json
-mnemo doctor --agent=codex
-mnemo doctor --path=.
-```
-
 ### mnemo setup status
 
 Add a global setup status command that reports detected and configured agent integrations without performing repairs.

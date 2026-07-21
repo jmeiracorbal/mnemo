@@ -177,9 +177,10 @@ func printDoctorReport(report doctorReport) {
 	fmt.Println()
 	for _, check := range report.Checks {
 		marker := "✓"
-		if check.Status == "warning" {
+		switch check.Status {
+		case "warning":
 			marker = "!"
-		} else if check.Status == "error" {
+		case "error":
 			marker = "✗"
 		}
 		suffix := ""
@@ -395,23 +396,34 @@ func checkStoreReadOnly(dataDir string) doctorCheck {
 	} else if err != nil {
 		return errorCheck("store", "stat memory database: "+err.Error(), dbPath)
 	}
-	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?mode=ro")
+	db, err := sql.Open("sqlite", sqliteReadOnlyDBURI(dbPath))
 	if err != nil {
 		return errorCheck("store", "open memory database read-only: "+err.Error(), dbPath)
 	}
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 	if err := db.Ping(); err != nil {
 		return errorCheck("store", "ping memory database read-only: "+err.Error(), dbPath)
 	}
 	counts := map[string]string{}
-	for _, table := range []string{"sessions", "observations", "user_prompts"} {
+	queries := map[string]string{
+		"sessions":     "SELECT COUNT(*) FROM sessions",
+		"observations": "SELECT COUNT(*) FROM observations",
+		"user_prompts": "SELECT COUNT(*) FROM user_prompts",
+	}
+	for table, query := range queries {
 		var count int
-		if err := db.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&count); err != nil {
+		if err := db.QueryRow(query).Scan(&count); err != nil {
 			return errorCheck("store", "query "+table+": "+err.Error(), dbPath)
 		}
 		counts[table] = fmt.Sprintf("%d", count)
 	}
 	return doctorCheck{ID: "store", Status: "ok", Severity: "info", Message: "memory database opens read-only", Path: dbPath, Details: counts}
+}
+
+func sqliteReadOnlyDBURI(dbPath string) string {
+	return "file:" + filepath.ToSlash(dbPath) + "?mode=ro&immutable=1"
 }
 
 func agentOK(agent, id, message, path string) doctorCheck {
