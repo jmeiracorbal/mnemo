@@ -81,11 +81,11 @@ func TestCheckStoreReadOnlyUsesWALSafeImmutableURI(t *testing.T) {
 	if err := os.Chmod(dataDir, 0555); err != nil {
 		t.Fatalf("chmod read-only dir: %v", err)
 	}
-	defer func() {
+	t.Cleanup(func() {
 		if err := os.Chmod(dataDir, 0755); err != nil {
-			t.Fatalf("restore dir permissions: %v", err)
+			t.Errorf("restore dir permissions: %v", err)
 		}
-	}()
+	})
 
 	check := checkStoreReadOnly(dataDir)
 	if check.Status != "ok" {
@@ -129,6 +129,6 @@ func writeExecutable(t *testing.T, path string) {
 func closeTestDB(t *testing.T, db *sql.DB) {
 	t.Helper()
 	if err := db.Close(); err != nil {
-		t.Fatalf("close sqlite: %v", err)
+		t.Errorf("close sqlite: %v", err)
 	}
 }
