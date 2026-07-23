@@ -264,6 +264,7 @@ mnemo init [--agent=AGENT]           Activate mnemo in the current project (.mne
 mnemo install-instructions [--agent=AGENT]  Install global agent instructions
 mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
 mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
+mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual setup config snippets
 mnemo save <title> <content>         Save a memory
 mnemo search <query>                 Search memories
 mnemo context [project]              Show context from previous sessions
@@ -341,6 +342,7 @@ After running the installer, use `mnemo doctor` for a read-only health check and
 mnemo doctor --agent=all --path=.
 mnemo doctor --json --agent=codex --path=.
 mnemo setup status --agent=all
+mnemo setup print-config codex
 
 # Project activation
 cat .mnemo                          # must contain id + agents list
