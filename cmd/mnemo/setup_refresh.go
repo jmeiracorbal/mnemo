@@ -223,6 +223,9 @@ func writeSetupAssets(home string, targets []setupAssetTarget) ([]string, error)
 		if err := os.WriteFile(path, data, target.Mode); err != nil {
 			return nil, err
 		}
+		if err := os.Chmod(path, target.Mode); err != nil {
+			return nil, err
+		}
 		updated = append(updated, path)
 	}
 	return updated, nil

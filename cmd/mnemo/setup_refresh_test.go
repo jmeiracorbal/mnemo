@@ -66,6 +66,21 @@ func TestRefreshSetupPreservesExistingJSONConfig(t *testing.T) {
 	}
 }
 
+func TestRefreshSetupRestoresExistingScriptPermissions(t *testing.T) {
+	home := t.TempDir()
+	scriptPath := filepath.Join(home, ".codex", "hooks", "session-start.sh")
+	writeFile(t, scriptPath, "#!/bin/sh\n")
+	if err := os.Chmod(scriptPath, 0644); err != nil {
+		t.Fatalf("chmod fixture: %v", err)
+	}
+
+	if _, err := refreshSetup(setupRefreshOptions{Agent: "codex", Home: home, MnemoBin: "mnemo"}); err != nil {
+		t.Fatalf("refresh setup: %v", err)
+	}
+
+	assertExecutable(t, scriptPath)
+}
+
 func readTestFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)
