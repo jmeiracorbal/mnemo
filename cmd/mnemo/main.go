@@ -50,6 +50,9 @@ func main() {
 	case "install-instructions":
 		runInstallInstructions()
 		return
+	case "doctor":
+		runDoctor()
+		return
 	case "--version", "version":
 		fmt.Printf("mnemo %s\n", version)
 		return

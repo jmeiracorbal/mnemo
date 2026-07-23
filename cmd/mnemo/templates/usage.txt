@@ -11,6 +11,7 @@ Usage:
   mnemo export [file]                  Export all memories to JSON
   mnemo import <file.json>             Import memories from JSON
   mnemo capture <content>|-            Extract learnings from text (passive capture; "-" reads stdin)
+  mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
   mnemo init [--agent=AGENT] [--path=DIR]  Activate mnemo in the current project (.mnemo)
   mnemo install-instructions [--agent=AGENT]  Install global agent instructions
   mnemo migrate [--path=DIR]              Migrate project from legacy key to UUID-based identity
@@ -26,7 +27,13 @@ Agents for init / install-instructions:
   --agent=codex        Codex global AGENTS.md instructions / .mnemo activation
   --agent=opencode     OpenCode global AGENTS.md instructions / .mnemo activation
   --agent=all          All agents
-  --path=DIR           Target project directory for init (default: current directory)
+  --path=DIR           Target project directory for init/doctor (default: current directory)
+
+Doctor options:
+  --json               Emit a stable JSON diagnostic envelope
+  --agent=AGENT        Check one agent or all agents (default: all)
+  --home=DIR           Override home directory for global agent checks
+  --data-dir=DIR       Override mnemo data directory for store checks
 
 Tool profiles for mcp:
   --tools=agent    15 tools for AI agents (default when using plugin)

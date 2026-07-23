@@ -260,6 +260,7 @@ claude mcp add -s user mnemo-admin -- ~/.local/bin/mnemo mcp --tools=admin
 mnemo mcp [--tools=PROFILE]          Start MCP server (stdio)
 mnemo init [--agent=AGENT]           Activate mnemo in the current project (.mnemo)
 mnemo install-instructions [--agent=AGENT]  Install global agent instructions
+mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
 mnemo save <title> <content>         Save a memory
 mnemo search <query>                 Search memories
 mnemo context [project]              Show context from previous sessions
@@ -331,9 +332,12 @@ ls -l ~/.claude/skills/mnemo-memory \
 
 Only symlinks for agent-specific consumers selected during `npx skills add` are expected to exist. Codex and Cursor use the canonical `.agents/skills` path directly.
 
-After running the installer, check global agent files exist; after `mnemo init`, check only the project marker:
+After running the installer, use `mnemo doctor` for a read-only health check. You can also inspect the files manually:
 
 ```bash
+mnemo doctor --agent=all --path=.
+mnemo doctor --json --agent=codex --path=.
+
 # Project activation
 cat .mnemo                          # must contain id + agents list
 
