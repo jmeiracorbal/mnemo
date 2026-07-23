@@ -109,13 +109,19 @@ func buildSetupStatusReport(opts setupStatusOptions) setupStatusReport {
 	}
 	report.Summary.Total = len(report.Rows)
 	for _, row := range report.Rows {
+		if setupStatusRowHasError(row) {
+			report.Summary.Errors++
+			continue
+		}
 		if row.Detected == "yes" && row.MCP == "yes" && (row.Hooks == "yes" || row.Hooks == "n/a") && row.Instructions == "yes" {
 			report.Summary.OK++
 			continue
 		}
 		report.Summary.Warnings++
 	}
-	if report.Summary.Warnings > 0 {
+	if report.Summary.Errors > 0 {
+		report.Status = "error"
+	} else if report.Summary.Warnings > 0 {
 		report.Status = "warning"
 	}
 	return report
@@ -148,10 +154,18 @@ func statusFromCheck(check doctorCheck) string {
 	if check.ID == "" {
 		return ""
 	}
-	if check.Status == "ok" {
+	switch check.Status {
+	case "ok":
 		return "yes"
+	case "error":
+		return "error"
+	default:
+		return "no"
 	}
-	return "no"
+}
+
+func setupStatusRowHasError(row setupStatusRow) bool {
+	return row.Detected == "error" || row.MCP == "error" || row.Hooks == "error" || row.Instructions == "error"
 }
 
 func yesNo(v bool) string {

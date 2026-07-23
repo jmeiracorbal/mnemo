@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -60,34 +61,59 @@ func TestBuildSetupStatusReportReportsMissingAgent(t *testing.T) {
 }
 
 func TestBuildSetupStatusReportChecksClaudeCodePluginHooks(t *testing.T) {
+	for name, registry := range map[string]string{
+		"array":  `{"plugins":{"mnemo@mnemo":[{"installPath":"%s"}]}}`,
+		"object": `{"plugins":{"mnemo@mnemo":{"installPath":"%s"}}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			home := t.TempDir()
+			installPath := filepath.Join(home, "plugin-cache", "mnemo")
+
+			if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
+				t.Fatalf("install instructions: %v", err)
+			}
+			writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo"}}}`)
+			writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), fmt.Sprintf(registry, installPath))
+			writeFile(t, filepath.Join(installPath, ".claude-plugin", "plugin.json"), `{"name":"mnemo"}`)
+			writeFile(t, filepath.Join(installPath, "hooks", "hooks.json"), `{"hooks":{}}`)
+			for _, script := range []string{
+				"session-start.sh",
+				"session-stop.sh",
+				"subagent-stop.sh",
+				"post-compact.sh",
+				"post-compact-resume.sh",
+				"post-file-edit.sh",
+				"post-bash-git.sh",
+			} {
+				writeExecutable(t, filepath.Join(installPath, "scripts", script))
+			}
+
+			report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
+			if report.Status != "ok" {
+				t.Fatalf("status = %q, want ok", report.Status)
+			}
+			row := report.Rows[0]
+			if row.Agent != "Claude" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "yes" || row.Instructions != "yes" {
+				t.Fatalf("unexpected row: %+v", row)
+			}
+		})
+	}
+}
+
+func TestBuildSetupStatusReportCountsRuntimeErrors(t *testing.T) {
 	home := t.TempDir()
-	installPath := filepath.Join(home, "plugin-cache", "mnemo")
 
 	if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
 		t.Fatalf("install instructions: %v", err)
 	}
 	writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo"}}}`)
-	writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), `{"plugins":{"mnemo@mnemo":[{"installPath":"`+installPath+`"}]}}`)
-	writeFile(t, filepath.Join(installPath, ".claude-plugin", "plugin.json"), `{"name":"mnemo"}`)
-	writeFile(t, filepath.Join(installPath, "hooks", "hooks.json"), `{"hooks":{}}`)
-	for _, script := range []string{
-		"session-start.sh",
-		"session-stop.sh",
-		"subagent-stop.sh",
-		"post-compact.sh",
-		"post-compact-resume.sh",
-		"post-file-edit.sh",
-		"post-bash-git.sh",
-	} {
-		writeExecutable(t, filepath.Join(installPath, "scripts", script))
-	}
+	writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), `{`)
 
 	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
-	if report.Status != "ok" {
-		t.Fatalf("status = %q, want ok", report.Status)
+	if report.Status != "error" || report.Summary.Errors != 1 {
+		t.Fatalf("status = %q errors = %d, want error/1", report.Status, report.Summary.Errors)
 	}
-	row := report.Rows[0]
-	if row.Agent != "Claude" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "yes" || row.Instructions != "yes" {
-		t.Fatalf("unexpected row: %+v", row)
+	if got := report.Rows[0].Hooks; got != "error" {
+		t.Fatalf("hooks = %q, want error", got)
 	}
 }

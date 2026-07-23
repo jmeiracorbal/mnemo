@@ -263,7 +263,7 @@ mnemo mcp [--tools=PROFILE]          Start MCP server (stdio)
 mnemo init [--agent=AGENT]           Activate mnemo in the current project (.mnemo)
 mnemo install-instructions [--agent=AGENT]  Install global agent instructions
 mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
-mnemo setup status [--json] [--agent=AGENT]  Show global agent setup status
+mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
 mnemo save <title> <content>         Save a memory
 mnemo search <query>                 Search memories
 mnemo context [project]              Show context from previous sessions

@@ -12,7 +12,7 @@ Usage:
   mnemo import <file.json>             Import memories from JSON
   mnemo capture <content>|-            Extract learnings from text (passive capture; "-" reads stdin)
   mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
-  mnemo setup status [--json] [--agent=AGENT]  Show global agent setup status
+  mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
   mnemo init [--agent=AGENT] [--path=DIR]  Activate mnemo in the current project (.mnemo)
   mnemo install-instructions [--agent=AGENT]  Install global agent instructions
   mnemo migrate [--path=DIR]              Migrate project from legacy key to UUID-based identity

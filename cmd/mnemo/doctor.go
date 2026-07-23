@@ -14,6 +14,11 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+var (
+	errClaudePluginRegistryNotFound = errors.New("claude code plugin registry not found")
+	errClaudeMnemoPluginNotFound    = errors.New("claude code mnemo plugin not found")
+)
+
 type doctorOptions struct {
 	JSON    bool
 	Agent   string
@@ -293,7 +298,11 @@ func checkAgentRuntimeFiles(home, agent string) doctorCheck {
 	case "claudecode":
 		installPath, err := claudeMnemoPluginInstallPath(home)
 		if err != nil {
-			return agentWarning(agent, "runtime_files."+agent, err.Error(), filepath.Join(home, ".claude", "plugins", "installed_plugins.json"))
+			path := filepath.Join(home, ".claude", "plugins", "installed_plugins.json")
+			if errors.Is(err, errClaudePluginRegistryNotFound) || errors.Is(err, errClaudeMnemoPluginNotFound) {
+				return agentWarning(agent, "runtime_files."+agent, err.Error(), path)
+			}
+			return agentError(agent, "runtime_files."+agent, err.Error(), path)
 		}
 		paths := []string{
 			filepath.Join(installPath, ".claude-plugin", "plugin.json"),
@@ -344,22 +353,37 @@ func claudeMnemoPluginInstallPath(home string) (string, error) {
 	path := filepath.Join(home, ".claude", "plugins", "installed_plugins.json")
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("Claude Code plugin registry not found")
+		return "", errClaudePluginRegistryNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("read Claude Code plugin registry: %w", err)
 	}
 	var registry struct {
-		Plugins map[string][]struct {
-			InstallPath string `json:"installPath"`
-		} `json:"plugins"`
+		Plugins map[string]json.RawMessage `json:"plugins"`
 	}
 	if err := json.Unmarshal(data, &registry); err != nil {
 		return "", fmt.Errorf("parse Claude Code plugin registry: %w", err)
 	}
-	entries := registry.Plugins["mnemo@mnemo"]
+	raw, ok := registry.Plugins["mnemo@mnemo"]
+	if !ok {
+		return "", errClaudeMnemoPluginNotFound
+	}
+	var entries []struct {
+		InstallPath string `json:"installPath"`
+	}
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		var entry struct {
+			InstallPath string `json:"installPath"`
+		}
+		if err := json.Unmarshal(raw, &entry); err != nil {
+			return "", fmt.Errorf("parse Claude Code mnemo plugin entry: %w", err)
+		}
+		entries = []struct {
+			InstallPath string `json:"installPath"`
+		}{entry}
+	}
 	if len(entries) == 0 || strings.TrimSpace(entries[0].InstallPath) == "" {
-		return "", fmt.Errorf("Claude Code mnemo plugin not found")
+		return "", errClaudeMnemoPluginNotFound
 	}
 	return entries[0].InstallPath, nil
 }
