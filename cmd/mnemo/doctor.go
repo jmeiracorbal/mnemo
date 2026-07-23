@@ -290,6 +290,23 @@ func checkMCPConfig(home, agent string) doctorCheck {
 
 func checkAgentRuntimeFiles(home, agent string) doctorCheck {
 	switch agent {
+	case "claudecode":
+		installPath, err := claudeMnemoPluginInstallPath(home)
+		if err != nil {
+			return agentWarning(agent, "runtime_files."+agent, err.Error(), filepath.Join(home, ".claude", "plugins", "installed_plugins.json"))
+		}
+		paths := []string{
+			filepath.Join(installPath, ".claude-plugin", "plugin.json"),
+			filepath.Join(installPath, "hooks", "hooks.json"),
+			filepath.Join(installPath, "scripts", "session-start.sh"),
+			filepath.Join(installPath, "scripts", "session-stop.sh"),
+			filepath.Join(installPath, "scripts", "subagent-stop.sh"),
+			filepath.Join(installPath, "scripts", "post-compact.sh"),
+			filepath.Join(installPath, "scripts", "post-compact-resume.sh"),
+			filepath.Join(installPath, "scripts", "post-file-edit.sh"),
+			filepath.Join(installPath, "scripts", "post-bash-git.sh"),
+		}
+		return checkFiles(agent, "runtime_files."+agent, "Claude Code plugin hooks installed", paths, true)
 	case "cursor":
 		paths := []string{
 			filepath.Join(home, ".cursor", "hooks.json"),
@@ -321,6 +338,30 @@ func checkAgentRuntimeFiles(home, agent string) doctorCheck {
 	default:
 		return doctorCheck{}
 	}
+}
+
+func claudeMnemoPluginInstallPath(home string) (string, error) {
+	path := filepath.Join(home, ".claude", "plugins", "installed_plugins.json")
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("Claude Code plugin registry not found")
+	}
+	if err != nil {
+		return "", fmt.Errorf("read Claude Code plugin registry: %w", err)
+	}
+	var registry struct {
+		Plugins map[string][]struct {
+			InstallPath string `json:"installPath"`
+		} `json:"plugins"`
+	}
+	if err := json.Unmarshal(data, &registry); err != nil {
+		return "", fmt.Errorf("parse Claude Code plugin registry: %w", err)
+	}
+	entries := registry.Plugins["mnemo@mnemo"]
+	if len(entries) == 0 || strings.TrimSpace(entries[0].InstallPath) == "" {
+		return "", fmt.Errorf("Claude Code mnemo plugin not found")
+	}
+	return entries[0].InstallPath, nil
 }
 
 func checkFiles(agent, id, okMessage string, paths []string, executableScripts bool) doctorCheck {

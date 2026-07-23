@@ -2,22 +2,6 @@
 
 This document tracks planned capabilities that are not yet released. Released behavior belongs in release notes, not here.
 
-## Diagnostics
-
-### mnemo setup status
-
-Add a global setup status command that reports detected and configured agent integrations without performing repairs.
-
-Target output shape:
-
-```text
-Agent       Detected  MCP  Hooks  Instructions
-Claude      yes       yes  yes    yes
-Codex       yes       yes  yes    yes
-Cursor      yes       yes  yes    yes
-OpenCode    no        no   no     no
-```
-
 ## Setup lifecycle
 
 Add explicit setup maintenance commands for global agent integrations:
