@@ -21,6 +21,16 @@ import (
 //
 // Returns true if the file was changed, false if it was already up to date.
 func MergeFile(filePath string) (changed bool, err error) {
+	var patch any
+	if err := json.NewDecoder(os.Stdin).Decode(&patch); err != nil {
+		return false, fmt.Errorf("read patch from stdin: %w", err)
+	}
+	return MergeValue(filePath, patch)
+}
+
+// MergeValue reads filePath (or starts from {} if it does not exist),
+// deep-merges patch into it, and writes the result back atomically.
+func MergeValue(filePath string, patch any) (changed bool, err error) {
 	// If filePath is a symlink, resolve it so we write to the real file and
 	// do not replace the symlink with a regular file (e.g. dotfiles setups).
 	if fi, statErr := os.Lstat(filePath); statErr == nil && fi.Mode()&os.ModeSymlink != 0 {
@@ -43,12 +53,6 @@ func MergeFile(filePath string) (changed bool, err error) {
 		if err := json.Unmarshal(data, &target); err != nil {
 			return false, fmt.Errorf("parse %s: %w", filePath, err)
 		}
-	}
-
-	// Read patch from stdin.
-	var patch any
-	if err := json.NewDecoder(os.Stdin).Decode(&patch); err != nil {
-		return false, fmt.Errorf("read patch from stdin: %w", err)
 	}
 
 	merged := deepMerge(target, patch)
