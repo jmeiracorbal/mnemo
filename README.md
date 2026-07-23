@@ -50,7 +50,7 @@ mnemo --version
 - **Portable Agent Skill:** teaches compatible agents the complete mnemo workflow without weakening the always-active safety rules
 - **Full CLI:** save, search, export, import, inspect, and diagnose memories from the terminal
 - **Read-only diagnostics:** `mnemo doctor` checks project activation, global agent setup, MCP config, hooks/plugins, and local store health
-- **Setup status:** `mnemo setup status` summarizes detected agent integrations and configured MCP/hooks/instructions without repairing anything
+- **Setup lifecycle:** `mnemo setup status`, `print-config`, and `refresh` inspect, print, and refresh global agent configuration
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
 - **Claude Code + Cursor + Windsurf + Codex + OpenCode:** native integration for all five agents via their respective hook systems
 
