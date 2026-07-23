@@ -50,6 +50,7 @@ mnemo --version
 - **Portable Agent Skill:** teaches compatible agents the complete mnemo workflow without weakening the always-active safety rules
 - **Full CLI:** save, search, export, import, inspect, and diagnose memories from the terminal
 - **Read-only diagnostics:** `mnemo doctor` checks project activation, global agent setup, MCP config, hooks/plugins, and local store health
+- **Setup status:** `mnemo setup status` summarizes detected agent integrations and configured MCP/hooks/instructions without repairing anything
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
 - **Claude Code + Cursor + Windsurf + Codex + OpenCode:** native integration for all five agents via their respective hook systems
 
@@ -262,6 +263,7 @@ mnemo mcp [--tools=PROFILE]          Start MCP server (stdio)
 mnemo init [--agent=AGENT]           Activate mnemo in the current project (.mnemo)
 mnemo install-instructions [--agent=AGENT]  Install global agent instructions
 mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
+mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
 mnemo save <title> <content>         Save a memory
 mnemo search <query>                 Search memories
 mnemo context [project]              Show context from previous sessions
@@ -333,11 +335,12 @@ ls -l ~/.claude/skills/mnemo-memory \
 
 Only symlinks for agent-specific consumers selected during `npx skills add` are expected to exist. Codex and Cursor use the canonical `.agents/skills` path directly.
 
-After running the installer, use `mnemo doctor` for a read-only health check. You can also inspect the files manually:
+After running the installer, use `mnemo doctor` for a read-only health check and `mnemo setup status` for a compact global setup table. `setup status` is read-only: `Detected` means the agent's user-level configuration directory exists, and the other columns report whether mnemo's MCP, hooks/plugin files, and global instructions are configured. You can also inspect the files manually:
 
 ```bash
 mnemo doctor --agent=all --path=.
 mnemo doctor --json --agent=codex --path=.
+mnemo setup status --agent=all
 
 # Project activation
 cat .mnemo                          # must contain id + agents list

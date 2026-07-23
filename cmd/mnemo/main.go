@@ -53,6 +53,9 @@ func main() {
 	case "doctor":
 		runDoctor()
 		return
+	case "setup":
+		runSetup()
+		return
 	case "--version", "version":
 		fmt.Printf("mnemo %s\n", version)
 		return
