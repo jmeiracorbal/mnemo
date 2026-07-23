@@ -81,12 +81,16 @@ func buildSetupConfigSnippets(opts setupPrintConfigOptions) ([]setupConfigSnippe
 	}
 	var snippets []setupConfigSnippet
 	for _, agent := range agents {
-		snippets = append(snippets, setupConfigSnippetsForAgent(opts.Home, opts.MnemoBin, agent)...)
+		agentSnippets, err := setupConfigSnippetsForAgent(opts.Home, opts.MnemoBin, agent)
+		if err != nil {
+			return nil, err
+		}
+		snippets = append(snippets, agentSnippets...)
 	}
 	return snippets, nil
 }
 
-func setupConfigSnippetsForAgent(home, mnemoBin, agent string) []setupConfigSnippet {
+func setupConfigSnippetsForAgent(home, mnemoBin, agent string) ([]setupConfigSnippet, error) {
 	switch agent {
 	case "claudecode":
 		return []setupConfigSnippet{{
@@ -94,7 +98,7 @@ func setupConfigSnippetsForAgent(home, mnemoBin, agent string) []setupConfigSnip
 			Path:    filepath.Join(home, ".claude", ".mcp.json"),
 			Format:  "json",
 			Content: mcpServersJSON(mnemoBin),
-		}}
+		}}, nil
 	case "cursor":
 		hooksDir := filepath.Join(home, ".cursor", "hooks")
 		return []setupConfigSnippet{
@@ -116,7 +120,7 @@ func setupConfigSnippetsForAgent(home, mnemoBin, agent string) []setupConfigSnip
 					},
 				}),
 			},
-		}
+		}, nil
 	case "windsurf":
 		hooksDir := filepath.Join(home, ".codeium", "windsurf", "hooks")
 		return []setupConfigSnippet{
@@ -137,7 +141,7 @@ func setupConfigSnippetsForAgent(home, mnemoBin, agent string) []setupConfigSnip
 					},
 				}),
 			},
-		}
+		}, nil
 	case "codex":
 		hooksDir := filepath.Join(home, ".codex", "hooks")
 		return []setupConfigSnippet{
@@ -173,7 +177,7 @@ func setupConfigSnippetsForAgent(home, mnemoBin, agent string) []setupConfigSnip
 					},
 				}),
 			},
-		}
+		}, nil
 	case "opencode":
 		return []setupConfigSnippet{{
 			Agent:  agentLabel(agent),
@@ -187,9 +191,9 @@ func setupConfigSnippetsForAgent(home, mnemoBin, agent string) []setupConfigSnip
 					},
 				},
 			}),
-		}}
+		}}, nil
 	default:
-		return nil
+		return nil, fmt.Errorf("unsupported agent %q for setup print-config", agent)
 	}
 }
 
