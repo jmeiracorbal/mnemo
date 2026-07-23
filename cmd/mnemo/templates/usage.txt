@@ -14,6 +14,7 @@ Usage:
   mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
   mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
   mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual setup config snippets
+  mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]  Refresh installed global setup files
   mnemo init [--agent=AGENT] [--path=DIR]  Activate mnemo in the current project (.mnemo)
   mnemo install-instructions [--agent=AGENT]  Install global agent instructions
   mnemo migrate [--path=DIR]              Migrate project from legacy key to UUID-based identity
@@ -46,6 +47,11 @@ Setup print-config options:
   AGENT                claudecode | cursor | windsurf | codex | opencode | all
   --home=DIR           Use DIR when rendering user-level config paths
   --mnemo-bin=PATH     Use PATH as the mnemo binary in snippets
+
+Setup refresh options:
+  --agent=AGENT        Refresh one agent or all agents (default: all)
+  --home=DIR           Override home directory for global agent files
+  --mnemo-bin=PATH     Use PATH as the mnemo binary in config files
 
 Tool profiles for mcp:
   --tools=agent    15 tools for AI agents (default when using plugin)

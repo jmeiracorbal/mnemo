@@ -7,13 +7,11 @@ This document tracks planned capabilities that are not yet released. Released be
 Add explicit setup maintenance commands for global agent integrations:
 
 ```bash
-mnemo setup refresh --agent=all
 mnemo setup uninstall --agent=codex
 ```
 
 Goals:
 
-- refresh previously installed global files after upgrades;
 - uninstall mnemo from selected agents without removing the local database;
 
 ## Project management
