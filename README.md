@@ -1,6 +1,6 @@
 # mnemo
 
-[![Go](https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Status](https://img.shields.io/badge/status-stable-brightgreen)](https://github.com/jmeiracorbal/mnemo)
 [![Storage](https://img.shields.io/badge/storage-SQLite%2BFTS5-003B57?logo=sqlite&logoColor=white)](https://sqlite.org)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet?logo=anthropic&logoColor=white)](https://claude.ai/code)
@@ -48,7 +48,8 @@ mnemo --version
 - **18 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_tag_stats`, and more, available directly inside your editor
 - **Passive capture:** extracts learnings from conversation transcripts automatically at session end
 - **Portable Agent Skill:** teaches compatible agents the complete mnemo workflow without weakening the always-active safety rules
-- **Full CLI:** save, search, export, import, and inspect memories from the terminal
+- **Full CLI:** save, search, export, import, inspect, and diagnose memories from the terminal
+- **Read-only diagnostics:** `mnemo doctor` checks project activation, global agent setup, MCP config, hooks/plugins, and local store health
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
 - **Claude Code + Cursor + Windsurf + Codex + OpenCode:** native integration for all five agents via their respective hook systems
 

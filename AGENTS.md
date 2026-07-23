@@ -47,11 +47,26 @@ The release tag and plugin metadata version must always match.
 
 The binary version and plugin metadata must not silently drift. If a release changes version metadata, verify plugin metadata files, release workflow behavior, and install/update paths are all aligned.
 
-### 5. Keep documentation accurate about what the plugin really does
+### 5. Apply the post-merge release workflow after every approved PR
+
+When a PR has been approved, merged, and published to `main`, always follow the release workflow:
+
+1. Check out `main`.
+2. Pull the latest `main` changes and tags with fast-forward only.
+3. Update local agent/plugin version metadata for the new release.
+4. Update README/docs for the newly released behavior.
+5. Run the required verification checklist.
+6. Commit the version/docs update.
+7. Create the matching release tag.
+8. Push both the commit and the tag.
+
+Do not tag from a feature branch or from stale local `main`.
+
+### 6. Keep documentation accurate about what the plugin really does
 
 Distinguish clearly between binary installation, plugin installation, hook registration, setup-side file modifications, and MCP configuration. If the plugin depends on the binary being in `PATH`, state that explicitly near the install steps.
 
-### 6. Project identity derivation must stay consistent across hooks
+### 7. Project identity derivation must stay consistent across hooks
 
 All hooks must derive `PROJECT` the same way:
 
@@ -60,7 +75,7 @@ All hooks must derive `PROJECT` the same way:
 
 Any inconsistency fragments stored memory across sessions. Any change to this logic is a storage compatibility change.
 
-### 7. Tests must validate the shipped plugin, not only installer internals
+### 8. Tests must validate the shipped plugin, not only installer internals
 
 Tests must cover: hook config references to existing scripts, shipped metadata consistency, filename matches between hook JSON and actual scripts. If a real shipped file can be wrong while tests pass, coverage is insufficient.
 
