@@ -114,6 +114,7 @@ func TestShippedMnemoMemorySkill(t *testing.T) {
 		"non-empty `id`",
 		"Never create `MEMORY.md`",
 		"`mem_session_summary`",
+		"mnemo doctor",
 	}
 	for _, value := range required {
 		if !strings.Contains(content, value) {

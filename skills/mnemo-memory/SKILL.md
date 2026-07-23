@@ -18,6 +18,17 @@ Before any memory operation:
 
 If `.mnemo` is missing or invalid, tell the user to run `mnemo init` and stop the memory workflow. If mnemo tools are unavailable, report that integration is incomplete. Never create `MEMORY.md`, write into an agent's native memory directory, or use arbitrary text files as a fallback.
 
+### Troubleshoot integration
+
+When mnemo appears misconfigured, unavailable, or inconsistent with the project marker, prefer the read-only diagnostic command before guessing:
+
+```bash
+mnemo doctor --path <root>
+mnemo doctor --json --path <root>
+```
+
+Use the output to explain missing `.mnemo`, PATH, global instruction, MCP, hook/plugin, or store issues. Do not repair configuration automatically unless the user explicitly asks for setup or install changes.
+
 ## 2. Recover relevant context
 
 - At session start, resume, or after compaction, call `mem_context` before significant work.
