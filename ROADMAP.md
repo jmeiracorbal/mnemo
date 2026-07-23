@@ -9,14 +9,12 @@ Add explicit setup maintenance commands for global agent integrations:
 ```bash
 mnemo setup refresh --agent=all
 mnemo setup uninstall --agent=codex
-mnemo setup print-config codex
 ```
 
 Goals:
 
 - refresh previously installed global files after upgrades;
 - uninstall mnemo from selected agents without removing the local database;
-- print target-specific MCP/config snippets for manual setup and debugging.
 
 ## Project management
 

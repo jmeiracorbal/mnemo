@@ -33,11 +33,27 @@ type setupStatusRow struct {
 }
 
 func runSetup() {
-	if len(os.Args) < 3 || os.Args[2] != "status" {
-		fmt.Fprintln(os.Stderr, "usage: mnemo setup status [--json] [--agent=AGENT] [--home=DIR]")
+	if len(os.Args) < 3 {
+		printSetupUsage()
 		os.Exit(1)
 	}
+	switch os.Args[2] {
+	case "status":
+		runSetupStatus()
+	case "print-config":
+		runSetupPrintConfig()
+	default:
+		printSetupUsage()
+		os.Exit(1)
+	}
+}
 
+func printSetupUsage() {
+	fmt.Fprintln(os.Stderr, "usage: mnemo setup status [--json] [--agent=AGENT] [--home=DIR]")
+	fmt.Fprintln(os.Stderr, "       mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]")
+}
+
+func runSetupStatus() {
 	opts, err := parseSetupStatusArgs(os.Args[3:], os.UserHomeDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo setup status: home: %v\n", err)
