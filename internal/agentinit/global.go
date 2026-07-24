@@ -2,6 +2,7 @@ package agentinit
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/jmeiracorbal/mnemo/templates"
@@ -62,4 +63,24 @@ func InstallGlobalInstructions(home, agent string) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// RemoveGlobalInstructions removes mnemo's global instruction surface for an
+// agent while preserving user content outside the managed mnemo section.
+func RemoveGlobalInstructions(home, agent string) (string, bool, error) {
+	path, err := GlobalInstructionPath(home, agent)
+	if err != nil {
+		return "", false, err
+	}
+	if agent == "cursor" {
+		if err := os.Remove(path); err != nil {
+			if os.IsNotExist(err) {
+				return path, false, nil
+			}
+			return path, false, err
+		}
+		return path, true, nil
+	}
+	changed, err := RemoveSection(path)
+	return path, changed, err
 }
