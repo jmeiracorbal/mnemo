@@ -44,6 +44,8 @@ func runSetup() {
 		runSetupPrintConfig()
 	case "refresh":
 		runSetupRefresh()
+	case "uninstall":
+		runSetupUninstall()
 	default:
 		printSetupUsage()
 		os.Exit(1)
@@ -54,6 +56,7 @@ func printSetupUsage() {
 	fmt.Fprintln(os.Stderr, "usage: mnemo setup status [--json] [--agent=AGENT] [--home=DIR]")
 	fmt.Fprintln(os.Stderr, "       mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]")
 	fmt.Fprintln(os.Stderr, "       mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]")
+	fmt.Fprintln(os.Stderr, "       mnemo setup uninstall --agent=AGENT [--home=DIR]")
 }
 
 func runSetupStatus() {

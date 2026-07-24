@@ -183,6 +183,12 @@ func AppendSection(path, content string) error {
 	return upsertManagedSection(path, sectionStart, sectionEnd, content, "")
 }
 
+// RemoveSection removes the managed mnemo protocol section from path.
+// Content outside the markers is preserved.
+func RemoveSection(path string) (bool, error) {
+	return removeManagedSection(path, sectionStart, sectionEnd)
+}
+
 // AppendClaudeSection creates or updates the Claude-specific managed section.
 // It also adds @AGENTS.md once when creating the section.
 func AppendClaudeSection(path, content string) error {
@@ -254,6 +260,48 @@ func appendSection(existing, addition string) string {
 		return existing + "\n" + addition + "\n"
 	}
 	return existing + "\n\n" + addition + "\n"
+}
+
+func removeManagedSection(path, startMarker, endMarker string) (bool, error) {
+	existing, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	current := string(existing)
+	startCount := strings.Count(current, startMarker)
+	endCount := strings.Count(current, endMarker)
+	if startCount != endCount || startCount > 1 {
+		return false, fmt.Errorf(
+			"malformed managed section: found %d %q marker(s) and %d %q marker(s)",
+			startCount, startMarker, endCount, endMarker,
+		)
+	}
+	if startCount == 0 {
+		return false, nil
+	}
+	start := strings.Index(current, startMarker)
+	end := strings.Index(current, endMarker)
+	if end < start {
+		return false, fmt.Errorf("malformed managed section: %q appears before %q", endMarker, startMarker)
+	}
+	end += len(endMarker)
+	updated := current[:start] + current[end:]
+	updated = strings.TrimRight(updated, "\n")
+	if strings.TrimSpace(updated) == "" {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return false, err
+		}
+		return true, nil
+	}
+	updated += "\n"
+	if updated == current {
+		return false, nil
+	}
+	return true, os.WriteFile(path, []byte(updated), 0644)
 }
 
 // WriteFile writes data to path, creating parent directories. Overwrites if exists.

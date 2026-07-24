@@ -173,33 +173,41 @@ func upsertCodexMCPConfig(path, section string) error {
 }
 
 func refreshAgentRuntimeFiles(home, agent string) ([]string, error) {
+	targets, err := setupRuntimeAssetTargets(agent)
+	if err != nil {
+		return nil, err
+	}
+	return writeSetupAssets(home, targets)
+}
+
+func setupRuntimeAssetTargets(agent string) ([]setupAssetTarget, error) {
 	switch agent {
 	case "claudecode":
 		// Claude Code hooks are managed by the Claude plugin installation.
 		return nil, nil
 	case "cursor":
-		return writeSetupAssets(home, []setupAssetTarget{
+		return []setupAssetTarget{
 			{Asset: "scripts/cursor/hooks/before-submit-prompt.sh", Path: filepath.Join(".cursor", "hooks", "before-submit-prompt.sh"), Mode: 0755},
 			{Asset: "scripts/cursor/hooks/stop.sh", Path: filepath.Join(".cursor", "hooks", "stop.sh"), Mode: 0755},
-		})
+		}, nil
 	case "windsurf":
-		return writeSetupAssets(home, []setupAssetTarget{
+		return []setupAssetTarget{
 			{Asset: "scripts/windsurf/hooks/pre-user-prompt.sh", Path: filepath.Join(".codeium", "windsurf", "hooks", "pre-user-prompt.sh"), Mode: 0755},
 			{Asset: "scripts/windsurf/hooks/post-cascade-response.sh", Path: filepath.Join(".codeium", "windsurf", "hooks", "post-cascade-response.sh"), Mode: 0755},
-		})
+		}, nil
 	case "codex":
-		return writeSetupAssets(home, []setupAssetTarget{
+		return []setupAssetTarget{
 			{Asset: "scripts/codex/hooks/session-start.sh", Path: filepath.Join(".codex", "hooks", "session-start.sh"), Mode: 0755},
 			{Asset: "scripts/codex/hooks/stop.sh", Path: filepath.Join(".codex", "hooks", "stop.sh"), Mode: 0755},
 			{Asset: "scripts/codex/hooks/mnemo-protocol.md", Path: filepath.Join(".codex", "hooks", "mnemo-protocol.md"), Mode: 0644},
-		})
+		}, nil
 	case "opencode":
-		return writeSetupAssets(home, []setupAssetTarget{
+		return []setupAssetTarget{
 			{Asset: "scripts/opencode/plugins/mnemo.ts", Path: filepath.Join(".config", "opencode", "plugins", "mnemo.ts"), Mode: 0644},
 			{Asset: "scripts/opencode/plugins/mnemo-protocol.md", Path: filepath.Join(".config", "opencode", "plugins", "mnemo-protocol.md"), Mode: 0644},
-		})
+		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported agent %q for setup refresh", agent)
+		return nil, fmt.Errorf("unsupported agent %q for setup runtime files", agent)
 	}
 }
 

@@ -50,7 +50,7 @@ mnemo --version
 - **Portable Agent Skill:** teaches compatible agents the complete mnemo workflow without weakening the always-active safety rules
 - **Full CLI:** save, search, export, import, inspect, and diagnose memories from the terminal
 - **Read-only diagnostics:** `mnemo doctor` checks project activation, global agent setup, MCP config, hooks/plugins, and local store health
-- **Setup lifecycle:** `mnemo setup status`, `print-config`, and `refresh` inspect, print, and refresh global agent configuration
+- **Setup lifecycle:** `mnemo setup status`, `print-config`, `refresh`, and `uninstall` inspect and maintain global agent configuration
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
 - **Claude Code + Cursor + Windsurf + Codex + OpenCode:** native integration for all five agents via their respective hook systems
 
@@ -266,6 +266,7 @@ mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
 mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
 mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual setup config snippets
 mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]  Refresh installed global setup files
+mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for an agent
 mnemo save <title> <content>         Save a memory
 mnemo search <query>                 Search memories
 mnemo context [project]              Show context from previous sessions
@@ -345,6 +346,7 @@ mnemo doctor --json --agent=codex --path=.
 mnemo setup status --agent=all
 mnemo setup print-config codex
 mnemo setup refresh --agent=codex
+mnemo setup uninstall --agent=codex
 
 # Project activation
 cat .mnemo                          # must contain id + agents list
