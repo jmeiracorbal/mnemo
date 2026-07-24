@@ -76,6 +76,36 @@ func TestUninstallSetupRemovesCodexFilesAndPreservesUserConfig(t *testing.T) {
 	assertMissing(t, filepath.Join(home, ".codex", "hooks", "mnemo-protocol.md"))
 }
 
+func TestRemoveCodexMCPConfigRemovesNestedTables(t *testing.T) {
+	home := t.TempDir()
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	writeFile(t, configPath, `[mcp_servers.mnemo]
+command = "/bin/mnemo"
+
+[mcp_servers.mnemo.env]
+STALE = "yes"
+
+[mcp_servers.other]
+command = "other"
+`)
+
+	changed, err := removeCodexMCPConfig(configPath)
+	if err != nil {
+		t.Fatalf("remove codex MCP config: %v", err)
+	}
+	if !changed {
+		t.Fatal("remove codex MCP config did not report a change")
+	}
+
+	content := readTestFile(t, configPath)
+	if strings.Contains(content, `[mcp_servers.mnemo]`) || strings.Contains(content, `[mcp_servers.mnemo.env]`) || strings.Contains(content, "STALE") {
+		t.Fatalf("mnemo table was not fully removed:\n%s", content)
+	}
+	if !strings.Contains(content, `[mcp_servers.other]`) {
+		t.Fatalf("unrelated table was not preserved:\n%s", content)
+	}
+}
+
 func TestUninstallSetupRemovesCursorConfigAndRuntimeFiles(t *testing.T) {
 	home := t.TempDir()
 	writeFile(t, filepath.Join(home, ".cursor", "mcp.json"), `{"mcpServers":{"other":{"command":"other"}}}`)
@@ -99,6 +129,28 @@ func TestUninstallSetupRemovesCursorConfigAndRuntimeFiles(t *testing.T) {
 	assertMissing(t, filepath.Join(home, ".cursor", "rules", "mnemo.mdc"))
 	assertMissing(t, filepath.Join(home, ".cursor", "hooks", "before-submit-prompt.sh"))
 	assertMissing(t, filepath.Join(home, ".cursor", "hooks", "stop.sh"))
+}
+
+func TestUninstallAgentRuntimeFilesPreservesRemovedPathsOnError(t *testing.T) {
+	home := t.TempDir()
+	firstPath := filepath.Join(home, ".codex", "hooks", "session-start.sh")
+	secondPath := filepath.Join(home, ".codex", "hooks", "stop.sh")
+	writeFile(t, firstPath, "#!/bin/sh\n")
+	if err := os.MkdirAll(filepath.Join(secondPath, "child"), 0755); err != nil {
+		t.Fatalf("mkdir fixture: %v", err)
+	}
+
+	removed, err := uninstallAgentRuntimeFiles(home, "codex")
+	if err == nil {
+		t.Fatal("uninstall runtime files unexpectedly succeeded")
+	}
+	if len(removed) != 1 || removed[0] != firstPath {
+		t.Fatalf("removed = %v, want [%s]", removed, firstPath)
+	}
+	assertMissing(t, firstPath)
+	if _, statErr := os.Stat(secondPath); statErr != nil {
+		t.Fatalf("second path should remain after failed removal: %v", statErr)
+	}
 }
 
 func assertMissing(t *testing.T, path string) {

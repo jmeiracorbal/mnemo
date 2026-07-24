@@ -23,9 +23,14 @@ func runSetupUninstall() {
 	}
 	removed, err := uninstallSetup(opts)
 	if err != nil {
+		printSetupUninstallRemoved(removed)
 		fmt.Fprintf(os.Stderr, "mnemo setup uninstall: %v\n", err)
 		os.Exit(1)
 	}
+	printSetupUninstallRemoved(removed)
+}
+
+func printSetupUninstallRemoved(removed []string) {
 	for _, path := range removed {
 		fmt.Printf("mnemo setup uninstall: updated %s\n", path)
 	}
@@ -64,10 +69,10 @@ func uninstallSetup(opts setupUninstallOptions) ([]string, error) {
 	var removed []string
 	for _, agent := range agents {
 		agentRemoved, err := uninstallAgentSetup(opts.Home, agent)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", agent, err)
-		}
 		removed = append(removed, agentRemoved...)
+		if err != nil {
+			return removed, fmt.Errorf("%s: %w", agent, err)
+		}
 	}
 	return removed, nil
 }
@@ -77,23 +82,23 @@ func uninstallAgentSetup(home, agent string) ([]string, error) {
 
 	instructionsPath, changed, err := agentinit.RemoveGlobalInstructions(home, agent)
 	if err != nil {
-		return nil, err
+		return removed, err
 	}
 	if changed {
 		removed = append(removed, instructionsPath)
 	}
 
 	configFiles, err := uninstallAgentConfig(home, agent)
-	if err != nil {
-		return nil, err
-	}
 	removed = append(removed, configFiles...)
+	if err != nil {
+		return removed, err
+	}
 
 	runtimeFiles, err := uninstallAgentRuntimeFiles(home, agent)
-	if err != nil {
-		return nil, err
-	}
 	removed = append(removed, runtimeFiles...)
+	if err != nil {
+		return removed, err
+	}
 	return removed, nil
 }
 
@@ -119,7 +124,7 @@ func uninstallAgentConfig(home, agent string) ([]string, error) {
 		mcpPath := filepath.Join(home, ".cursor", "mcp.json")
 		changed, err := removeMCPServer(mcpPath, "mcpServers", "mnemo")
 		if err := appendIfChanged(mcpPath, changed, err); err != nil {
-			return nil, err
+			return removed, err
 		}
 		hooksPath := filepath.Join(home, ".cursor", "hooks.json")
 		hooksDir := filepath.Join(home, ".cursor", "hooks")
@@ -133,7 +138,7 @@ func uninstallAgentConfig(home, agent string) ([]string, error) {
 		mcpPath := filepath.Join(home, ".codeium", "windsurf", "mcp_config.json")
 		changed, err := removeMCPServer(mcpPath, "mcpServers", "mnemo")
 		if err := appendIfChanged(mcpPath, changed, err); err != nil {
-			return nil, err
+			return removed, err
 		}
 		hooksPath := filepath.Join(home, ".codeium", "windsurf", "hooks.json")
 		hooksDir := filepath.Join(home, ".codeium", "windsurf", "hooks")
@@ -147,7 +152,7 @@ func uninstallAgentConfig(home, agent string) ([]string, error) {
 		configPath := filepath.Join(home, ".codex", "config.toml")
 		changed, err := removeCodexMCPConfig(configPath)
 		if err := appendIfChanged(configPath, changed, err); err != nil {
-			return nil, err
+			return removed, err
 		}
 		hooksPath := filepath.Join(home, ".codex", "hooks.json")
 		hooksDir := filepath.Join(home, ".codex", "hooks")
@@ -179,7 +184,7 @@ func uninstallAgentRuntimeFiles(home, agent string) ([]string, error) {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return nil, err
+			return removed, err
 		}
 		removed = append(removed, path)
 	}
@@ -311,12 +316,12 @@ func removeCodexMCPConfig(path string) (bool, error) {
 	out := make([]string, 0, len(lines))
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "[mcp_servers.mnemo]" {
+		if isCodexMnemoTableHeader(trimmed) {
 			removed = true
 			skipping = true
 			continue
 		}
-		if skipping && strings.HasPrefix(trimmed, "[") {
+		if skipping && isTOMLTableHeader(trimmed) {
 			skipping = false
 		}
 		if !skipping {
@@ -336,4 +341,26 @@ func removeCodexMCPConfig(path string) (bool, error) {
 	}
 	content += "\n"
 	return true, os.WriteFile(path, []byte(content), 0644)
+}
+
+func isCodexMnemoTableHeader(line string) bool {
+	name, ok := tomlTableName(line)
+	return ok && (name == "mcp_servers.mnemo" || strings.HasPrefix(name, "mcp_servers.mnemo."))
+}
+
+func isTOMLTableHeader(line string) bool {
+	_, ok := tomlTableName(line)
+	return ok
+}
+
+func tomlTableName(line string) (string, bool) {
+	line = strings.TrimSpace(line)
+	switch {
+	case strings.HasPrefix(line, "[[") && strings.HasSuffix(line, "]]"):
+		return strings.TrimSpace(line[2 : len(line)-2]), true
+	case strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]"):
+		return strings.TrimSpace(line[1 : len(line)-1]), true
+	default:
+		return "", false
+	}
 }

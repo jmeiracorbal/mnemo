@@ -144,13 +144,15 @@ func upsertCodexMCPConfig(path, section string) error {
 	replaced := false
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "[mcp_servers.mnemo]" {
-			out = append(out, strings.TrimRight(section, "\n"))
+		if isCodexMnemoTableHeader(trimmed) {
+			if !replaced {
+				out = append(out, strings.TrimRight(section, "\n"))
+			}
 			skipping = true
 			replaced = true
 			continue
 		}
-		if skipping && strings.HasPrefix(trimmed, "[") {
+		if skipping && isTOMLTableHeader(trimmed) {
 			skipping = false
 		}
 		if !skipping {
