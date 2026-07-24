@@ -2,18 +2,6 @@
 
 This document tracks planned capabilities that are not yet released. Released behavior belongs in release notes, not here.
 
-## Setup lifecycle
-
-Add explicit setup maintenance commands for global agent integrations:
-
-```bash
-mnemo setup uninstall --agent=codex
-```
-
-Goals:
-
-- uninstall mnemo from selected agents without removing the local database;
-
 ## Project management
 
 Add project management commands for UUID-based projects:

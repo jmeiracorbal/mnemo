@@ -75,3 +75,67 @@ func TestInstallGlobalInstructionsPreservesExistingMarkedFile(t *testing.T) {
 		t.Fatalf("managed section not idempotent:\n%s", content)
 	}
 }
+
+func TestRemoveGlobalInstructionsPreservesUserContent(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".codex", "AGENTS.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("# Existing\n\nUser content.\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InstallGlobalInstructions(home, "codex"); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+
+	gotPath, changed, err := RemoveGlobalInstructions(home, "codex")
+	if err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if !changed {
+		t.Fatal("remove did not report a change")
+	}
+	if gotPath != path {
+		t.Fatalf("path = %q, want %q", gotPath, path)
+	}
+
+	content := string(mustReadFile(t, path))
+	if !strings.Contains(content, "# Existing\n\nUser content.") {
+		t.Fatalf("existing content was not preserved:\n%s", content)
+	}
+	if strings.Contains(content, sectionStart) || strings.Contains(content, sectionEnd) {
+		t.Fatalf("managed section was not removed:\n%s", content)
+	}
+}
+
+func TestRemoveGlobalInstructionsRemovesCursorRuleFile(t *testing.T) {
+	home := t.TempDir()
+	path, err := InstallGlobalInstructions(home, "cursor")
+	if err != nil {
+		t.Fatalf("install: %v", err)
+	}
+
+	gotPath, changed, err := RemoveGlobalInstructions(home, "cursor")
+	if err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if !changed {
+		t.Fatal("remove did not report a change")
+	}
+	if gotPath != path {
+		t.Fatalf("path = %q, want %q", gotPath, path)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("cursor rule file still exists or stat failed: %v", err)
+	}
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return data
+}

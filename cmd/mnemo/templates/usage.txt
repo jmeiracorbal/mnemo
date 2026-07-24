@@ -15,6 +15,7 @@ Usage:
   mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
   mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual setup config snippets
   mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]  Refresh installed global setup files
+  mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for an agent
   mnemo init [--agent=AGENT] [--path=DIR]  Activate mnemo in the current project (.mnemo)
   mnemo install-instructions [--agent=AGENT]  Install global agent instructions
   mnemo migrate [--path=DIR]              Migrate project from legacy key to UUID-based identity
@@ -52,6 +53,10 @@ Setup refresh options:
   --agent=AGENT        Refresh one agent or all agents (default: all)
   --home=DIR           Override home directory for global agent files
   --mnemo-bin=PATH     Use PATH as the mnemo binary in config files
+
+Setup uninstall options:
+  --agent=AGENT        Remove one agent or all agents (required)
+  --home=DIR           Override home directory for global agent files
 
 Tool profiles for mcp:
   --tools=agent    15 tools for AI agents (default when using plugin)

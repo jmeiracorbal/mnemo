@@ -66,6 +66,35 @@ func TestRefreshSetupPreservesExistingJSONConfig(t *testing.T) {
 	}
 }
 
+func TestRefreshSetupReplacesCodexMCPNestedTables(t *testing.T) {
+	home := t.TempDir()
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	writeFile(t, configPath, `[mcp_servers.mnemo]
+command = "/old/mnemo"
+
+[mcp_servers.mnemo.env]
+STALE = "yes"
+
+[mcp_servers.other]
+command = "other"
+`)
+
+	if _, err := refreshSetup(setupRefreshOptions{Agent: "codex", Home: home, MnemoBin: "/bin/mnemo"}); err != nil {
+		t.Fatalf("refresh setup: %v", err)
+	}
+
+	content := readTestFile(t, configPath)
+	if !strings.Contains(content, `[mcp_servers.mnemo]`) || !strings.Contains(content, `command = "/bin/mnemo"`) {
+		t.Fatalf("mnemo MCP config was not refreshed:\n%s", content)
+	}
+	if strings.Contains(content, `[mcp_servers.mnemo.env]`) || strings.Contains(content, "STALE") {
+		t.Fatalf("stale mnemo nested table was not removed:\n%s", content)
+	}
+	if !strings.Contains(content, `[mcp_servers.other]`) {
+		t.Fatalf("unrelated MCP config was not preserved:\n%s", content)
+	}
+}
+
 func TestRefreshSetupRestoresExistingScriptPermissions(t *testing.T) {
 	home := t.TempDir()
 	scriptPath := filepath.Join(home, ".codex", "hooks", "session-start.sh")
