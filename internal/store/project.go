@@ -34,6 +34,27 @@ func (s *Store) ListProjects() ([]Project, error) {
 	return projects, nil
 }
 
+func (s *Store) ListProjectSummaries() ([]ProjectSummary, error) {
+	rows, err := s.q.ListProjectSummaries(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	projects := make([]ProjectSummary, 0, len(rows))
+	for _, p := range rows {
+		projects = append(projects, ProjectSummary{
+			ID:               p.ID,
+			Name:             p.Name,
+			CreatedAt:        p.CreatedAt,
+			Directory:        p.Directory,
+			SessionCount:     int(p.SessionCount),
+			ObservationCount: int(p.ObservationCount),
+			PromptCount:      int(p.PromptCount),
+			LastSeenAt:       p.LastSeenAt,
+		})
+	}
+	return projects, nil
+}
+
 func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) {
 	if oldName == "" || newName == "" || oldName == newName {
 		return &MigrateResult{}, nil
