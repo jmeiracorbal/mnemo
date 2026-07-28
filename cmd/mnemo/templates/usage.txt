@@ -11,6 +11,7 @@ Usage:
   mnemo export [file]                  Export all memories to JSON
   mnemo import <file.json>             Import memories from JSON
   mnemo capture <content>|-            Extract learnings from text (passive capture; "-" reads stdin)
+  mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
   mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
   mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
   mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual setup config snippets
@@ -57,6 +58,14 @@ Setup refresh options:
 Setup uninstall options:
   --agent=AGENT        Remove one agent or all agents (required)
   --home=DIR           Override home directory for global agent files
+
+Projects list options:
+  --sort=FIELD         id | name | observations | last-seen (default: last-seen)
+  --asc                Sort ascending
+  --desc               Sort descending (default)
+  --unused-since=AGE   Show projects not seen since AGE (for example 90d, 24h, or 2026-01-01)
+  --empty              Show projects with no observations or prompts
+  --json               Emit a stable JSON project list
 
 Tool profiles for mcp:
   --tools=agent    15 tools for AI agents (default when using plugin)

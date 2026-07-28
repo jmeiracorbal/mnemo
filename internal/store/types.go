@@ -8,6 +8,17 @@ type Project struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type ProjectSummary struct {
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	CreatedAt        string `json:"created_at"`
+	Directory        string `json:"directory,omitempty"`
+	SessionCount     int    `json:"session_count"`
+	ObservationCount int    `json:"observation_count"`
+	PromptCount      int    `json:"prompt_count"`
+	LastSeenAt       string `json:"last_seen_at"`
+}
+
 type Session struct {
 	ID        string   `json:"id"`
 	Project   string   `json:"project"`

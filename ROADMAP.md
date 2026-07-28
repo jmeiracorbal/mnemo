@@ -7,7 +7,6 @@ This document tracks planned capabilities that are not yet released. Released be
 Add project management commands for UUID-based projects:
 
 ```bash
-mnemo projects list
 mnemo projects prune
 mnemo projects merge <from> <to>
 mnemo projects rename <id> <name>
@@ -15,7 +14,6 @@ mnemo projects rename <id> <name>
 
 Goals:
 
-- make old or unused project records visible;
 - provide safe cleanup for stale projects;
 - support explicit consolidation when project identity changes.
 

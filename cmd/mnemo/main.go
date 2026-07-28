@@ -76,6 +76,8 @@ func main() {
 	switch os.Args[1] {
 	case "init":
 		runInit(s)
+	case "projects":
+		runProjects(s)
 	case "migrate":
 		runMigrateProjects(s)
 	case "mcp":
