@@ -70,6 +70,7 @@ type Querier interface {
 	ListObservationsAffectedByTag(ctx context.Context, tag string) ([]ListObservationsAffectedByTagRow, error)
 	ListObservationsMissingSyncMutation(ctx context.Context, arg ListObservationsMissingSyncMutationParams) ([]ListObservationsMissingSyncMutationRow, error)
 	ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]SyncMutation, error)
+	ListProjectSummaries(ctx context.Context) ([]ListProjectSummariesRow, error)
 	ListProjects(ctx context.Context) ([]Project, error)
 	ListPromptsMissingSyncMutation(ctx context.Context, arg ListPromptsMissingSyncMutationParams) ([]ListPromptsMissingSyncMutationRow, error)
 	ListRecentObservations(ctx context.Context, arg ListRecentObservationsParams) ([]ListRecentObservationsRow, error)
