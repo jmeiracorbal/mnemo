@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -244,7 +245,11 @@ func parseProjectTime(value string) (time.Time, error) {
 }
 
 func printProjectsList(projects []store.ProjectSummary) {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	printProjectsListTo(os.Stdout, projects)
+}
+
+func printProjectsListTo(out io.Writer, projects []store.ProjectSummary) {
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "ID\tName/Path\tObservations\tSessions\tPrompts\tLast Seen")
 	for _, project := range projects {
 		lastSeen := project.LastSeenAt
@@ -256,13 +261,21 @@ func printProjectsList(projects []store.ProjectSummary) {
 			nameOrPath = project.Directory
 		}
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%s\n",
-			project.ID,
-			nameOrPath,
+			projectsTableCell(project.ID),
+			projectsTableCell(nameOrPath),
 			project.ObservationCount,
 			project.SessionCount,
 			project.PromptCount,
-			lastSeen,
+			projectsTableCell(lastSeen),
 		)
 	}
 	_ = w.Flush()
+}
+
+func projectsTableCell(value string) string {
+	fields := strings.Fields(value)
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.Join(fields, " ")
 }
