@@ -57,12 +57,10 @@ func runProjectsList(s *store.Store) {
 		os.Exit(1)
 	}
 	if opts.JSON {
-		out, err := json.MarshalIndent(projectsListReport{Total: len(projects), Projects: projects}, "", "  ")
-		if err != nil {
+		if err := printProjectsListJSONTo(os.Stdout, projects); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo projects list: json: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println(string(out))
 		return
 	}
 	printProjectsList(projects)
@@ -246,6 +244,15 @@ func parseProjectTime(value string) (time.Time, error) {
 
 func printProjectsList(projects []store.ProjectSummary) {
 	printProjectsListTo(os.Stdout, projects)
+}
+
+func printProjectsListJSONTo(out io.Writer, projects []store.ProjectSummary) error {
+	data, err := json.MarshalIndent(projectsListReport{Total: len(projects), Projects: projects}, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(out, string(data))
+	return err
 }
 
 func printProjectsListTo(out io.Writer, projects []store.ProjectSummary) {
