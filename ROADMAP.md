@@ -4,18 +4,37 @@ This document tracks planned capabilities that are not yet released. Released be
 
 ## Project management
 
-Add project management commands for UUID-based projects:
+Build on project inventory and add consolidation before introducing more destructive cleanup flows:
 
 ```bash
+mnemo projects merge --from <project> --to <project> [--dry-run]
+mnemo projects merge --auto-by-path [--dry-run]
 mnemo projects prune
-mnemo projects merge <from> <to>
-mnemo projects rename <id> <name>
+mnemo projects rename --id <project> --name <name>
+mnemo projects rename --path <dir> --name <name>
 ```
 
-Goals:
+Near-term goals:
 
-- provide safe cleanup for stale projects;
-- support explicit consolidation when project identity changes.
+- detect duplicate project identities that point at the same directory/path, especially UUID-era IDs plus legacy path-derived keys;
+- provide safe project merge/consolidation with dry-run output before mutation;
+- update observations, sessions, prompts, sync mutations, enrollments, and project metadata consistently when consolidating projects;
+- keep `prune` behind explicit safety checks after merge/consolidation is reliable;
+- revisit `rename` after consolidation, using explicit selectors (`--id`, `--path`, or a shared selector flag) instead of ambiguous positional arguments.
+
+## Project maintenance skill
+
+Add a separate Agent Skill for project inventory maintenance so agents can diagnose and resolve common project identity problems without requiring the user to manually inspect IDs and run every merge command.
+
+Planned responsibilities:
+
+- run `mnemo projects list --json` and identify likely duplicates by shared directory/path, legacy key patterns, and UUID project metadata;
+- produce a concise project maintenance report with proposed merge groups and destination projects;
+- execute high-confidence merge plans through `mnemo projects merge` when explicitly requested or when a user has opted into automatic project maintenance;
+- fall back to asking for confirmation when merge targets are ambiguous, when data would be moved across unrelated paths, or when destructive cleanup is involved;
+- record what was merged and why, so future agents understand previous consolidation decisions.
+
+The skill should be read-only by default, support dry-run planning, and require clear opt-in before broad mutation.
 
 ## Local sync
 
