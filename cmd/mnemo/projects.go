@@ -62,8 +62,8 @@ func runProjects(s *store.Store) {
 
 func printProjectsUsage() {
 	fmt.Fprintln(os.Stderr, "usage: mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]")
-	fmt.Fprintln(os.Stderr, "       mnemo projects merge --from=PROJECT --to=PROJECT [--dry-run|--yes] [--json]")
-	fmt.Fprintln(os.Stderr, "       mnemo projects merge --auto-by-path [--dry-run|--yes] [--json]")
+	fmt.Fprintln(os.Stderr, "       mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]")
+	fmt.Fprintln(os.Stderr, "       mnemo projects merge --auto-by-path (--dry-run|--yes) [--json]")
 }
 
 func runProjectsList(s *store.Store) {
@@ -110,23 +110,20 @@ func runProjectsMerge(s *store.Store) {
 		return
 	}
 
-	results := make([]store.ProjectMergeResult, 0, len(plans))
-	for _, plan := range plans {
-		result, err := s.MergeProjects(plan.From.ID, plan.To.ID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "mnemo projects merge: %s -> %s: %v\n", plan.From.ID, plan.To.ID, err)
-			os.Exit(1)
+	results, err := applyProjectsMergePlans(s, plans)
+	if err != nil {
+		if len(results) > 0 {
+			if emitErr := printProjectsMergeApplyOutput(os.Stdout, opts.JSON, results); emitErr != nil {
+				fmt.Fprintf(os.Stderr, "mnemo projects merge: json: %v\n", emitErr)
+			}
 		}
-		results = append(results, *result)
+		fmt.Fprintf(os.Stderr, "mnemo projects merge: %v\n", err)
+		os.Exit(1)
 	}
-	if opts.JSON {
-		if err := printProjectsMergeJSONTo(os.Stdout, projectsMergeReport{DryRun: false, Total: len(results), Results: results}); err != nil {
-			fmt.Fprintf(os.Stderr, "mnemo projects merge: json: %v\n", err)
-			os.Exit(1)
-		}
-		return
+	if err := printProjectsMergeApplyOutput(os.Stdout, opts.JSON, results); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo projects merge: json: %v\n", err)
+		os.Exit(1)
 	}
-	printProjectsMergeResults(os.Stdout, results)
 }
 
 func parseProjectsListArgs(args []string, now func() time.Time) (projectsListOptions, error) {
@@ -290,6 +287,18 @@ func buildProjectsMergePlans(s *store.Store, opts projectsMergeOptions) ([]store
 		}
 	}
 	return plans, nil
+}
+
+func applyProjectsMergePlans(s *store.Store, plans []store.ProjectMergePlan) ([]store.ProjectMergeResult, error) {
+	results := make([]store.ProjectMergeResult, 0, len(plans))
+	for _, plan := range plans {
+		result, err := s.MergeProjects(plan.From.ID, plan.To.ID)
+		if err != nil {
+			return results, fmt.Errorf("%s -> %s: %w", plan.From.ID, plan.To.ID, err)
+		}
+		results = append(results, *result)
+	}
+	return results, nil
 }
 
 func filterProjectsList(projects []store.ProjectSummary, opts projectsListOptions) []store.ProjectSummary {
@@ -459,6 +468,14 @@ func printProjectsMergeJSONTo(out io.Writer, report projectsMergeReport) error {
 	}
 	_, err = fmt.Fprintln(out, string(data))
 	return err
+}
+
+func printProjectsMergeApplyOutput(out io.Writer, jsonOutput bool, results []store.ProjectMergeResult) error {
+	if jsonOutput {
+		return printProjectsMergeJSONTo(out, projectsMergeReport{DryRun: false, Total: len(results), Results: results})
+	}
+	printProjectsMergeResults(out, results)
+	return nil
 }
 
 func printProjectsListTo(out io.Writer, projects []store.ProjectSummary) {

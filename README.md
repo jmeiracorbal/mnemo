@@ -269,8 +269,8 @@ mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual set
 mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]  Refresh installed global setup files
 mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for an agent
 mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
-mnemo projects merge --from=PROJECT --to=PROJECT [--dry-run|--yes] [--json]  Merge one project into another
-mnemo projects merge --auto-by-path [--dry-run|--yes] [--json]  Merge duplicate project identities by shared directory
+mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]  Merge one project into another
+mnemo projects merge --auto-by-path (--dry-run|--yes) [--json]  Merge duplicate project identities by shared directory
 mnemo save <title> <content>         Save a memory
 mnemo search <query>                 Search memories
 mnemo context [project]              Show context from previous sessions

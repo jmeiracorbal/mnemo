@@ -125,6 +125,48 @@ func TestBuildProjectsMergePlansAutoByPath(t *testing.T) {
 	}
 }
 
+func TestApplyProjectsMergePlansReturnsCompletedResultsOnLaterFailure(t *testing.T) {
+	s := newProjectsTestStore(t)
+	source := "projects-alpha"
+	destination := "11111111-2222-3333-4444-555555555555"
+
+	if err := s.EnsureProject(destination, "Alpha"); err != nil {
+		t.Fatalf("ensure destination: %v", err)
+	}
+	if err := s.CreateSession("s-alpha", source, "/tmp/alpha"); err != nil {
+		t.Fatalf("create source session: %v", err)
+	}
+	if _, err := s.AddObservation(testObservationParams(source, "s-alpha", "Alpha source")); err != nil {
+		t.Fatalf("add source observation: %v", err)
+	}
+	plans := []store.ProjectMergePlan{
+		{From: store.ProjectSummary{ID: source}, To: store.ProjectSummary{ID: destination}},
+		{From: store.ProjectSummary{ID: "missing-source"}, To: store.ProjectSummary{ID: destination}},
+	}
+
+	results, err := applyProjectsMergePlans(s, plans)
+	if err == nil {
+		t.Fatal("expected second merge to fail")
+	}
+	if len(results) != 1 {
+		t.Fatalf("completed results = %d, want 1 (%+v)", len(results), results)
+	}
+	if results[0].Plan.From.ID != source || results[0].Plan.To.ID != destination {
+		t.Fatalf("unexpected completed result: %+v", results[0])
+	}
+	var out bytes.Buffer
+	if err := printProjectsMergeApplyOutput(&out, true, results); err != nil {
+		t.Fatalf("print partial results: %v", err)
+	}
+	var report projectsMergeReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("unmarshal partial results: %v", err)
+	}
+	if report.Total != 1 || len(report.Results) != 1 {
+		t.Fatalf("unexpected partial report: %+v", report)
+	}
+}
+
 func TestPreferProjectMergeDestinationPrefersUUIDThenActivity(t *testing.T) {
 	uuidProject := store.ProjectSummary{ID: "11111111-2222-3333-4444-555555555555", ObservationCount: 1}
 	legacyProject := store.ProjectSummary{ID: "projects-alpha", ObservationCount: 10}
