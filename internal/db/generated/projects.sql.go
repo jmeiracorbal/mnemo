@@ -9,6 +9,29 @@ import (
 	"context"
 )
 
+const countProjectRows = `-- name: CountProjectRows :one
+SELECT COUNT(*) FROM projects WHERE id = ?
+`
+
+func (q *Queries) CountProjectRows(ctx context.Context, id string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countProjectRows, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const deleteProjectByID = `-- name: DeleteProjectByID :execrows
+DELETE FROM projects WHERE id = ?
+`
+
+func (q *Queries) DeleteProjectByID(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteProjectByID, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const ensureProject = `-- name: EnsureProject :exec
 INSERT OR IGNORE INTO projects (id, name) VALUES (?, ?)
 `

@@ -49,7 +49,7 @@ mnemo --version
 - **Passive capture:** extracts learnings from conversation transcripts automatically at session end
 - **Portable Agent Skill:** teaches compatible agents the complete mnemo workflow without weakening the always-active safety rules
 - **Full CLI:** save, search, export, import, inspect, and diagnose memories from the terminal
-- **Project inventory:** `mnemo projects list` shows known projects with readable table output, sorting, age filters, empty-project filters, and JSON output
+- **Project inventory:** `mnemo projects list` shows known projects; `mnemo projects merge` consolidates duplicate identities with dry-run planning
 - **Read-only diagnostics:** `mnemo doctor` checks project activation, global agent setup, MCP config, hooks/plugins, and local store health
 - **Setup lifecycle:** `mnemo setup status`, `print-config`, `refresh`, and `uninstall` inspect and maintain global agent configuration
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
@@ -269,6 +269,8 @@ mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual set
 mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]  Refresh installed global setup files
 mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for an agent
 mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
+mnemo projects merge --from=PROJECT --to=PROJECT [--dry-run|--yes] [--json]  Merge one project into another
+mnemo projects merge --auto-by-path [--dry-run|--yes] [--json]  Merge duplicate project identities by shared directory
 mnemo save <title> <content>         Save a memory
 mnemo search <query>                 Search memories
 mnemo context [project]              Show context from previous sessions
