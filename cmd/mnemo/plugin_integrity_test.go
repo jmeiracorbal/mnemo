@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // TestShippedHooksReferenceRealScripts validates that every command in
@@ -119,6 +121,60 @@ func TestShippedMnemoMemorySkill(t *testing.T) {
 	for _, value := range required {
 		if !strings.Contains(content, value) {
 			t.Errorf("shipped skill missing %q", value)
+		}
+	}
+}
+
+func TestShippedMnemoProjectMaintenanceSkill(t *testing.T) {
+	skillPath := filepath.Join("..", "..", "skills", "mnemo-project-maintenance", "SKILL.md")
+	data, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("read shipped project maintenance skill: %v", err)
+	}
+	content := string(data)
+	required := []string{
+		"name: mnemo-project-maintenance",
+		"description:",
+		"mnemo projects list --json",
+		"mnemo projects merge --auto-by-path --dry-run --json",
+		"Do not run `mnemo projects merge ... --yes` unless the user explicitly approves",
+		"`from` is the duplicate/source project",
+		"`to` is the canonical destination project",
+	}
+	for _, value := range required {
+		if !strings.Contains(content, value) {
+			t.Errorf("shipped project maintenance skill missing %q", value)
+		}
+	}
+
+	agentPath := filepath.Join("..", "..", "skills", "mnemo-project-maintenance", "agents", "openai.yaml")
+	agentData, err := os.ReadFile(agentPath)
+	if err != nil {
+		t.Fatalf("read shipped project maintenance skill metadata: %v", err)
+	}
+	var metadata struct {
+		Interface struct {
+			DisplayName      string `yaml:"display_name"`
+			ShortDescription string `yaml:"short_description"`
+			DefaultPrompt    string `yaml:"default_prompt"`
+		} `yaml:"interface"`
+	}
+	if err := yaml.Unmarshal(agentData, &metadata); err != nil {
+		t.Fatalf("parse shipped project maintenance skill metadata: %v", err)
+	}
+	wantMetadata := map[string]string{
+		"interface.display_name":      "mnemo Project Maintenance",
+		"interface.short_description": "Detect and safely merge duplicate projects",
+		"interface.default_prompt":    "Use $mnemo-project-maintenance to inspect mnemo project inventory, propose duplicate project merges, and apply only explicitly approved repairs.",
+	}
+	gotMetadata := map[string]string{
+		"interface.display_name":      metadata.Interface.DisplayName,
+		"interface.short_description": metadata.Interface.ShortDescription,
+		"interface.default_prompt":    metadata.Interface.DefaultPrompt,
+	}
+	for key, want := range wantMetadata {
+		if got := gotMetadata[key]; got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
 		}
 	}
 }

@@ -17,19 +17,16 @@ Near-term goals:
 - keep `prune` behind explicit safety checks after merge/consolidation is reliable;
 - revisit `rename` after consolidation, using explicit selectors (`--id`, `--path`, or a shared selector flag) instead of ambiguous positional arguments.
 
-## Project maintenance skill
+## Skill agent metadata coverage
 
-Add a separate Agent Skill for project inventory maintenance so agents can diagnose and resolve common project identity problems without requiring the user to manually inspect IDs and run every merge command.
+Add agent-specific metadata coverage for every shipped skill after the project maintenance skill lands.
 
-Planned responsibilities:
+Goals:
 
-- run `mnemo projects list --json` and identify likely duplicates by shared directory/path, legacy key patterns, and UUID project metadata;
-- produce a concise project maintenance report with proposed merge groups and destination projects;
-- execute high-confidence merge plans through `mnemo projects merge` when explicitly requested or when a user has opted into automatic project maintenance;
-- fall back to asking for confirmation when merge targets are ambiguous, when data would be moved across unrelated paths, or when destructive cleanup is involved;
-- record what was merged and why, so future agents understand previous consolidation decisions.
-
-The skill should be read-only by default, support dry-run planning, and require clear opt-in before broad mutation.
+- decide which `agents/` metadata files are required per supported agent and keep them consistent across all skills;
+- verify whether each agent detects metadata files, symlinked skill folders, or only real skill directories;
+- prefer canonical skill folders as the source of truth, using symlinks only for installed global agent locations when agents reliably support them;
+- update validation so new skills cannot ship with incomplete agent metadata.
 
 ## Local sync
 
