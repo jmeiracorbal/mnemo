@@ -122,3 +122,35 @@ func TestShippedMnemoMemorySkill(t *testing.T) {
 		}
 	}
 }
+
+func TestShippedMnemoProjectMaintenanceSkill(t *testing.T) {
+	skillPath := filepath.Join("..", "..", "skills", "mnemo-project-maintenance", "SKILL.md")
+	data, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("read shipped project maintenance skill: %v", err)
+	}
+	content := string(data)
+	required := []string{
+		"name: mnemo-project-maintenance",
+		"description:",
+		"mnemo projects list --json",
+		"mnemo projects merge --auto-by-path --dry-run --json",
+		"Do not run `mnemo projects merge ... --yes` unless the user explicitly approves",
+		"`from` is the duplicate/source project",
+		"`to` is the canonical destination project",
+	}
+	for _, value := range required {
+		if !strings.Contains(content, value) {
+			t.Errorf("shipped project maintenance skill missing %q", value)
+		}
+	}
+
+	agentPath := filepath.Join("..", "..", "skills", "mnemo-project-maintenance", "agents", "openai.yaml")
+	agentData, err := os.ReadFile(agentPath)
+	if err != nil {
+		t.Fatalf("read shipped project maintenance skill metadata: %v", err)
+	}
+	if !strings.Contains(string(agentData), "$mnemo-project-maintenance") {
+		t.Fatalf("project maintenance skill metadata missing default prompt invocation")
+	}
+}

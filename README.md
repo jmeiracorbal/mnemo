@@ -50,6 +50,7 @@ mnemo --version
 - **Portable Agent Skill:** teaches compatible agents the complete mnemo workflow without weakening the always-active safety rules
 - **Full CLI:** save, search, export, import, inspect, and diagnose memories from the terminal
 - **Project inventory:** `mnemo projects list` shows known projects; `mnemo projects merge` consolidates duplicate identities with dry-run planning
+- **Project maintenance skill:** helps agents detect duplicate project identities and propose safe merge plans
 - **Read-only diagnostics:** `mnemo doctor` checks project activation, global agent setup, MCP config, hooks/plugins, and local store health
 - **Setup lifecycle:** `mnemo setup status`, `print-config`, `refresh`, and `uninstall` inspect and maintain global agent configuration
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
@@ -91,6 +92,14 @@ The skill is global, but it is guarded by the project marker. Its first step is 
 
 The skill is recommended rather than required. Hooks, MCP, and the always-active project protocol remain functional without it. `mnemo init` prints the installation command when the canonical global skill is missing.
 
+For project inventory cleanup, install the optional maintenance skill separately:
+
+```bash
+npx skills add jmeiracorbal/mnemo --skill mnemo-project-maintenance --global
+```
+
+Use it when an agent should inspect `mnemo projects list`, propose duplicate project merges, and apply only explicitly approved repairs.
+
 ### 3. Enable mnemo per project
 
 Run from the project root:
@@ -111,7 +120,7 @@ mnemo follows a CodeGraph-style split: installation configures agents globally, 
 | **MCP (always global)** | `~/.claude/.mcp.json` | `~/.cursor/mcp.json` | `~/.codeium/windsurf/mcp_config.json` | `~/.codex/config.toml` | `~/.config/opencode/opencode.json` |
 | **Hook config** | plugin hooks check `.mnemo` | `~/.cursor/hooks.json` | `~/.codeium/windsurf/hooks.json` | `~/.codex/hooks.json` checks `.mnemo` | global plugin checks `.mnemo` |
 | **Global protocol** | `~/.claude/CLAUDE.md` | `~/.cursor/rules/mnemo.mdc` | `~/.codeium/windsurf/memories/global_rules.md` | `~/.codex/AGENTS.md` | `~/.config/opencode/AGENTS.md` |
-| **Global skill access** | symlink at `~/.claude/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` | symlink at `~/.codeium/windsurf/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` | canonical `~/.agents/skills/mnemo-memory` |
+| **Global skill access** | symlinks under `~/.claude/skills/` | canonical `~/.agents/skills/` | symlinks under `~/.codeium/windsurf/skills/` | canonical `~/.agents/skills/` | canonical `~/.agents/skills/` |
 
 All supported agents now use global hook/configuration surfaces where available. Their global instructions are intentionally conditional: if `.mnemo` is missing or invalid, agents skip mnemo entirely and do not create fallback memory files.
 
