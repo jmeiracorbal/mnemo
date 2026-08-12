@@ -18,16 +18,22 @@ type Querier interface {
 	CopyProjectEnrollment(ctx context.Context, arg CopyProjectEnrollmentParams) error
 	CopySessionTag(ctx context.Context, arg CopySessionTagParams) error
 	CountLiveObservations(ctx context.Context) (int64, error)
+	CountObservationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error)
 	CountObservationsByHash(ctx context.Context, normalizedHash sql.NullString) (int64, error)
 	CountObservationsForSessionProject(ctx context.Context, sessionID string) (int64, error)
 	CountPendingMutations(ctx context.Context, targetKey string) (int64, error)
+	CountProjectRows(ctx context.Context, id string) (int64, error)
+	CountPromptProjectRows(ctx context.Context, projectName sql.NullString) (int64, error)
 	CountPrompts(ctx context.Context) (int64, error)
 	CountSessionObservations(ctx context.Context, sessionID string) (int64, error)
 	CountSessionObservationsByScope(ctx context.Context, arg CountSessionObservationsByScopeParams) (int64, error)
+	CountSessionProjectRows(ctx context.Context, projectName string) (int64, error)
 	CountSessions(ctx context.Context) (int64, error)
+	CountSyncMutationProjectRows(ctx context.Context, projectName string) (int64, error)
 	DeleteObservationByID(ctx context.Context, id int64) error
 	DeleteObservationTagByName(ctx context.Context, tag string) error
 	DeleteObservationTags(ctx context.Context, observationID int64) error
+	DeleteProjectByID(ctx context.Context, id string) (int64, error)
 	DeleteProjectEnrollment(ctx context.Context, project string) error
 	DeleteSessionTagByName(ctx context.Context, tag string) error
 	DeleteSessionTags(ctx context.Context, sessionID string) error

@@ -97,6 +97,18 @@ SELECT EXISTS(
   UNION SELECT 1 FROM sync_enrolled_projects e WHERE e.project = sqlc.arg('project_name')
 );
 
+-- name: CountObservationProjectRows :one
+SELECT COUNT(*) FROM observations WHERE project = sqlc.arg('project_name');
+
+-- name: CountSessionProjectRows :one
+SELECT COUNT(*) FROM sessions WHERE project = sqlc.arg('project_name');
+
+-- name: CountPromptProjectRows :one
+SELECT COUNT(*) FROM user_prompts WHERE project = sqlc.arg('project_name');
+
+-- name: CountSyncMutationProjectRows :one
+SELECT COUNT(*) FROM sync_mutations WHERE project = sqlc.arg('project_name');
+
 -- name: RenameObservationProject :execrows
 UPDATE observations SET project = sqlc.arg('new_name') WHERE project = sqlc.arg('old_name');
 
