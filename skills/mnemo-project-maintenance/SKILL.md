@@ -72,4 +72,4 @@ Use mnemo CLI commands to find and consolidate duplicate project identities. Thi
 
    Confirm that the applied duplicates no longer appear and call out any remaining ambiguous candidates.
 
-9. Record the repair when memory tools are available and the current project has a valid `.mnemo` marker: save what was merged, why it was safe, and any remaining follow-up.
+9. Record the repair through `mem_save` by using `mnemo-memory` when memory tools are available and the current project has a valid `.mnemo` marker. The record must include what was merged, why it was safe, and any remaining follow-up. Never use native agent memory, `MEMORY.md`, arbitrary plaintext files, or alternative stores.

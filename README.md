@@ -98,6 +98,8 @@ For project inventory cleanup, install the optional maintenance skill separately
 npx skills add jmeiracorbal/mnemo --skill mnemo-project-maintenance --global
 ```
 
+This command installs only the skill and agent links. It does not install the `mnemo` binary, hooks, MCP configuration, or the Claude Code plugin. Install mnemo first and ensure `mnemo` is available in `PATH`, because the skill invokes the CLI.
+
 Use it when an agent should inspect `mnemo projects list`, propose duplicate project merges, and apply only explicitly approved repairs.
 
 ### 3. Enable mnemo per project

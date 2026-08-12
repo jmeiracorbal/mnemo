@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // TestShippedHooksReferenceRealScripts validates that every command in
@@ -150,7 +152,29 @@ func TestShippedMnemoProjectMaintenanceSkill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read shipped project maintenance skill metadata: %v", err)
 	}
-	if !strings.Contains(string(agentData), "$mnemo-project-maintenance") {
-		t.Fatalf("project maintenance skill metadata missing default prompt invocation")
+	var metadata struct {
+		Interface struct {
+			DisplayName      string `yaml:"display_name"`
+			ShortDescription string `yaml:"short_description"`
+			DefaultPrompt    string `yaml:"default_prompt"`
+		} `yaml:"interface"`
+	}
+	if err := yaml.Unmarshal(agentData, &metadata); err != nil {
+		t.Fatalf("parse shipped project maintenance skill metadata: %v", err)
+	}
+	wantMetadata := map[string]string{
+		"interface.display_name":      "mnemo Project Maintenance",
+		"interface.short_description": "Detect and safely merge duplicate projects",
+		"interface.default_prompt":    "Use $mnemo-project-maintenance to inspect mnemo project inventory, propose duplicate project merges, and apply only explicitly approved repairs.",
+	}
+	gotMetadata := map[string]string{
+		"interface.display_name":      metadata.Interface.DisplayName,
+		"interface.short_description": metadata.Interface.ShortDescription,
+		"interface.default_prompt":    metadata.Interface.DefaultPrompt,
+	}
+	for key, want := range wantMetadata {
+		if got := gotMetadata[key]; got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
 	}
 }
