@@ -99,6 +99,17 @@ func (q *Queries) CopyProjectEnrollment(ctx context.Context, arg CopyProjectEnro
 	return err
 }
 
+const countObservationProjectRows = `-- name: CountObservationProjectRows :one
+SELECT COUNT(*) FROM observations WHERE project = ?1
+`
+
+func (q *Queries) CountObservationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countObservationProjectRows, projectName)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPendingMutations = `-- name: CountPendingMutations :one
 SELECT COUNT(*) FROM sync_mutations
 WHERE target_key = ? AND acked_at IS NULL
@@ -106,6 +117,39 @@ WHERE target_key = ? AND acked_at IS NULL
 
 func (q *Queries) CountPendingMutations(ctx context.Context, targetKey string) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPendingMutations, targetKey)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPromptProjectRows = `-- name: CountPromptProjectRows :one
+SELECT COUNT(*) FROM user_prompts WHERE project = ?1
+`
+
+func (q *Queries) CountPromptProjectRows(ctx context.Context, projectName sql.NullString) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPromptProjectRows, projectName)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSessionProjectRows = `-- name: CountSessionProjectRows :one
+SELECT COUNT(*) FROM sessions WHERE project = ?1
+`
+
+func (q *Queries) CountSessionProjectRows(ctx context.Context, projectName string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSessionProjectRows, projectName)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSyncMutationProjectRows = `-- name: CountSyncMutationProjectRows :one
+SELECT COUNT(*) FROM sync_mutations WHERE project = ?1
+`
+
+func (q *Queries) CountSyncMutationProjectRows(ctx context.Context, projectName string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSyncMutationProjectRows, projectName)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

@@ -4,6 +4,12 @@ INSERT OR IGNORE INTO projects (id, name) VALUES (?, ?);
 -- name: GetProjectByID :one
 SELECT id, name, created_at FROM projects WHERE id = ?;
 
+-- name: CountProjectRows :one
+SELECT COUNT(*) FROM projects WHERE id = ?;
+
+-- name: DeleteProjectByID :execrows
+DELETE FROM projects WHERE id = ?;
+
 -- name: ListProjects :many
 SELECT id, name, created_at FROM projects ORDER BY created_at ASC;
 

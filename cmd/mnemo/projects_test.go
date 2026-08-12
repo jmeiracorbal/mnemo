@@ -41,6 +41,36 @@ func TestParseProjectsListArgsRejectsUnknownSort(t *testing.T) {
 	}
 }
 
+func TestParseProjectsMergeArgsExplicitDryRun(t *testing.T) {
+	opts, err := parseProjectsMergeArgs([]string{"--from=alpha-legacy", "--to=alpha", "--dry-run", "--json"})
+	if err != nil {
+		t.Fatalf("parse projects merge args: %v", err)
+	}
+	if opts.From != "alpha-legacy" || opts.To != "alpha" || !opts.DryRun || !opts.JSON || opts.Yes || opts.AutoByPath {
+		t.Fatalf("unexpected options: %+v", opts)
+	}
+}
+
+func TestParseProjectsMergeArgsRequiresSafetyFlag(t *testing.T) {
+	_, err := parseProjectsMergeArgs([]string{"--from=alpha-legacy", "--to=alpha"})
+	if err == nil {
+		t.Fatal("expected safety flag error")
+	}
+}
+
+func TestParseProjectsMergeArgsAutoByPath(t *testing.T) {
+	opts, err := parseProjectsMergeArgs([]string{"--auto-by-path", "--dry-run"})
+	if err != nil {
+		t.Fatalf("parse projects merge args: %v", err)
+	}
+	if !opts.AutoByPath || !opts.DryRun {
+		t.Fatalf("unexpected options: %+v", opts)
+	}
+	if _, err := parseProjectsMergeArgs([]string{"--auto-by-path", "--from=alpha", "--dry-run"}); err == nil {
+		t.Fatal("expected auto-by-path/from conflict")
+	}
+}
+
 func TestProjectsListFiltersAndSorts(t *testing.T) {
 	projects := []store.ProjectSummary{
 		{ID: "beta", Name: "Beta", ObservationCount: 2, LastSeenAt: "2026-01-15 10:00:00"},
@@ -62,6 +92,92 @@ func TestProjectsListFiltersAndSorts(t *testing.T) {
 	}
 	if got[0].ID != "gamma" || got[1].ID != "alpha" {
 		t.Fatalf("unexpected order: %+v", got)
+	}
+}
+
+func TestBuildProjectsMergePlansAutoByPath(t *testing.T) {
+	s := newProjectsTestStore(t)
+	uuidProject := "11111111-2222-3333-4444-555555555555"
+	legacyProject := "projects-alpha"
+
+	if err := s.CreateSession("s-uuid", uuidProject, "/tmp/alpha"); err != nil {
+		t.Fatalf("create uuid session: %v", err)
+	}
+	if err := s.CreateSession("s-legacy", legacyProject, "/tmp/alpha"); err != nil {
+		t.Fatalf("create legacy session: %v", err)
+	}
+	if _, err := s.AddObservation(testObservationParams(uuidProject, "s-uuid", "UUID project")); err != nil {
+		t.Fatalf("add uuid observation: %v", err)
+	}
+	if _, err := s.AddObservation(testObservationParams(legacyProject, "s-legacy", "Legacy project")); err != nil {
+		t.Fatalf("add legacy observation: %v", err)
+	}
+
+	plans, err := buildProjectsMergePlans(s, projectsMergeOptions{AutoByPath: true, DryRun: true})
+	if err != nil {
+		t.Fatalf("build auto merge plans: %v", err)
+	}
+	if len(plans) != 1 {
+		t.Fatalf("plans = %d, want 1 (%+v)", len(plans), plans)
+	}
+	if plans[0].From.ID != legacyProject || plans[0].To.ID != uuidProject {
+		t.Fatalf("unexpected auto merge plan: %+v", plans[0])
+	}
+}
+
+func TestApplyProjectsMergePlansReturnsCompletedResultsOnLaterFailure(t *testing.T) {
+	s := newProjectsTestStore(t)
+	source := "projects-alpha"
+	destination := "11111111-2222-3333-4444-555555555555"
+
+	if err := s.EnsureProject(destination, "Alpha"); err != nil {
+		t.Fatalf("ensure destination: %v", err)
+	}
+	if err := s.CreateSession("s-alpha", source, "/tmp/alpha"); err != nil {
+		t.Fatalf("create source session: %v", err)
+	}
+	if _, err := s.AddObservation(testObservationParams(source, "s-alpha", "Alpha source")); err != nil {
+		t.Fatalf("add source observation: %v", err)
+	}
+	plans := []store.ProjectMergePlan{
+		{From: store.ProjectSummary{ID: source}, To: store.ProjectSummary{ID: destination}},
+		{From: store.ProjectSummary{ID: "missing-source"}, To: store.ProjectSummary{ID: destination}},
+	}
+
+	results, err := applyProjectsMergePlans(s, plans)
+	if err == nil {
+		t.Fatal("expected second merge to fail")
+	}
+	if len(results) != 1 {
+		t.Fatalf("completed results = %d, want 1 (%+v)", len(results), results)
+	}
+	if results[0].Plan.From.ID != source || results[0].Plan.To.ID != destination {
+		t.Fatalf("unexpected completed result: %+v", results[0])
+	}
+	var out bytes.Buffer
+	if err := printProjectsMergeApplyOutput(&out, true, results); err != nil {
+		t.Fatalf("print partial results: %v", err)
+	}
+	var report projectsMergeReport
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatalf("unmarshal partial results: %v", err)
+	}
+	if report.Total != 1 || len(report.Results) != 1 {
+		t.Fatalf("unexpected partial report: %+v", report)
+	}
+}
+
+func TestPreferProjectMergeDestinationPrefersUUIDThenActivity(t *testing.T) {
+	uuidProject := store.ProjectSummary{ID: "11111111-2222-3333-4444-555555555555", ObservationCount: 1}
+	legacyProject := store.ProjectSummary{ID: "projects-alpha", ObservationCount: 10}
+	if !preferProjectMergeDestination(uuidProject, legacyProject) {
+		t.Fatal("expected UUID project to be preferred")
+	}
+
+	activeProject := store.ProjectSummary{ID: "22222222-3333-4444-5555-666666666666", ObservationCount: 5}
+	lessActiveProject := store.ProjectSummary{ID: "11111111-2222-3333-4444-555555555555", ObservationCount: 1}
+	if !preferProjectMergeDestination(activeProject, lessActiveProject) {
+		t.Fatal("expected more active UUID project to be preferred")
 	}
 }
 
@@ -125,4 +241,27 @@ func TestPrintProjectsListJSONPreservesWhitespace(t *testing.T) {
 
 func fixedProjectsNow() time.Time {
 	return time.Date(2026, 2, 1, 12, 0, 0, 0, time.UTC)
+}
+
+func newProjectsTestStore(t *testing.T) *store.Store {
+	t.Helper()
+	s, err := store.New(store.FallbackConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = s.Close()
+	})
+	return s
+}
+
+func testObservationParams(project, sessionID, title string) store.AddObservationParams {
+	return store.AddObservationParams{
+		SessionID: sessionID,
+		Type:      "decision",
+		Title:     title,
+		Content:   title + " content",
+		Project:   project,
+		Scope:     "project",
+	}
 }

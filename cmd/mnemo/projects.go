@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +28,22 @@ type projectsListReport struct {
 	Projects []store.ProjectSummary `json:"projects"`
 }
 
+type projectsMergeOptions struct {
+	From       string
+	To         string
+	AutoByPath bool
+	DryRun     bool
+	Yes        bool
+	JSON       bool
+}
+
+type projectsMergeReport struct {
+	DryRun  bool                       `json:"dry_run"`
+	Total   int                        `json:"total"`
+	Plans   []store.ProjectMergePlan   `json:"plans,omitempty"`
+	Results []store.ProjectMergeResult `json:"results,omitempty"`
+}
+
 func runProjects(s *store.Store) {
 	if len(os.Args) < 3 {
 		printProjectsUsage()
@@ -35,6 +52,8 @@ func runProjects(s *store.Store) {
 	switch os.Args[2] {
 	case "list":
 		runProjectsList(s)
+	case "merge":
+		runProjectsMerge(s)
 	default:
 		printProjectsUsage()
 		os.Exit(1)
@@ -43,6 +62,8 @@ func runProjects(s *store.Store) {
 
 func printProjectsUsage() {
 	fmt.Fprintln(os.Stderr, "usage: mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]")
+	fmt.Fprintln(os.Stderr, "       mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]")
+	fmt.Fprintln(os.Stderr, "       mnemo projects merge --auto-by-path (--dry-run|--yes) [--json]")
 }
 
 func runProjectsList(s *store.Store) {
@@ -64,6 +85,45 @@ func runProjectsList(s *store.Store) {
 		return
 	}
 	printProjectsList(projects)
+}
+
+func runProjectsMerge(s *store.Store) {
+	opts, err := parseProjectsMergeArgs(os.Args[3:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo projects merge: %v\n", err)
+		os.Exit(1)
+	}
+	plans, err := buildProjectsMergePlans(s, opts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo projects merge: %v\n", err)
+		os.Exit(1)
+	}
+	if opts.DryRun {
+		if opts.JSON {
+			if err := printProjectsMergeJSONTo(os.Stdout, projectsMergeReport{DryRun: true, Total: len(plans), Plans: plans}); err != nil {
+				fmt.Fprintf(os.Stderr, "mnemo projects merge: json: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		printProjectsMergePlans(os.Stdout, plans)
+		return
+	}
+
+	results, err := applyProjectsMergePlans(s, plans)
+	if err != nil {
+		if len(results) > 0 {
+			if emitErr := printProjectsMergeApplyOutput(os.Stdout, opts.JSON, results); emitErr != nil {
+				fmt.Fprintf(os.Stderr, "mnemo projects merge: json: %v\n", emitErr)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "mnemo projects merge: %v\n", err)
+		os.Exit(1)
+	}
+	if err := printProjectsMergeApplyOutput(os.Stdout, opts.JSON, results); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo projects merge: json: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func parseProjectsListArgs(args []string, now func() time.Time) (projectsListOptions, error) {
@@ -93,6 +153,44 @@ func parseProjectsListArgs(args []string, now func() time.Time) (projectsListOpt
 		default:
 			return opts, fmt.Errorf("unknown argument %q", arg)
 		}
+	}
+	return opts, nil
+}
+
+func parseProjectsMergeArgs(args []string) (projectsMergeOptions, error) {
+	var opts projectsMergeOptions
+	for _, arg := range args {
+		switch {
+		case arg == "--auto-by-path":
+			opts.AutoByPath = true
+		case arg == "--dry-run":
+			opts.DryRun = true
+		case arg == "--yes":
+			opts.Yes = true
+		case arg == "--json":
+			opts.JSON = true
+		case strings.HasPrefix(arg, "--from="):
+			opts.From = strings.TrimSpace(arg[len("--from="):])
+		case strings.HasPrefix(arg, "--to="):
+			opts.To = strings.TrimSpace(arg[len("--to="):])
+		default:
+			return opts, fmt.Errorf("unknown argument %q", arg)
+		}
+	}
+	if opts.DryRun && opts.Yes {
+		return opts, fmt.Errorf("--dry-run and --yes are mutually exclusive")
+	}
+	if !opts.DryRun && !opts.Yes {
+		return opts, fmt.Errorf("refusing to merge without --dry-run or --yes")
+	}
+	if opts.AutoByPath {
+		if opts.From != "" || opts.To != "" {
+			return opts, fmt.Errorf("--auto-by-path cannot be combined with --from or --to")
+		}
+		return opts, nil
+	}
+	if opts.From == "" || opts.To == "" {
+		return opts, fmt.Errorf("explicit merge requires --from and --to")
 	}
 	return opts, nil
 }
@@ -144,6 +242,65 @@ func buildProjectsList(s *store.Store, opts projectsListOptions) ([]store.Projec
 	return projects, nil
 }
 
+func buildProjectsMergePlans(s *store.Store, opts projectsMergeOptions) ([]store.ProjectMergePlan, error) {
+	if !opts.AutoByPath {
+		plan, err := s.BuildProjectMergePlan(opts.From, opts.To)
+		if err != nil {
+			return nil, err
+		}
+		return []store.ProjectMergePlan{*plan}, nil
+	}
+
+	projects, err := s.ListProjectSummaries()
+	if err != nil {
+		return nil, err
+	}
+	groups := make(map[string][]store.ProjectSummary)
+	for _, project := range projects {
+		directory := normalizedProjectDirectory(project.Directory)
+		if directory == "" {
+			continue
+		}
+		groups[directory] = append(groups[directory], project)
+	}
+	directories := make([]string, 0, len(groups))
+	for directory, group := range groups {
+		if len(group) > 1 {
+			directories = append(directories, directory)
+		}
+	}
+	sort.Strings(directories)
+
+	var plans []store.ProjectMergePlan
+	for _, directory := range directories {
+		group := groups[directory]
+		sort.SliceStable(group, func(i, j int) bool {
+			return preferProjectMergeDestination(group[i], group[j])
+		})
+		destination := group[0]
+		for _, source := range group[1:] {
+			plan, err := s.BuildProjectMergePlan(source.ID, destination.ID)
+			if err != nil {
+				return nil, err
+			}
+			plans = append(plans, *plan)
+		}
+	}
+	return plans, nil
+}
+
+func applyProjectsMergePlans(s *store.Store, plans []store.ProjectMergePlan) ([]store.ProjectMergeResult, error) {
+	results := make([]store.ProjectMergeResult, 0, len(plans))
+	for _, plan := range plans {
+		result, err := s.MergeProjects(plan.From.ID, plan.To.ID)
+		if err != nil {
+			return results, fmt.Errorf("%s -> %s: %w", plan.From.ID, plan.To.ID, err)
+		}
+		results = append(results, *result)
+	}
+	return results, nil
+}
+
 func filterProjectsList(projects []store.ProjectSummary, opts projectsListOptions) []store.ProjectSummary {
 	filtered := projects[:0]
 	for _, project := range projects {
@@ -156,6 +313,55 @@ func filterProjectsList(projects []store.ProjectSummary, opts projectsListOption
 		filtered = append(filtered, project)
 	}
 	return filtered
+}
+
+func normalizedProjectDirectory(directory string) string {
+	directory = strings.TrimSpace(directory)
+	if directory == "" {
+		return ""
+	}
+	return filepath.Clean(directory)
+}
+
+func preferProjectMergeDestination(a, b store.ProjectSummary) bool {
+	aUUID := isUUIDProjectID(a.ID)
+	bUUID := isUUIDProjectID(b.ID)
+	if aUUID != bUUID {
+		return aUUID
+	}
+	aActivity := projectActivityTotal(a)
+	bActivity := projectActivityTotal(b)
+	if aActivity != bActivity {
+		return aActivity > bActivity
+	}
+	lastSeen := compareLastSeen(a.LastSeenAt, b.LastSeenAt)
+	if lastSeen != 0 {
+		return lastSeen > 0
+	}
+	return a.ID < b.ID
+}
+
+func projectActivityTotal(project store.ProjectSummary) int {
+	return project.ObservationCount + project.SessionCount + project.PromptCount
+}
+
+func isUUIDProjectID(id string) bool {
+	if len(id) != 36 {
+		return false
+	}
+	for i, r := range id {
+		switch i {
+		case 8, 13, 18, 23:
+			if r != '-' {
+				return false
+			}
+		default:
+			if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func projectUnusedSince(project store.ProjectSummary, cutoff time.Time) bool {
@@ -255,6 +461,23 @@ func printProjectsListJSONTo(out io.Writer, projects []store.ProjectSummary) err
 	return err
 }
 
+func printProjectsMergeJSONTo(out io.Writer, report projectsMergeReport) error {
+	data, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(out, string(data))
+	return err
+}
+
+func printProjectsMergeApplyOutput(out io.Writer, jsonOutput bool, results []store.ProjectMergeResult) error {
+	if jsonOutput {
+		return printProjectsMergeJSONTo(out, projectsMergeReport{DryRun: false, Total: len(results), Results: results})
+	}
+	printProjectsMergeResults(out, results)
+	return nil
+}
+
 func printProjectsListTo(out io.Writer, projects []store.ProjectSummary) {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "ID\tName/Path\tObservations\tSessions\tPrompts\tLast Seen")
@@ -277,6 +500,67 @@ func printProjectsListTo(out io.Writer, projects []store.ProjectSummary) {
 		)
 	}
 	_ = w.Flush()
+}
+
+func printProjectsMergePlans(out io.Writer, plans []store.ProjectMergePlan) {
+	if len(plans) == 0 {
+		_, _ = fmt.Fprintln(out, "No project merge candidates found.")
+		return
+	}
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(w, "From\tTo\tObservations\tSessions\tPrompts\tSync\tEnrollment")
+	for _, plan := range plans {
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%d\t%s\n",
+			projectsTableCell(plan.From.ID),
+			projectsTableCell(plan.To.ID),
+			plan.Observations,
+			plan.Sessions,
+			plan.Prompts,
+			plan.SyncMutations,
+			projectMergeEnrollmentCell(plan),
+		)
+	}
+	_, _ = fmt.Fprintln(w, "\nDry run only. Re-run with --yes to apply.")
+	_ = w.Flush()
+}
+
+func printProjectsMergeResults(out io.Writer, results []store.ProjectMergeResult) {
+	if len(results) == 0 {
+		_, _ = fmt.Fprintln(out, "No project merge candidates found.")
+		return
+	}
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(w, "From\tTo\tObservations\tSessions\tPrompts\tSync\tSource Project")
+	for _, result := range results {
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%d\t%s\n",
+			projectsTableCell(result.Plan.From.ID),
+			projectsTableCell(result.Plan.To.ID),
+			result.ObservationsUpdated,
+			result.SessionsUpdated,
+			result.PromptsUpdated,
+			result.SyncMutationsUpdated,
+			projectMergeDeletedCell(result.SourceProjectDeleted),
+		)
+	}
+	_ = w.Flush()
+}
+
+func projectMergeEnrollmentCell(plan store.ProjectMergePlan) string {
+	switch {
+	case plan.WillCopyEnrollment:
+		return "copy"
+	case plan.SourceEnrolled:
+		return "already"
+	default:
+		return "-"
+	}
+}
+
+func projectMergeDeletedCell(deleted bool) string {
+	if deleted {
+		return "deleted"
+	}
+	return "-"
 }
 
 func projectsTableCell(value string) string {

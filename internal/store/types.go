@@ -296,6 +296,31 @@ type MigrateResult struct {
 	SyncMutationsUpdated int64 `json:"sync_mutations_updated"`
 }
 
+type ProjectMergePlan struct {
+	From                    ProjectSummary `json:"from"`
+	To                      ProjectSummary `json:"to"`
+	Observations            int64          `json:"observations"`
+	Sessions                int64          `json:"sessions"`
+	Prompts                 int64          `json:"prompts"`
+	SyncMutations           int64          `json:"sync_mutations"`
+	SourceProjectRows       int64          `json:"source_project_rows"`
+	SourceEnrolled          bool           `json:"source_enrolled"`
+	DestinationEnrolled     bool           `json:"destination_enrolled"`
+	WillCopyEnrollment      bool           `json:"will_copy_enrollment"`
+	WillDeleteSourceProject bool           `json:"will_delete_source_project"`
+}
+
+type ProjectMergeResult struct {
+	Plan                  ProjectMergePlan `json:"plan"`
+	Merged                bool             `json:"merged"`
+	ObservationsUpdated   int64            `json:"observations_updated"`
+	SessionsUpdated       int64            `json:"sessions_updated"`
+	PromptsUpdated        int64            `json:"prompts_updated"`
+	SyncMutationsUpdated  int64            `json:"sync_mutations_updated"`
+	SourceProjectDeleted  bool             `json:"source_project_deleted"`
+	EnrollmentTransferred bool             `json:"enrollment_transferred"`
+}
+
 type PassiveCaptureParams struct {
 	SessionID string `json:"session_id"`
 	Content   string `json:"content"`
