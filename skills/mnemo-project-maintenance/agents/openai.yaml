@@ -1,0 +1,4 @@
+interface:
+  display_name: "mnemo Project Maintenance"
+  short_description: "Detect and safely merge duplicate projects"
+  default_prompt: "Use $mnemo-project-maintenance to inspect mnemo project inventory, propose duplicate project merges, and apply only explicitly approved repairs."
