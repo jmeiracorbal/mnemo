@@ -17,17 +17,6 @@ Near-term goals:
 - keep `prune` behind explicit safety checks after merge/consolidation is reliable;
 - revisit `rename` after consolidation, using explicit selectors (`--id`, `--path`, or a shared selector flag) instead of ambiguous positional arguments.
 
-## Skill agent metadata coverage
-
-Add agent-specific metadata coverage for every shipped skill after the project maintenance skill lands.
-
-Goals:
-
-- decide which `agents/` metadata files are required per supported agent and keep them consistent across all skills;
-- verify whether each agent detects metadata files, symlinked skill folders, or only real skill directories;
-- prefer canonical skill folders as the source of truth, using symlinks only for installed global agent locations when agents reliably support them;
-- update validation so new skills cannot ship with incomplete agent metadata.
-
 ## Local sync
 
 Expose local/Git-friendly sync flows before introducing any cloud replication:
