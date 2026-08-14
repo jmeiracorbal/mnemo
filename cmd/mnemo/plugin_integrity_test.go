@@ -146,35 +146,197 @@ func TestShippedMnemoProjectMaintenanceSkill(t *testing.T) {
 			t.Errorf("shipped project maintenance skill missing %q", value)
 		}
 	}
+}
 
-	agentPath := filepath.Join("..", "..", "skills", "mnemo-project-maintenance", "agents", "openai.yaml")
-	agentData, err := os.ReadFile(agentPath)
+type shippedSkillFrontmatter struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+}
+
+type shippedSkillOpenAIInterface struct {
+	DisplayName      string `yaml:"display_name"`
+	ShortDescription string `yaml:"short_description"`
+	DefaultPrompt    string `yaml:"default_prompt"`
+}
+
+type shippedSkillOpenAIMetadata struct {
+	Interface shippedSkillOpenAIInterface `yaml:"interface"`
+}
+
+func TestShippedSkillsHaveOpenAIMetadata(t *testing.T) {
+	skillsRoot := filepath.Join("..", "..", "skills")
+	wantMetadata := map[string]shippedSkillOpenAIInterface{
+		"mnemo-memory": {
+			DisplayName:      "mnemo Memory",
+			ShortDescription: "Use persistent memory safely across sessions",
+			DefaultPrompt:    "Use $mnemo-memory to recover relevant context and persist important learnings for this project.",
+		},
+		"mnemo-project-maintenance": {
+			DisplayName:      "mnemo Project Maintenance",
+			ShortDescription: "Detect and safely merge duplicate projects",
+			DefaultPrompt:    "Use $mnemo-project-maintenance to inspect mnemo project inventory, propose duplicate project merges, and apply only explicitly approved repairs.",
+		},
+	}
+
+	entries, err := os.ReadDir(skillsRoot)
 	if err != nil {
-		t.Fatalf("read shipped project maintenance skill metadata: %v", err)
+		t.Fatalf("read shipped skills: %v", err)
 	}
-	var metadata struct {
-		Interface struct {
-			DisplayName      string `yaml:"display_name"`
-			ShortDescription string `yaml:"short_description"`
-			DefaultPrompt    string `yaml:"default_prompt"`
-		} `yaml:"interface"`
+	seen := map[string]bool{}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			t.Errorf("shipped skill %s must be a real directory, not a symlink", entry.Name())
+			continue
+		}
+		if !entry.IsDir() {
+			continue
+		}
+
+		skillName := entry.Name()
+		seen[skillName] = true
+		want, ok := wantMetadata[skillName]
+		if !ok {
+			t.Errorf("shipped skill %s missing expected OpenAI metadata contract", skillName)
+			continue
+		}
+
+		t.Run(skillName, func(t *testing.T) {
+			skillDir := filepath.Join(skillsRoot, skillName)
+			frontmatter := readShippedSkillFrontmatter(t, filepath.Join(skillDir, "SKILL.md"))
+			if frontmatter.Name != skillName {
+				t.Fatalf("SKILL.md name = %q, want %q", frontmatter.Name, skillName)
+			}
+			if strings.TrimSpace(frontmatter.Description) == "" {
+				t.Fatalf("SKILL.md description is empty")
+			}
+
+			metadata := readShippedOpenAIMetadata(t, filepath.Join(skillDir, "agents", "openai.yaml"))
+			assertOpenAIInterface(t, metadata.Interface, want, skillName)
+		})
 	}
-	if err := yaml.Unmarshal(agentData, &metadata); err != nil {
-		t.Fatalf("parse shipped project maintenance skill metadata: %v", err)
+	if len(seen) == 0 {
+		t.Fatalf("no shipped skills found")
 	}
-	wantMetadata := map[string]string{
-		"interface.display_name":      "mnemo Project Maintenance",
-		"interface.short_description": "Detect and safely merge duplicate projects",
-		"interface.default_prompt":    "Use $mnemo-project-maintenance to inspect mnemo project inventory, propose duplicate project merges, and apply only explicitly approved repairs.",
+	for skillName := range wantMetadata {
+		if !seen[skillName] {
+			t.Errorf("expected shipped skill %s was not found", skillName)
+		}
 	}
-	gotMetadata := map[string]string{
-		"interface.display_name":      metadata.Interface.DisplayName,
-		"interface.short_description": metadata.Interface.ShortDescription,
-		"interface.default_prompt":    metadata.Interface.DefaultPrompt,
+}
+
+func TestCutShippedSkillFrontmatterRequiresDelimiterLine(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+		wantOK  bool
+	}{
+		{
+			name:    "complete delimiter line before body",
+			content: "---\nname: mnemo-memory\n---\n# Body\n",
+			want:    "name: mnemo-memory",
+			wantOK:  true,
+		},
+		{
+			name:    "complete delimiter line at EOF",
+			content: "---\nname: mnemo-memory\n---",
+			want:    "name: mnemo-memory",
+			wantOK:  true,
+		},
+		{
+			name:    "reject delimiter suffix",
+			content: "---\nname: mnemo-memory\n---invalid\n# Body\n",
+			wantOK:  false,
+		},
+		{
+			name:    "missing delimiter",
+			content: "---\nname: mnemo-memory\n# Body\n",
+			wantOK:  false,
+		},
 	}
-	for key, want := range wantMetadata {
-		if got := gotMetadata[key]; got != want {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := cutShippedSkillFrontmatter(tt.content)
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
+			}
+			if got != tt.want {
+				t.Fatalf("frontmatter = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func readShippedSkillFrontmatter(t *testing.T, path string) shippedSkillFrontmatter {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read shipped skill frontmatter: %v", err)
+	}
+	frontmatterText, ok := cutShippedSkillFrontmatter(string(data))
+	if !ok {
+		t.Fatalf("%s has malformed YAML frontmatter", path)
+	}
+	var frontmatter shippedSkillFrontmatter
+	if err := yaml.Unmarshal([]byte(frontmatterText), &frontmatter); err != nil {
+		t.Fatalf("parse %s frontmatter: %v", path, err)
+	}
+	return frontmatter
+}
+
+func cutShippedSkillFrontmatter(content string) (string, bool) {
+	const openingDelimiter = "---\n"
+	if !strings.HasPrefix(content, openingDelimiter) {
+		return "", false
+	}
+	rest := strings.TrimPrefix(content, openingDelimiter)
+	if frontmatterText, _, ok := strings.Cut(rest, "\n---\n"); ok {
+		return frontmatterText, true
+	}
+	frontmatterText, ok := strings.CutSuffix(rest, "\n---")
+	if !ok {
+		return "", false
+	}
+	return frontmatterText, true
+}
+
+func readShippedOpenAIMetadata(t *testing.T, path string) shippedSkillOpenAIMetadata {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read shipped skill OpenAI metadata: %v", err)
+	}
+	var metadata shippedSkillOpenAIMetadata
+	if err := yaml.Unmarshal(data, &metadata); err != nil {
+		t.Fatalf("parse shipped skill OpenAI metadata: %v", err)
+	}
+	return metadata
+}
+
+func assertOpenAIInterface(t *testing.T, got, want shippedSkillOpenAIInterface, skillName string) {
+	t.Helper()
+	gotFields := map[string]string{
+		"interface.display_name":      got.DisplayName,
+		"interface.short_description": got.ShortDescription,
+		"interface.default_prompt":    got.DefaultPrompt,
+	}
+	wantFields := map[string]string{
+		"interface.display_name":      want.DisplayName,
+		"interface.short_description": want.ShortDescription,
+		"interface.default_prompt":    want.DefaultPrompt,
+	}
+	for key, want := range wantFields {
+		if got := gotFields[key]; got != want {
 			t.Errorf("%s = %q, want %q", key, got, want)
 		}
+	}
+	if !strings.Contains(got.DefaultPrompt, "$"+skillName) {
+		t.Errorf("interface.default_prompt must mention $%s", skillName)
+	}
+	if l := len(got.ShortDescription); l < 25 || l > 64 {
+		t.Errorf("interface.short_description length = %d, want 25..64", l)
 	}
 }
