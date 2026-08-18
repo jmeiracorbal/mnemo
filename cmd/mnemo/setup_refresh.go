@@ -1,16 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
-	mnemoassets "github.com/jmeiracorbal/mnemo"
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
-	"github.com/jmeiracorbal/mnemo/internal/jsonmerge"
 )
 
 type setupRefreshOptions struct {
@@ -76,167 +72,11 @@ func refreshSetup(opts setupRefreshOptions) ([]string, error) {
 	}
 	var updated []string
 	for _, agent := range agents {
-		agentUpdated, err := refreshAgentSetup(opts.Home, opts.MnemoBin, agent)
+		agentUpdated, err := agentinit.Refresh(opts.Home, opts.MnemoBin, agent)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", agent, err)
 		}
 		updated = append(updated, agentUpdated...)
-	}
-	return updated, nil
-}
-
-func refreshAgentSetup(home, mnemoBin, agent string) ([]string, error) {
-	var updated []string
-
-	instructionsPath, err := agentinit.InstallGlobalInstructions(home, agent)
-	if err != nil {
-		return nil, err
-	}
-	updated = append(updated, instructionsPath)
-
-	snippets, err := setupConfigSnippetsForAgent(home, mnemoBin, agent)
-	if err != nil {
-		return nil, err
-	}
-	for _, snippet := range snippets {
-		if err := applySetupConfigSnippet(snippet); err != nil {
-			return nil, err
-		}
-		updated = append(updated, snippet.Path)
-	}
-
-	runtimeFiles, err := refreshAgentRuntimeFiles(home, agent)
-	if err != nil {
-		return nil, err
-	}
-	updated = append(updated, runtimeFiles...)
-	return updated, nil
-}
-
-func applySetupConfigSnippet(snippet setupConfigSnippet) error {
-	switch snippet.Format {
-	case "json":
-		var patch any
-		if err := json.Unmarshal([]byte(snippet.Content), &patch); err != nil {
-			return fmt.Errorf("parse generated JSON for %s: %w", snippet.Path, err)
-		}
-		if _, err := jsonmerge.MergeValue(snippet.Path, patch); err != nil {
-			return err
-		}
-	case "toml":
-		if err := upsertCodexMCPConfig(snippet.Path, snippet.Content); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("unsupported config format %q for %s", snippet.Format, snippet.Path)
-	}
-	return nil
-}
-
-func upsertCodexMCPConfig(path, section string) error {
-	data, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("read %s: %w", path, err)
-	}
-	lines := strings.Split(string(data), "\n")
-	var out []string
-	skipping := false
-	replaced := false
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if isCodexMnemoTableHeader(trimmed) {
-			if !replaced {
-				out = append(out, strings.TrimRight(section, "\n"))
-			}
-			skipping = true
-			replaced = true
-			continue
-		}
-		if skipping && isTOMLTableHeader(trimmed) {
-			skipping = false
-		}
-		if !skipping {
-			out = append(out, line)
-		}
-	}
-	content := strings.TrimRight(strings.Join(out, "\n"), "\n")
-	if !replaced {
-		content = strings.TrimRight(string(data), "\n")
-		if content != "" {
-			content += "\n\n"
-		}
-		content += strings.TrimRight(section, "\n")
-	}
-	content += "\n"
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(content), 0644)
-}
-
-func refreshAgentRuntimeFiles(home, agent string) ([]string, error) {
-	targets, err := setupRuntimeAssetTargets(agent)
-	if err != nil {
-		return nil, err
-	}
-	return writeSetupAssets(home, targets)
-}
-
-func setupRuntimeAssetTargets(agent string) ([]setupAssetTarget, error) {
-	switch agent {
-	case "claudecode":
-		// Claude Code hooks are managed by the Claude plugin installation.
-		return nil, nil
-	case "cursor":
-		return []setupAssetTarget{
-			{Asset: "scripts/cursor/hooks/before-submit-prompt.sh", Path: filepath.Join(".cursor", "hooks", "before-submit-prompt.sh"), Mode: 0755},
-			{Asset: "scripts/cursor/hooks/stop.sh", Path: filepath.Join(".cursor", "hooks", "stop.sh"), Mode: 0755},
-		}, nil
-	case "windsurf":
-		return []setupAssetTarget{
-			{Asset: "scripts/windsurf/hooks/pre-user-prompt.sh", Path: filepath.Join(".codeium", "windsurf", "hooks", "pre-user-prompt.sh"), Mode: 0755},
-			{Asset: "scripts/windsurf/hooks/post-cascade-response.sh", Path: filepath.Join(".codeium", "windsurf", "hooks", "post-cascade-response.sh"), Mode: 0755},
-		}, nil
-	case "codex":
-		return []setupAssetTarget{
-			{Asset: "scripts/codex/hooks/session-start.sh", Path: filepath.Join(".codex", "hooks", "session-start.sh"), Mode: 0755},
-			{Asset: "scripts/codex/hooks/stop.sh", Path: filepath.Join(".codex", "hooks", "stop.sh"), Mode: 0755},
-			{Asset: "scripts/codex/hooks/mnemo-protocol.md", Path: filepath.Join(".codex", "hooks", "mnemo-protocol.md"), Mode: 0644},
-		}, nil
-	case "opencode":
-		return []setupAssetTarget{
-			{Asset: "scripts/opencode/plugins/mnemo.ts", Path: filepath.Join(".config", "opencode", "plugins", "mnemo.ts"), Mode: 0644},
-			{Asset: "scripts/opencode/plugins/mnemo-protocol.md", Path: filepath.Join(".config", "opencode", "plugins", "mnemo-protocol.md"), Mode: 0644},
-		}, nil
-	default:
-		return nil, fmt.Errorf("unsupported agent %q for setup runtime files", agent)
-	}
-}
-
-type setupAssetTarget struct {
-	Asset string
-	Path  string
-	Mode  os.FileMode
-}
-
-func writeSetupAssets(home string, targets []setupAssetTarget) ([]string, error) {
-	updated := make([]string, 0, len(targets))
-	for _, target := range targets {
-		data, err := mnemoassets.SetupAssets.ReadFile(target.Asset)
-		if err != nil {
-			return nil, fmt.Errorf("read embedded asset %s: %w", target.Asset, err)
-		}
-		path := filepath.Join(home, target.Path)
-		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(path, data, target.Mode); err != nil {
-			return nil, err
-		}
-		if err := os.Chmod(path, target.Mode); err != nil {
-			return nil, err
-		}
-		updated = append(updated, path)
 	}
 	return updated, nil
 }

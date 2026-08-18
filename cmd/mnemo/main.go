@@ -675,7 +675,7 @@ func runInit(s *store.Store) {
 	}
 
 	for _, a := range agents {
-		if err := initAgent(root, a); err != nil {
+		if err := agentinit.AddAgent(root, a); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo init: %s: %v\n", a, err)
 			os.Exit(1)
 		}
@@ -775,23 +775,6 @@ func deriveLegacyKey(absPath string) string {
 		rel = rel[1:]
 	}
 	return strings.ToLower(strings.ReplaceAll(rel, "/", "-"))
-}
-
-func initAgent(root, agent string) error {
-	switch agent {
-	case "claudecode":
-		return agentinit.InitClaudeCode(root)
-	case "cursor":
-		return agentinit.InitCursor(root)
-	case "windsurf":
-		return agentinit.InitWindsurf(root)
-	case "codex":
-		return agentinit.InitCodex(root)
-	case "opencode":
-		return agentinit.InitOpenCode(root)
-	default:
-		return fmt.Errorf("unknown agent %q — valid: claudecode | cursor | windsurf | codex | opencode | all", agent)
-	}
 }
 
 func absPath(dir string) (string, error) {
