@@ -71,6 +71,67 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 	}
 }
 
+func TestShippedHooksResolveProjectFromMarker(t *testing.T) {
+	roots := []string{
+		filepath.Join("..", "..", "plugin", "claude-code", "scripts"),
+		filepath.Join("..", "..", "scripts", "cursor", "hooks"),
+		filepath.Join("..", "..", "scripts", "windsurf", "hooks"),
+		filepath.Join("..", "..", "scripts", "codex", "hooks"),
+		filepath.Join("..", "..", "scripts", "opencode", "plugins"),
+	}
+
+	checked := 0
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			switch filepath.Ext(path) {
+			case ".sh", ".ts":
+			default:
+				return nil
+			}
+
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Errorf("read %s: %v", path, err)
+				return nil
+			}
+			content := string(data)
+			usesProject := strings.Contains(content, "$PROJECT") ||
+				strings.Contains(content, "PROJECT=") ||
+				strings.Contains(content, "--project") ||
+				strings.Contains(content, "mnemoProject(")
+			if !usesProject {
+				return nil
+			}
+			checked++
+
+			if !strings.Contains(content, ".mnemo") {
+				t.Errorf("%s uses project identity but does not read .mnemo", path)
+			}
+			fromMarker := strings.Contains(content, "mnemo json id") ||
+				strings.Contains(content, ".id")
+			if !fromMarker {
+				t.Errorf("%s uses project identity but does not resolve it from .mnemo id", path)
+			}
+			if strings.Contains(content, "tr '/' '-'") || strings.Contains(content, `tr "/" "-"`) {
+				t.Errorf("%s still derives project identity from filesystem path", path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no shipped hooks that resolve PROJECT were found")
+	}
+}
+
 func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
 	files := []string{
 		filepath.Join("..", "..", "templates", "rules", "generic.md"),

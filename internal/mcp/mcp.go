@@ -158,22 +158,27 @@ func ResolveTools(input string) map[string]bool {
 }
 
 // NewServer creates an MCP server with ALL tools registered.
-func NewServer(s *store.Store) *server.MCPServer {
-	return NewServerWithTools(s, nil)
+func NewServer(s *store.Store, version string) (*server.MCPServer, error) {
+	return NewServerWithTools(s, version, nil)
 }
 
 // NewServerWithTools creates an MCP server registering only the tools in
 // the allowlist. If allowlist is nil, all tools are registered.
-func NewServerWithTools(s *store.Store, allowlist map[string]bool) *server.MCPServer {
+// version is the binary version advertised to MCP clients; it is required.
+func NewServerWithTools(s *store.Store, version string, allowlist map[string]bool) (*server.MCPServer, error) {
+	if strings.TrimSpace(version) == "" {
+		return nil, fmt.Errorf("mcp server version is required")
+	}
+
 	srv := server.NewMCPServer(
 		"mnemo",
-		"0.1.0",
+		version,
 		server.WithToolCapabilities(true),
 		server.WithInstructions(strings.TrimSpace(serverInstructions)),
 	)
 
 	registerTools(srv, s, allowlist)
-	return srv
+	return srv, nil
 }
 
 func shouldRegister(name string, allowlist map[string]bool) bool {
