@@ -14,11 +14,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var (
-	errClaudePluginRegistryNotFound = errors.New("claude code plugin registry not found")
-	errClaudeMnemoPluginNotFound    = errors.New("claude code mnemo plugin not found")
-)
-
 type doctorOptions struct {
 	JSON    bool
 	Agent   string
@@ -129,10 +124,10 @@ func buildDoctorReport(opts doctorOptions) doctorReport {
 			report.addCheck(errorCheck("agent", err.Error(), opts.Agent))
 		} else {
 			for _, agent := range agents {
-				report.addCheck(checkGlobalInstructions(home, agent))
-				report.addCheck(checkMCPConfig(home, agent))
-				if check := checkAgentRuntimeFiles(home, agent); check.ID != "" {
-					report.addCheck(check)
+				report.addCheck(toDoctorCheck(agentinit.CheckInstructions(home, agent)))
+				report.addCheck(toDoctorCheck(agentinit.CheckMCP(home, agent)))
+				if check := agentinit.CheckRuntime(home, agent); check.ID != "" {
+					report.addCheck(toDoctorCheck(check))
 				}
 			}
 		}
@@ -199,6 +194,18 @@ func printDoctorReport(report doctorReport) {
 	}
 }
 
+func toDoctorCheck(c agentinit.Check) doctorCheck {
+	return doctorCheck{
+		ID:       c.ID,
+		Status:   c.Status,
+		Severity: c.Severity,
+		Message:  c.Message,
+		Agent:    c.Agent,
+		Path:     c.Path,
+		Details:  c.Details,
+	}
+}
+
 func okCheck(id, message, path string) doctorCheck {
 	return doctorCheck{ID: id, Status: "ok", Severity: "info", Message: message, Path: path}
 }
@@ -238,222 +245,6 @@ func checkBinaryOnPath() doctorCheck {
 	return okCheck("binary_path", "mnemo binary found on PATH", path)
 }
 
-func checkGlobalInstructions(home, agent string) doctorCheck {
-	path, err := agentinit.GlobalInstructionPath(home, agent)
-	if err != nil {
-		return errorCheck("global_instructions."+agent, err.Error(), "")
-	}
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return agentWarning(agent, "global_instructions."+agent, "global instructions not found", path)
-	}
-	if err != nil {
-		return agentError(agent, "global_instructions."+agent, "read global instructions: "+err.Error(), path)
-	}
-	content := string(data)
-	if !strings.Contains(content, ".mnemo") || !strings.Contains(content, "ONLY persistent memory system") {
-		return agentWarning(agent, "global_instructions."+agent, "global instructions do not look like mnemo instructions", path)
-	}
-	if agent != "cursor" && (!strings.Contains(content, "<!-- mnemo:start -->") || !strings.Contains(content, "<!-- mnemo:end -->")) {
-		return agentWarning(agent, "global_instructions."+agent, "global instructions are missing mnemo managed markers", path)
-	}
-	return agentOK(agent, "global_instructions."+agent, "global instructions installed", path)
-}
-
-func checkMCPConfig(home, agent string) doctorCheck {
-	switch agent {
-	case "claudecode":
-		path := filepath.Join(home, ".claude", ".mcp.json")
-		return checkJSONHas(path, "mcp_config."+agent, agent, "mcpServers", "mnemo")
-	case "cursor":
-		path := filepath.Join(home, ".cursor", "mcp.json")
-		return checkJSONHas(path, "mcp_config."+agent, agent, "mcpServers", "mnemo")
-	case "windsurf":
-		path := filepath.Join(home, ".codeium", "windsurf", "mcp_config.json")
-		return checkJSONHas(path, "mcp_config."+agent, agent, "mcpServers", "mnemo")
-	case "codex":
-		path := filepath.Join(home, ".codex", "config.toml")
-		data, err := os.ReadFile(path)
-		if errors.Is(err, os.ErrNotExist) {
-			return agentWarning(agent, "mcp_config."+agent, "MCP config not found", path)
-		}
-		if err != nil {
-			return agentError(agent, "mcp_config."+agent, "read MCP config: "+err.Error(), path)
-		}
-		content := string(data)
-		if !strings.Contains(content, "[mcp_servers.mnemo]") || !strings.Contains(content, "mcp") {
-			return agentWarning(agent, "mcp_config."+agent, "MCP config does not contain mnemo server", path)
-		}
-		return agentOK(agent, "mcp_config."+agent, "MCP config contains mnemo server", path)
-	case "opencode":
-		path := filepath.Join(home, ".config", "opencode", "opencode.json")
-		return checkJSONHas(path, "mcp_config."+agent, agent, "mcp", "mnemo")
-	default:
-		return agentError(agent, "mcp_config."+agent, "unknown agent", "")
-	}
-}
-
-func checkAgentRuntimeFiles(home, agent string) doctorCheck {
-	switch agent {
-	case "claudecode":
-		installPath, err := claudeMnemoPluginInstallPath(home)
-		if err != nil {
-			path := filepath.Join(home, ".claude", "plugins", "installed_plugins.json")
-			if errors.Is(err, errClaudePluginRegistryNotFound) || errors.Is(err, errClaudeMnemoPluginNotFound) {
-				return agentWarning(agent, "runtime_files."+agent, err.Error(), path)
-			}
-			return agentError(agent, "runtime_files."+agent, err.Error(), path)
-		}
-		paths := []string{
-			filepath.Join(installPath, ".claude-plugin", "plugin.json"),
-			filepath.Join(installPath, "hooks", "hooks.json"),
-			filepath.Join(installPath, "scripts", "session-start.sh"),
-			filepath.Join(installPath, "scripts", "session-stop.sh"),
-			filepath.Join(installPath, "scripts", "subagent-stop.sh"),
-			filepath.Join(installPath, "scripts", "post-compact.sh"),
-			filepath.Join(installPath, "scripts", "post-compact-resume.sh"),
-			filepath.Join(installPath, "scripts", "post-file-edit.sh"),
-			filepath.Join(installPath, "scripts", "post-bash-git.sh"),
-		}
-		return checkFiles(agent, "runtime_files."+agent, "Claude Code plugin hooks installed", paths, true)
-	case "cursor":
-		paths := []string{
-			filepath.Join(home, ".cursor", "hooks.json"),
-			filepath.Join(home, ".cursor", "hooks", "before-submit-prompt.sh"),
-			filepath.Join(home, ".cursor", "hooks", "stop.sh"),
-		}
-		return checkFiles(agent, "runtime_files."+agent, "Cursor global hooks installed", paths, true)
-	case "windsurf":
-		paths := []string{
-			filepath.Join(home, ".codeium", "windsurf", "hooks.json"),
-			filepath.Join(home, ".codeium", "windsurf", "hooks", "pre-user-prompt.sh"),
-			filepath.Join(home, ".codeium", "windsurf", "hooks", "post-cascade-response.sh"),
-		}
-		return checkFiles(agent, "runtime_files."+agent, "Windsurf global hooks installed", paths, true)
-	case "codex":
-		paths := []string{
-			filepath.Join(home, ".codex", "hooks.json"),
-			filepath.Join(home, ".codex", "hooks", "session-start.sh"),
-			filepath.Join(home, ".codex", "hooks", "stop.sh"),
-			filepath.Join(home, ".codex", "hooks", "mnemo-protocol.md"),
-		}
-		return checkFiles(agent, "runtime_files."+agent, "Codex global hooks installed", paths, true)
-	case "opencode":
-		paths := []string{
-			filepath.Join(home, ".config", "opencode", "plugins", "mnemo.ts"),
-			filepath.Join(home, ".config", "opencode", "plugins", "mnemo-protocol.md"),
-		}
-		return checkFiles(agent, "runtime_files."+agent, "OpenCode plugin files installed", paths, false)
-	default:
-		return doctorCheck{}
-	}
-}
-
-func claudeMnemoPluginInstallPath(home string) (string, error) {
-	path := filepath.Join(home, ".claude", "plugins", "installed_plugins.json")
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return "", errClaudePluginRegistryNotFound
-	}
-	if err != nil {
-		return "", fmt.Errorf("read Claude Code plugin registry: %w", err)
-	}
-	var registry struct {
-		Plugins map[string]json.RawMessage `json:"plugins"`
-	}
-	if err := json.Unmarshal(data, &registry); err != nil {
-		return "", fmt.Errorf("parse Claude Code plugin registry: %w", err)
-	}
-	raw, ok := registry.Plugins["mnemo@mnemo"]
-	if !ok {
-		return "", errClaudeMnemoPluginNotFound
-	}
-	var entries []struct {
-		InstallPath string `json:"installPath"`
-	}
-	if err := json.Unmarshal(raw, &entries); err != nil {
-		var entry struct {
-			InstallPath string `json:"installPath"`
-		}
-		if err := json.Unmarshal(raw, &entry); err != nil {
-			return "", fmt.Errorf("parse Claude Code mnemo plugin entry: %w", err)
-		}
-		entries = []struct {
-			InstallPath string `json:"installPath"`
-		}{entry}
-	}
-	if len(entries) == 0 || strings.TrimSpace(entries[0].InstallPath) == "" {
-		return "", errClaudeMnemoPluginNotFound
-	}
-	return entries[0].InstallPath, nil
-}
-
-func checkFiles(agent, id, okMessage string, paths []string, executableScripts bool) doctorCheck {
-	missing := []string{}
-	notExecutable := []string{}
-	for _, path := range paths {
-		info, err := os.Stat(path)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				missing = append(missing, path)
-				continue
-			}
-			return agentError(agent, id, "stat runtime file: "+err.Error(), path)
-		}
-		if info.IsDir() {
-			missing = append(missing, path)
-			continue
-		}
-		if executableScripts && strings.HasSuffix(path, ".sh") && info.Mode()&0111 == 0 {
-			notExecutable = append(notExecutable, path)
-		}
-	}
-	if len(missing) > 0 || len(notExecutable) > 0 {
-		details := map[string]string{}
-		if len(missing) > 0 {
-			details["missing"] = strings.Join(missing, ",")
-		}
-		if len(notExecutable) > 0 {
-			details["not_executable"] = strings.Join(notExecutable, ",")
-		}
-		return doctorCheck{ID: id, Status: "warning", Severity: "warning", Agent: agent, Message: "runtime files are incomplete", Details: details}
-	}
-	return agentOK(agent, id, okMessage, strings.Join(paths, ","))
-}
-
-func checkJSONHas(path, id, agent string, keys ...string) doctorCheck {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return agentWarning(agent, id, "MCP config not found", path)
-	}
-	if err != nil {
-		return agentError(agent, id, "read MCP config: "+err.Error(), path)
-	}
-	var raw any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return agentError(agent, id, "parse MCP config JSON: "+err.Error(), path)
-	}
-	if !jsonPathExists(raw, keys...) {
-		return agentWarning(agent, id, "MCP config does not contain mnemo server", path)
-	}
-	return agentOK(agent, id, "MCP config contains mnemo server", path)
-}
-
-func jsonPathExists(v any, keys ...string) bool {
-	current := v
-	for _, key := range keys {
-		m, ok := current.(map[string]any)
-		if !ok {
-			return false
-		}
-		current, ok = m[key]
-		if !ok {
-			return false
-		}
-	}
-	return true
-}
-
 func checkStoreReadOnly(dataDir string) doctorCheck {
 	dbPath := filepath.Join(dataDir, "memory.db")
 	if _, err := os.Stat(dbPath); errors.Is(err, os.ErrNotExist) {
@@ -489,22 +280,4 @@ func checkStoreReadOnly(dataDir string) doctorCheck {
 
 func sqliteReadOnlyDBURI(dbPath string) string {
 	return "file:" + filepath.ToSlash(dbPath) + "?mode=ro&immutable=1"
-}
-
-func agentOK(agent, id, message, path string) doctorCheck {
-	check := okCheck(id, message, path)
-	check.Agent = agent
-	return check
-}
-
-func agentWarning(agent, id, message, path string) doctorCheck {
-	check := warningCheck(id, message, path)
-	check.Agent = agent
-	return check
-}
-
-func agentError(agent, id, message, path string) doctorCheck {
-	check := errorCheck(id, message, path)
-	check.Agent = agent
-	return check
 }

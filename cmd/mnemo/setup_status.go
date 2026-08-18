@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
@@ -150,16 +149,16 @@ func buildSetupStatusReport(opts setupStatusOptions) setupStatusReport {
 }
 
 func buildSetupStatusRow(home, agent string) setupStatusRow {
-	hooks := statusFromCheck(checkAgentRuntimeFiles(home, agent))
+	hooks := statusFromCheck(agentinit.CheckRuntime(home, agent))
 	if hooks == "" {
 		hooks = "n/a"
 	}
 	return setupStatusRow{
-		Agent:        agentLabel(agent),
-		Detected:     yesNo(agentDetected(home, agent)),
-		MCP:          statusFromCheck(checkMCPConfig(home, agent)),
+		Agent:        agentinit.Label(agent),
+		Detected:     yesNo(agentinit.Detected(home, agent)),
+		MCP:          statusFromCheck(agentinit.CheckMCP(home, agent)),
 		Hooks:        hooks,
-		Instructions: statusFromCheck(checkGlobalInstructions(home, agent)),
+		Instructions: statusFromCheck(agentinit.CheckInstructions(home, agent)),
 	}
 }
 
@@ -172,7 +171,7 @@ func printSetupStatusReport(report setupStatusReport) {
 	_ = w.Flush()
 }
 
-func statusFromCheck(check doctorCheck) string {
+func statusFromCheck(check agentinit.Check) string {
 	if check.ID == "" {
 		return ""
 	}
@@ -195,46 +194,4 @@ func yesNo(v bool) string {
 		return "yes"
 	}
 	return "no"
-}
-
-func agentDetected(home, agent string) bool {
-	for _, path := range agentDetectionPaths(home, agent) {
-		if pathExists(path) {
-			return true
-		}
-	}
-	return false
-}
-
-func agentDetectionPaths(home, agent string) []string {
-	switch agent {
-	case "claudecode":
-		return []string{filepath.Join(home, ".claude")}
-	case "cursor":
-		return []string{filepath.Join(home, ".cursor")}
-	case "windsurf":
-		return []string{filepath.Join(home, ".codeium", "windsurf")}
-	case "codex":
-		return []string{filepath.Join(home, ".codex")}
-	case "opencode":
-		return []string{filepath.Join(home, ".config", "opencode")}
-	default:
-		return nil
-	}
-}
-
-func pathExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-func agentLabel(agent string) string {
-	switch agent {
-	case "claudecode":
-		return "Claude"
-	case "opencode":
-		return "OpenCode"
-	default:
-		return strings.ToUpper(agent[:1]) + agent[1:]
-	}
 }

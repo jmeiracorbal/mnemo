@@ -93,9 +93,3 @@ func TestBuildSetupConfigSnippetsForAll(t *testing.T) {
 	}
 }
 
-func TestSetupConfigSnippetsForAgentRejectsUnsupportedAgent(t *testing.T) {
-	_, err := setupConfigSnippetsForAgent("/home/test", "mnemo", "future-agent")
-	if err == nil || !strings.Contains(err.Error(), `unsupported agent "future-agent"`) {
-		t.Fatalf("error = %v, want unsupported agent", err)
-	}
-}

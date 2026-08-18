@@ -2,10 +2,6 @@ package agentinit
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-
-	"github.com/jmeiracorbal/mnemo/templates"
 )
 
 // SupportedAgents is the canonical set of agent IDs accepted by mnemo init and
@@ -26,20 +22,19 @@ func ExpandAgents(agent string) ([]string, error) {
 	return nil, fmt.Errorf("unknown agent %q — valid: claudecode | cursor | windsurf | codex | opencode | all", agent)
 }
 
-// GlobalInstructionPath returns the user-scope instruction path used by an
-// agent, mirroring CodeGraph's global install model.
+// GlobalInstructionPath returns the user-scope instruction path used by an agent.
 func GlobalInstructionPath(home, agent string) (string, error) {
 	switch agent {
 	case "claudecode":
-		return filepath.Join(home, ".claude", "CLAUDE.md"), nil
+		return claudeCodeInstructionPath(home), nil
 	case "cursor":
-		return filepath.Join(home, ".cursor", "rules", "mnemo.mdc"), nil
+		return cursorInstructionPath(home), nil
 	case "windsurf":
-		return filepath.Join(home, ".codeium", "windsurf", "memories", "global_rules.md"), nil
+		return windsurfInstructionPath(home), nil
 	case "codex":
-		return filepath.Join(home, ".codex", "AGENTS.md"), nil
+		return codexInstructionPath(home), nil
 	case "opencode":
-		return filepath.Join(home, ".config", "opencode", "AGENTS.md"), nil
+		return openCodeInstructionPath(home), nil
 	default:
 		return "", fmt.Errorf("unknown agent %q", agent)
 	}
@@ -49,38 +44,37 @@ func GlobalInstructionPath(home, agent string) (string, error) {
 // an agent's global instruction surface. The block is conditional on a valid
 // project .mnemo marker so a global install does not activate mnemo everywhere.
 func InstallGlobalInstructions(home, agent string) (string, error) {
-	path, err := GlobalInstructionPath(home, agent)
-	if err != nil {
-		return "", err
+	switch agent {
+	case "claudecode":
+		return claudeCodeInstallInstructions(home)
+	case "cursor":
+		return cursorInstallInstructions(home)
+	case "windsurf":
+		return windsurfInstallInstructions(home)
+	case "codex":
+		return codexInstallInstructions(home)
+	case "opencode":
+		return openCodeInstallInstructions(home)
+	default:
+		return "", fmt.Errorf("unknown agent %q", agent)
 	}
-	if agent == "cursor" {
-		if err := WriteFile(path, []byte(templates.CursorGlobal)); err != nil {
-			return "", err
-		}
-		return path, nil
-	}
-	if err := AppendSection(path, templates.Global); err != nil {
-		return "", err
-	}
-	return path, nil
 }
 
 // RemoveGlobalInstructions removes mnemo's global instruction surface for an
 // agent while preserving user content outside the managed mnemo section.
 func RemoveGlobalInstructions(home, agent string) (string, bool, error) {
-	path, err := GlobalInstructionPath(home, agent)
-	if err != nil {
-		return "", false, err
+	switch agent {
+	case "claudecode":
+		return claudeCodeRemoveInstructions(home)
+	case "cursor":
+		return cursorRemoveInstructions(home)
+	case "windsurf":
+		return windsurfRemoveInstructions(home)
+	case "codex":
+		return codexRemoveInstructions(home)
+	case "opencode":
+		return openCodeRemoveInstructions(home)
+	default:
+		return "", false, fmt.Errorf("unknown agent %q", agent)
 	}
-	if agent == "cursor" {
-		if err := os.Remove(path); err != nil {
-			if os.IsNotExist(err) {
-				return path, false, nil
-			}
-			return path, false, err
-		}
-		return path, true, nil
-	}
-	changed, err := RemoveSection(path)
-	return path, changed, err
 }

@@ -8,9 +8,9 @@ import (
 
 func TestProjectInitDoesNotWriteProjectInstructionFiles(t *testing.T) {
 	root := t.TempDir()
-	for _, initFn := range []func(string) error{InitClaudeCode, InitCursor, InitWindsurf, InitCodex, InitOpenCode} {
-		if err := initFn(root); err != nil {
-			t.Fatalf("init agent: %v", err)
+	for _, agent := range SupportedAgents {
+		if err := AddAgent(root, agent); err != nil {
+			t.Fatalf("init agent %s: %v", agent, err)
 		}
 	}
 
