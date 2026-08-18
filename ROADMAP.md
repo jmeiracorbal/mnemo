@@ -67,6 +67,17 @@ Goals:
 - record commands executed for each project;
 - use trace data to improve passive capture and debugging.
 
+## Architecture alignment
+
+Reduce operational drift between installation, setup, schema evolution, and CLI composition.
+
+Near-term goals:
+
+- unificar el escritor de setup para que el binario sea la única autoridad sobre MCP, hooks, instrucciones globales y runtime files;
+- unificar la fuente de verdad del esquema para que sqlc y las migraciones no evolucionen por caminos paralelos;
+- repartir mejor las responsabilidades de `cmd/mnemo`, separando comandos de memoria, setup, diagnóstico y utilidades operativas;
+- redefinir el papel de `internal/agentinit` para que o bien posea de verdad la lógica por agente o deje de aparentar esa abstracción.
+
 ## Later-stage ideas
 
 - terminal UI for memory browsing and curation;
