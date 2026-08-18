@@ -1,11 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
@@ -15,13 +13,6 @@ type setupPrintConfigOptions struct {
 	Agent    string
 	Home     string
 	MnemoBin string
-}
-
-type setupConfigSnippet struct {
-	Agent   string
-	Path    string
-	Format  string
-	Content string
 }
 
 func runSetupPrintConfig() {
@@ -74,14 +65,14 @@ func parseSetupPrintConfigArgs(args []string, userHomeDir func() (string, error)
 	return opts, nil
 }
 
-func buildSetupConfigSnippets(opts setupPrintConfigOptions) ([]setupConfigSnippet, error) {
+func buildSetupConfigSnippets(opts setupPrintConfigOptions) ([]agentinit.ConfigSnippet, error) {
 	agents, err := agentinit.ExpandAgents(opts.Agent)
 	if err != nil {
 		return nil, err
 	}
-	var snippets []setupConfigSnippet
+	var snippets []agentinit.ConfigSnippet
 	for _, agent := range agents {
-		agentSnippets, err := setupConfigSnippetsForAgent(opts.Home, opts.MnemoBin, agent)
+		agentSnippets, err := agentinit.ConfigSnippets(opts.Home, opts.MnemoBin, agent)
 		if err != nil {
 			return nil, err
 		}
@@ -90,133 +81,7 @@ func buildSetupConfigSnippets(opts setupPrintConfigOptions) ([]setupConfigSnippe
 	return snippets, nil
 }
 
-func setupConfigSnippetsForAgent(home, mnemoBin, agent string) ([]setupConfigSnippet, error) {
-	switch agent {
-	case "claudecode":
-		return []setupConfigSnippet{{
-			Agent:   agentLabel(agent),
-			Path:    filepath.Join(home, ".claude", ".mcp.json"),
-			Format:  "json",
-			Content: mcpServersJSON(mnemoBin),
-		}}, nil
-	case "cursor":
-		hooksDir := filepath.Join(home, ".cursor", "hooks")
-		return []setupConfigSnippet{
-			{
-				Agent:   agentLabel(agent),
-				Path:    filepath.Join(home, ".cursor", "mcp.json"),
-				Format:  "json",
-				Content: mcpServersJSON(mnemoBin),
-			},
-			{
-				Agent:  agentLabel(agent),
-				Path:   filepath.Join(home, ".cursor", "hooks.json"),
-				Format: "json",
-				Content: prettyJSON(map[string]any{
-					"version": 1,
-					"hooks": map[string]any{
-						"beforeSubmitPrompt": []any{map[string]any{"command": filepath.Join(hooksDir, "before-submit-prompt.sh")}},
-						"stop":               []any{map[string]any{"command": filepath.Join(hooksDir, "stop.sh")}},
-					},
-				}),
-			},
-		}, nil
-	case "windsurf":
-		hooksDir := filepath.Join(home, ".codeium", "windsurf", "hooks")
-		return []setupConfigSnippet{
-			{
-				Agent:   agentLabel(agent),
-				Path:    filepath.Join(home, ".codeium", "windsurf", "mcp_config.json"),
-				Format:  "json",
-				Content: mcpServersJSON(mnemoBin),
-			},
-			{
-				Agent:  agentLabel(agent),
-				Path:   filepath.Join(home, ".codeium", "windsurf", "hooks.json"),
-				Format: "json",
-				Content: prettyJSON(map[string]any{
-					"hooks": map[string]any{
-						"pre_user_prompt":                       []any{map[string]any{"command": filepath.Join(hooksDir, "pre-user-prompt.sh")}},
-						"post_cascade_response_with_transcript": []any{map[string]any{"command": filepath.Join(hooksDir, "post-cascade-response.sh")}},
-					},
-				}),
-			},
-		}, nil
-	case "codex":
-		hooksDir := filepath.Join(home, ".codex", "hooks")
-		return []setupConfigSnippet{
-			{
-				Agent:   agentLabel(agent),
-				Path:    filepath.Join(home, ".codex", "config.toml"),
-				Format:  "toml",
-				Content: fmt.Sprintf("[mcp_servers.mnemo]\ncommand = %q\nargs = [\"mcp\", \"--tools=agent\"]\n", mnemoBin),
-			},
-			{
-				Agent:  agentLabel(agent),
-				Path:   filepath.Join(home, ".codex", "hooks.json"),
-				Format: "json",
-				Content: prettyJSON(map[string]any{
-					"hooks": map[string]any{
-						"SessionStart": []any{map[string]any{
-							"matcher": "startup|resume",
-							"hooks": []any{map[string]any{
-								"type":          "command",
-								"command":       filepath.Join(hooksDir, "session-start.sh"),
-								"statusMessage": "Loading mnemo memory...",
-								"timeout":       10,
-							}},
-						}},
-						"Stop": []any{map[string]any{
-							"matcher": "",
-							"hooks": []any{map[string]any{
-								"type":    "command",
-								"command": filepath.Join(hooksDir, "stop.sh"),
-								"timeout": 10,
-							}},
-						}},
-					},
-				}),
-			},
-		}, nil
-	case "opencode":
-		return []setupConfigSnippet{{
-			Agent:  agentLabel(agent),
-			Path:   filepath.Join(home, ".config", "opencode", "opencode.json"),
-			Format: "json",
-			Content: prettyJSON(map[string]any{
-				"mcp": map[string]any{
-					"mnemo": map[string]any{
-						"type":    "local",
-						"command": []string{mnemoBin, "mcp", "--tools=agent"},
-					},
-				},
-			}),
-		}}, nil
-	default:
-		return nil, fmt.Errorf("unsupported agent %q for setup print-config", agent)
-	}
-}
-
-func mcpServersJSON(mnemoBin string) string {
-	return prettyJSON(map[string]any{
-		"mcpServers": map[string]any{
-			"mnemo": map[string]any{
-				"command": mnemoBin,
-				"args":    []string{"mcp", "--tools=agent"},
-			},
-		},
-	})
-}
-
-func prettyJSON(v any) string {
-	out, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	return string(out) + "\n"
-}
-
-func printSetupConfigSnippets(snippets []setupConfigSnippet) {
+func printSetupConfigSnippets(snippets []agentinit.ConfigSnippet) {
 	for i, snippet := range snippets {
 		if i > 0 {
 			fmt.Println()

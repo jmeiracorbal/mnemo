@@ -1,3 +1,6 @@
+// Package agentinit owns project identity and every agent-specific setup surface.
+// cmd/mnemo orchestrates CLI flags, reports, and printing; it must not encode
+// per-agent paths, config snippets, runtime files, or diagnostics.
 package agentinit
 
 import (
