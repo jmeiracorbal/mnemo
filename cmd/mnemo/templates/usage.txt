@@ -18,8 +18,9 @@ Usage:
   mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
   mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual setup config snippets
   mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]  Refresh installed global setup files
+  mnemo setup AGENT [--home=DIR] [--mnemo-bin=PATH]  Alias for setup refresh --agent=AGENT
   mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for an agent
-  mnemo init [--agent=AGENT] [--path=DIR]  Activate mnemo in the current project (.mnemo)
+  mnemo init [--agent=AGENT] [--path=DIR] [--no-project-rules]  Activate mnemo in the current project (.mnemo)
   mnemo install-instructions [--agent=AGENT]  Install global agent instructions
   mnemo migrate [--path=DIR]              Migrate project from legacy key to UUID-based identity
   mnemo json KEY [KEY ...]             Extract field from JSON on stdin (used by hooks)
@@ -70,7 +71,7 @@ Projects list options:
   --json               Emit a stable JSON project list
 
 Tool profiles for mcp:
-  --tools=agent    15 tools for AI agents (default when using plugin)
+  --tools=agent    17 tools for AI agents (default when using plugin)
   --tools=admin    3 tools for curation (delete, stats, timeline)
   --tools=all      All tools
 
