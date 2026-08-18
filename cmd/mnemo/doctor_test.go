@@ -1,13 +1,12 @@
 package main
 
 import (
-	"database/sql"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/internal/doctor"
 )
 
 func TestParseDoctorArgs(t *testing.T) {
@@ -34,7 +33,7 @@ func TestBuildDoctorReportChecksCodexGlobalInstall(t *testing.T) {
 	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "stop.sh"))
 	writeFile(t, filepath.Join(home, ".codex", "hooks", "mnemo-protocol.md"), "protocol")
 
-	report := buildDoctorReport(doctorOptions{Agent: "codex", Path: project, Home: home, DataDir: dataDir})
+	report := doctor.BuildReport(doctor.Options{Agent: "codex", Path: project, Home: home, DataDir: dataDir})
 
 	assertCheckStatus(t, report, "project_marker", "ok")
 	assertCheckStatus(t, report, "global_instructions.codex", "ok")
@@ -45,55 +44,23 @@ func TestBuildDoctorReportChecksCodexGlobalInstall(t *testing.T) {
 func TestBuildDoctorReportWarnsWhenProjectMarkerMissing(t *testing.T) {
 	home := t.TempDir()
 	project := t.TempDir()
-	report := buildDoctorReport(doctorOptions{Agent: "codex", Path: project, Home: home, DataDir: t.TempDir()})
+	report := doctor.BuildReport(doctor.Options{Agent: "codex", Path: project, Home: home, DataDir: t.TempDir()})
 	assertCheckStatus(t, report, "project_marker", "warning")
 }
 
-func TestCheckStoreReadOnlyUsesWALSafeImmutableURI(t *testing.T) {
-	dataDir := t.TempDir()
-	dbPath := filepath.Join(dataDir, "memory.db")
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
+func TestBuildDoctorReportWarnsOnCompetingMemory(t *testing.T) {
+	home := t.TempDir()
+	project := t.TempDir()
+	if err := agentinit.EnsureMarkerWithID(project, "project-123"); err != nil {
+		t.Fatalf("marker: %v", err)
 	}
-	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
-		closeTestDB(t, db)
-		t.Fatalf("enable WAL: %v", err)
-	}
-	for _, query := range []string{
-		"CREATE TABLE sessions (id TEXT)",
-		"CREATE TABLE observations (id TEXT)",
-		"CREATE TABLE user_prompts (id TEXT)",
-		"PRAGMA wal_checkpoint(FULL)",
-	} {
-		if _, err := db.Exec(query); err != nil {
-			closeTestDB(t, db)
-			t.Fatalf("exec %q: %v", query, err)
-		}
-	}
-	closeTestDB(t, db)
+	writeFile(t, filepath.Join(project, "MEMORY.md"), "# native memory\n")
 
-	uri := sqliteReadOnlyDBURI(dbPath)
-	if !strings.Contains(uri, "mode=ro") || !strings.Contains(uri, "immutable=1") {
-		t.Fatalf("read-only URI is not WAL-safe: %s", uri)
-	}
-
-	if err := os.Chmod(dataDir, 0555); err != nil {
-		t.Fatalf("chmod read-only dir: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := os.Chmod(dataDir, 0755); err != nil {
-			t.Errorf("restore dir permissions: %v", err)
-		}
-	})
-
-	check := checkStoreReadOnly(dataDir)
-	if check.Status != "ok" {
-		t.Fatalf("store check status = %q, want ok (message: %s)", check.Status, check.Message)
-	}
+	report := doctor.BuildReport(doctor.Options{Agent: "codex", Path: project, Home: home, DataDir: t.TempDir()})
+	assertCheckStatus(t, report, "competing_memory", "warning")
 }
 
-func assertCheckStatus(t *testing.T, report doctorReport, id, want string) {
+func assertCheckStatus(t *testing.T, report doctor.Report, id, want string) {
 	t.Helper()
 	for _, check := range report.Checks {
 		if check.ID == id {
@@ -123,12 +90,5 @@ func writeExecutable(t *testing.T, path string) {
 	}
 	if err := os.WriteFile(path, []byte("#!/bin/sh\n"), 0755); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func closeTestDB(t *testing.T, db *sql.DB) {
-	t.Helper()
-	if err := db.Close(); err != nil {
-		t.Errorf("close sqlite: %v", err)
 	}
 }

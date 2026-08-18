@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jmeiracorbal/mnemo/internal/agentinit"
 )
 
 func TestParseSetupRefreshArgs(t *testing.T) {
@@ -33,13 +35,19 @@ func TestRefreshSetupWritesCodexFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refresh setup: %v", err)
 	}
-	if len(updated) != 6 {
-		t.Fatalf("updated paths = %d, want 6 (%v)", len(updated), updated)
+	if len(updated) != 12 {
+		t.Fatalf("updated paths = %d, want 12 (%v)", len(updated), updated)
 	}
 
 	config := readTestFile(t, filepath.Join(home, ".codex", "config.toml"))
 	if !strings.Contains(config, `[mcp_servers.mnemo]`) || !strings.Contains(config, `command = "/bin/mnemo"`) {
 		t.Fatalf("unexpected codex config:\n%s", config)
+	}
+	if !strings.Contains(config, "experimental_compact_prompt_file") {
+		t.Fatalf("codex config missing compact prompt file:\n%s", config)
+	}
+	if !agentinit.GlobalSkillInstalled(home) {
+		t.Fatal("global skill not installed by setup refresh")
 	}
 	hooks := readTestFile(t, filepath.Join(home, ".codex", "hooks.json"))
 	if !strings.Contains(hooks, filepath.Join(home, ".codex", "hooks", "session-start.sh")) {

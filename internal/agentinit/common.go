@@ -180,6 +180,18 @@ func GlobalSkillInstalled(home string) bool {
 	return err == nil && !info.IsDir()
 }
 
+// ReadProjectMarker returns the parsed .mnemo marker for root.
+func ReadProjectMarker(root string) (*Marker, error) {
+	m, err := readMarker(root)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(m.ID) == "" {
+		return nil, fmt.Errorf(".mnemo has no project ID in %s — run mnemo init", root)
+	}
+	return m, nil
+}
+
 // AppendSection creates or updates the managed mnemo protocol section in path.
 // Content outside the markers is preserved.
 func AppendSection(path, content string) error {

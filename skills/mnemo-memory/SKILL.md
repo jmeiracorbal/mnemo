@@ -1,6 +1,6 @@
 ---
 name: mnemo-memory
-description: Use mnemo as the only persistent memory for an initialized project. Use when starting or resuming work, recovering context after compaction, recalling prior decisions, saving important decisions or fixes, recording conventions or user preferences, and closing a task or session. Always verify a valid .mnemo marker first; never fall back to native, file-based, or plaintext memory.
+description: ALWAYS ACTIVE when .mnemo exists — mnemo is the ONLY persistent memory for initialized projects. Never use MEMORY.md or native agent memory. Use for session start, compaction recovery, recalls, saves, and session close. Verify a valid .mnemo marker first.
 ---
 
 # mnemo Memory

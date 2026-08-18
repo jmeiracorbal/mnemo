@@ -57,6 +57,7 @@ func windsurfRuntimeAssets() []assetTarget {
 	return []assetTarget{
 		{Asset: "scripts/windsurf/hooks/pre-user-prompt.sh", Path: filepath.Join(".codeium", "windsurf", "hooks", "pre-user-prompt.sh"), Mode: 0755},
 		{Asset: "scripts/windsurf/hooks/post-cascade-response.sh", Path: filepath.Join(".codeium", "windsurf", "hooks", "post-cascade-response.sh"), Mode: 0755},
+		{Asset: "assets/protocol/session-start-protocol.md", Path: filepath.Join(".codeium", "windsurf", "hooks", "session-start-protocol.md"), Mode: 0644},
 	}
 }
 

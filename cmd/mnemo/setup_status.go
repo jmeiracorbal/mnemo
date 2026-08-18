@@ -16,11 +16,18 @@ type setupStatusOptions struct {
 	Home  string
 }
 
+type setupStatusSummary struct {
+	Total    int `json:"total"`
+	OK       int `json:"ok"`
+	Warnings int `json:"warnings"`
+	Errors   int `json:"errors"`
+}
+
 type setupStatusReport struct {
-	Status  string           `json:"status"`
-	Agent   string           `json:"agent"`
-	Summary doctorSummary    `json:"summary"`
-	Rows    []setupStatusRow `json:"agents"`
+	Status  string             `json:"status"`
+	Agent   string             `json:"agent"`
+	Summary setupStatusSummary `json:"summary"`
+	Rows    []setupStatusRow   `json:"agents"`
 }
 
 type setupStatusRow struct {
@@ -46,15 +53,30 @@ func runSetup() {
 	case "uninstall":
 		runSetupUninstall()
 	default:
+		if isSetupAgentAlias(os.Args[2]) {
+			os.Args = append([]string{os.Args[0], os.Args[1], "refresh", "--agent=" + os.Args[2]}, os.Args[3:]...)
+			runSetupRefresh()
+			return
+		}
 		printSetupUsage()
 		os.Exit(1)
 	}
+}
+
+func isSetupAgentAlias(value string) bool {
+	for _, agent := range agentinit.SupportedAgents {
+		if value == agent {
+			return true
+		}
+	}
+	return value == "all"
 }
 
 func printSetupUsage() {
 	fmt.Fprintln(os.Stderr, "usage: mnemo setup status [--json] [--agent=AGENT] [--home=DIR]")
 	fmt.Fprintln(os.Stderr, "       mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]")
 	fmt.Fprintln(os.Stderr, "       mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]")
+	fmt.Fprintln(os.Stderr, "       mnemo setup AGENT [--home=DIR] [--mnemo-bin=PATH]")
 	fmt.Fprintln(os.Stderr, "       mnemo setup uninstall --agent=AGENT [--home=DIR]")
 }
 

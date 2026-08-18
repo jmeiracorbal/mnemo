@@ -44,4 +44,7 @@ if [ "$PROMPT_LEN" -gt 20 ]; then
   fi
 fi
 
+HOOKS_DIR="$(dirname "$0")"
+cat "${HOOKS_DIR}/session-start-protocol.md" 2>/dev/null
+
 exit 0

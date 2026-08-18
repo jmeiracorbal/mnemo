@@ -50,6 +50,15 @@ func Refresh(home, mnemoBin, agent string) ([]string, error) {
 		return nil, err
 	}
 	updated = append(updated, runtimeFiles...)
+
+	if agent == "codex" {
+		codexFiles, err := writeCodexCompactionPrompt(home)
+		if err != nil {
+			return nil, err
+		}
+		updated = append(updated, codexFiles...)
+	}
+
 	return updated, nil
 }
 

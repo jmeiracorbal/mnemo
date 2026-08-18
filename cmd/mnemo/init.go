@@ -15,6 +15,7 @@ import (
 func runInit(s *store.Store) {
 	agent := "claudecode"
 	dir := "."
+	projectRules := true
 
 	for _, arg := range os.Args[2:] {
 		switch {
@@ -22,6 +23,8 @@ func runInit(s *store.Store) {
 			agent = arg[len("--agent="):]
 		case strings.HasPrefix(arg, "--path="):
 			dir = arg[len("--path="):]
+		case arg == "--no-project-rules":
+			projectRules = false
 		}
 	}
 
@@ -53,6 +56,16 @@ func runInit(s *store.Store) {
 		if err := agentinit.AddAgent(root, a); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo init: %s: %v\n", a, err)
 			os.Exit(1)
+		}
+		if projectRules {
+			paths, err := agentinit.InstallProjectInstructions(root, a)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "mnemo init: %s project rules: %v\n", a, err)
+				os.Exit(1)
+			}
+			for _, path := range paths {
+				fmt.Printf("mnemo init: project rules updated %s\n", path)
+			}
 		}
 		fmt.Printf("mnemo init: %s activated in %s\n", a, root)
 	}

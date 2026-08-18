@@ -90,6 +90,12 @@ var memSessionSummaryDescription string
 //go:embed descriptions/mem_capture_passive.md
 var memCapturePassiveDescription string
 
+//go:embed descriptions/mem_current_project.md
+var memCurrentProjectDescription string
+
+//go:embed descriptions/mem_doctor.md
+var memDoctorDescription string
+
 // ─── Tool Profiles ───────────────────────────────────────────────────────────
 
 // ProfileAgent contains the tool names that AI agents need during coding sessions.
@@ -109,6 +115,8 @@ var ProfileAgent = map[string]bool{
 	"mem_merge_tags":        true,
 	"mem_tag_stats":         true,
 	"mem_related_tags":      true,
+	"mem_current_project":   true,
+	"mem_doctor":            true,
 }
 
 // ProfileAdmin contains tools for CLI curation and dashboards.
@@ -697,6 +705,8 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 			handleCapturePassive(s),
 		)
 	}
+
+	registerDiagnosticTools(srv, allowlist)
 }
 
 // ─── Tool Handlers ───────────────────────────────────────────────────────────
