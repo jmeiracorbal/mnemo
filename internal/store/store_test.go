@@ -1713,6 +1713,101 @@ func TestTimelineHandlesMissingSessionRecord(t *testing.T) {
 	}
 }
 
+func TestMigratedStoreHasCanonicalSchemaObjects(t *testing.T) {
+	s := newTestStore(t)
+	required := []string{
+		"sessions",
+		"observations",
+		"user_prompts",
+		"sync_chunks",
+		"sync_state",
+		"sync_mutations",
+		"sync_enrolled_projects",
+		"observation_tags",
+		"session_tags",
+		"projects",
+		"observations_fts",
+		"prompts_fts",
+		"idx_obs_scope",
+		"ux_observations_sync_id",
+		"obs_fts_insert",
+		"prompt_fts_insert",
+	}
+	for _, name := range required {
+		var count int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name = ?`, name).Scan(&count); err != nil {
+			t.Fatalf("lookup %s: %v", name, err)
+		}
+		if count == 0 {
+			t.Fatalf("migrated store missing canonical object %s", name)
+		}
+	}
+}
+
+func TestNewUpgradesPartialDatabaseToCanonicalSchema(t *testing.T) {
+	dataDir := t.TempDir()
+	dbPath := filepath.Join(dataDir, "memory.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open partial db: %v", err)
+	}
+	_, err = db.Exec(`
+		CREATE TABLE sessions (
+			id TEXT PRIMARY KEY,
+			project TEXT NOT NULL,
+			directory TEXT NOT NULL,
+			started_at TEXT NOT NULL DEFAULT (datetime('now')),
+			ended_at TEXT,
+			summary TEXT
+		);
+		CREATE TABLE observations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id TEXT NOT NULL,
+			type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			content TEXT NOT NULL,
+			tool_name TEXT,
+			project TEXT,
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			FOREIGN KEY (session_id) REFERENCES sessions(id)
+		);
+		INSERT INTO sessions (id, project, directory) VALUES ('s1', 'mnemo', '/tmp/mnemo');
+		INSERT INTO observations (session_id, type, title, content, project)
+		VALUES ('s1', 'manual', 'partial', 'partial content', 'mnemo');
+	`)
+	if err != nil {
+		_ = db.Close()
+		t.Fatalf("seed partial db: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close partial db: %v", err)
+	}
+
+	s, err := New(FallbackConfig(dataDir))
+	if err != nil {
+		t.Fatalf("new store after partial schema: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	var scope string
+	if err := s.db.QueryRow(`SELECT scope FROM observations WHERE title = 'partial'`).Scan(&scope); err != nil {
+		t.Fatalf("query backfilled scope: %v", err)
+	}
+	if scope != "project" {
+		t.Fatalf("scope = %q, want project", scope)
+	}
+
+	for _, name := range []string{"projects", "observation_tags", "idx_obs_scope", "obs_fts_insert"} {
+		var count int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name = ?`, name).Scan(&count); err != nil {
+			t.Fatalf("lookup %s: %v", name, err)
+		}
+		if count == 0 {
+			t.Fatalf("upgraded store missing %s", name)
+		}
+	}
+}
+
 func TestMigrationAndHelperEdgeBranches(t *testing.T) {
 	t.Run("migrate is idempotent with existing triggers", func(t *testing.T) {
 		s := newTestStore(t)
