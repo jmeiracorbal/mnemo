@@ -22,7 +22,6 @@ INSTALL_DIR="${MNEMO_INSTALL_DIR:-$HOME/.local/bin}"
 DRY_RUN="${MNEMO_DRY_RUN:-false}"
 MNEMO_VERSION="${MNEMO_VERSION:-}"
 AGENT="${MNEMO_AGENT:-auto}"
-TMP_SCRIPTS=""
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -97,10 +96,6 @@ check_version_compat() {
   local base_url="https://github.com/${REPO}/releases/download/${version}"
 
   info "Checking compatibility of pinned version ${version}..."
-
-  if ! probe_url "${base_url}/mnemo-scripts.tar.gz.sha256"; then
-    err "Release ${version} does not ship mnemo-scripts.tar.gz. This asset is required by the current installer. Unset MNEMO_VERSION to use the latest release."
-  fi
 
   if ! probe_url "${base_url}/mnemo-${platform}.sha256"; then
     err "Release ${version} does not ship a binary for ${platform}. Unset MNEMO_VERSION to use the latest release."
@@ -177,188 +172,14 @@ check_path() {
   fi
 }
 
-# ── download scripts archive ───────────────────────────────────────────────────
+# ── setup delegation ───────────────────────────────────────────────────────────
 
-download_scripts() {
-  local version="$1"
-  local base_url="https://github.com/${REPO}/releases/download/${version}"
-  local archive_url="${base_url}/mnemo-scripts.tar.gz"
-  local checksum_url="${base_url}/mnemo-scripts.tar.gz.sha256"
+setup_agent() {
+  local agent="$1" mnemo_bin="$2"
 
-  TMP_SCRIPTS=$(mktemp -d)
-  trap 'rm -rf "$TMP_SCRIPTS"' EXIT
-
-  info "Downloading scripts archive..."
-  local tmp_archive
-  tmp_archive=$(mktemp)
-
-  fetch "$archive_url" "$tmp_archive" || err "Scripts archive download failed: ${archive_url}"
-
-  local checksum_text expected_hash actual_hash
-  checksum_text=$(fetch_stdout "$checksum_url") || err "Scripts checksum download failed: ${checksum_url}"
-  expected_hash=$(printf '%s\n' "$checksum_text" | awk '{print $1}')
-  [ -n "$expected_hash" ] || err "Scripts checksum missing or malformed: ${checksum_url}"
-
-  actual_hash=$(shasum -a 256 "$tmp_archive" | awk '{print $1}')
-  if [ "$expected_hash" != "$actual_hash" ]; then
-    err "Checksum mismatch for scripts archive. Expected: ${expected_hash}, got: ${actual_hash}"
-  fi
-
-  tar -xzf "$tmp_archive" -C "$TMP_SCRIPTS" --strip-components=1
-  rm -f "$tmp_archive"
-  ok "Scripts ready"
-}
-
-# ── setup: Claude Code ─────────────────────────────────────────────────────────
-
-setup_claudecode() {
-  local mnemo_bin="$1"
-  local claude_dir="$HOME/.claude"
-  local mcp_json="$claude_dir/.mcp.json"
-
-  info "Configuring Claude Code..."
-  mkdir -p "$claude_dir"
-
-  local result
-  result=$(printf '{"mcpServers":{"mnemo":{"command":"%s","args":["mcp","--tools=agent"]}}}' \
-    "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
-  ok "~/.claude/.mcp.json: ${result}"
-
-  "$mnemo_bin" install-instructions --agent=claudecode
-  ok "Global Claude Code instructions installed. Run 'mnemo init --agent=claudecode' in projects that should use mnemo."
-}
-
-# ── setup: Cursor ──────────────────────────────────────────────────────────────
-
-setup_cursor() {
-  local mnemo_bin="$1"
-  local hooks_dir="$HOME/.cursor/hooks"
-  local mcp_json="$HOME/.cursor/mcp.json"
-  local hooks_json="$HOME/.cursor/hooks.json"
-
-  info "Configuring Cursor..."
-
-  mkdir -p "$hooks_dir"
-  cp "$TMP_SCRIPTS/cursor/hooks/before-submit-prompt.sh" "$hooks_dir/"
-  cp "$TMP_SCRIPTS/cursor/hooks/stop.sh" "$hooks_dir/"
-  chmod +x "$hooks_dir/before-submit-prompt.sh" "$hooks_dir/stop.sh"
-  ok "Hook scripts installed to ${hooks_dir}"
-
-  local result
-  result=$(printf '{"mcpServers":{"mnemo":{"command":"%s","args":["mcp","--tools=agent"]}}}' \
-    "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
-  ok "~/.cursor/mcp.json: ${result}"
-
-  result=$(printf '{"version":1,"hooks":{"beforeSubmitPrompt":[{"command":"%s/before-submit-prompt.sh"}],"stop":[{"command":"%s/stop.sh"}]}}' \
-    "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
-  ok "~/.cursor/hooks.json: ${result}"
-
-  "$mnemo_bin" install-instructions --agent=cursor
-  ok "Global Cursor hooks and instructions installed. Run 'mnemo init --agent=cursor' in projects that should use mnemo."
-}
-
-# ── setup: Codex ──────────────────────────────────────────────────────────────
-
-setup_codex() {
-  local mnemo_bin="$1"
-  local codex_dir="$HOME/.codex"
-  local hooks_dir="$codex_dir/hooks"
-  local hooks_json="$codex_dir/hooks.json"
-  local codex_config="$codex_dir/config.toml"
-  info "Configuring Codex..."
-
-  mkdir -p "$hooks_dir"
-  cp "$TMP_SCRIPTS/codex/hooks/session-start.sh" "$hooks_dir/"
-  cp "$TMP_SCRIPTS/codex/hooks/stop.sh" "$hooks_dir/"
-  cp "$TMP_SCRIPTS/codex/hooks/mnemo-protocol.md" "$hooks_dir/"
-  chmod +x "$hooks_dir/session-start.sh" "$hooks_dir/stop.sh"
-  ok "Hook scripts installed to ${hooks_dir}"
-
-  touch "$codex_config"
-
-  if grep -q '^\[mcp_servers\.mnemo\]' "$codex_config" 2>/dev/null; then
-    local tmp_mcp
-    tmp_mcp=$(mktemp)
-    awk -v bin="$mnemo_bin" '
-      /^\[mcp_servers\.mnemo\]/{
-        print "[mcp_servers.mnemo]"
-        print "command = \"" bin "\""
-        print "args = [\"mcp\", \"--tools=agent\"]"
-        skip=1; next
-      }
-      skip && /^\[/{skip=0}
-      !skip{print}
-    ' "$codex_config" > "$tmp_mcp"
-    if mv "$tmp_mcp" "$codex_config"; then
-      ok "$HOME/.codex/config.toml: mnemo MCP updated"
-    else
-      rm -f "$tmp_mcp"
-      err "Failed to update $HOME/.codex/config.toml"
-    fi
-  else
-    tail -c1 "$codex_config" | grep -q $'\n' || printf '\n' >> "$codex_config"
-    printf '\n[mcp_servers.mnemo]\ncommand = "%s"\nargs = ["mcp", "--tools=agent"]\n' "$mnemo_bin" >> "$codex_config"
-    ok "$HOME/.codex/config.toml: mnemo MCP configured"
-  fi
-
-  local result
-  result=$(printf '{"hooks":{"SessionStart":[{"matcher":"startup|resume","hooks":[{"type":"command","command":"%s/session-start.sh","statusMessage":"Loading mnemo memory...","timeout":10}]}],"Stop":[{"matcher":"","hooks":[{"type":"command","command":"%s/stop.sh","timeout":10}]}]}}' \
-    "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
-  ok "~/.codex/hooks.json: ${result}"
-
-  "$mnemo_bin" install-instructions --agent=codex
-  ok "Global Codex hooks and instructions installed. Run 'mnemo init --agent=codex' in projects that should use mnemo."
-}
-
-# ── setup: Windsurf ────────────────────────────────────────────────────────────
-
-setup_windsurf() {
-  local mnemo_bin="$1"
-  local hooks_dir="$HOME/.codeium/windsurf/hooks"
-  local mcp_json="$HOME/.codeium/windsurf/mcp_config.json"
-  local hooks_json="$HOME/.codeium/windsurf/hooks.json"
-  info "Configuring Windsurf..."
-
-  mkdir -p "$hooks_dir"
-  cp "$TMP_SCRIPTS/windsurf/hooks/pre-user-prompt.sh" "$hooks_dir/"
-  cp "$TMP_SCRIPTS/windsurf/hooks/post-cascade-response.sh" "$hooks_dir/"
-  chmod +x "$hooks_dir/pre-user-prompt.sh" "$hooks_dir/post-cascade-response.sh"
-  ok "Hook scripts installed to ${hooks_dir}"
-
-  local result
-  result=$(printf '{"mcpServers":{"mnemo":{"command":"%s","args":["mcp","--tools=agent"]}}}' \
-    "$mnemo_bin" | "$mnemo_bin" json-merge "$mcp_json")
-  ok "~/.codeium/windsurf/mcp_config.json: ${result}"
-
-  result=$(printf '{"hooks":{"pre_user_prompt":[{"command":"%s/pre-user-prompt.sh"}],"post_cascade_response_with_transcript":[{"command":"%s/post-cascade-response.sh"}]}}' \
-    "$hooks_dir" "$hooks_dir" | "$mnemo_bin" json-merge "$hooks_json")
-  ok "~/.codeium/windsurf/hooks.json: ${result}"
-
-  "$mnemo_bin" install-instructions --agent=windsurf
-  ok "Global Windsurf hooks and instructions installed. Run 'mnemo init --agent=windsurf' in projects that should use mnemo."
-}
-
-# ── setup: OpenCode ────────────────────────────────────────────────────────────
-
-setup_opencode() {
-  local mnemo_bin="$1"
-  local plugins_dir="$HOME/.config/opencode/plugins"
-  local opencode_json="$HOME/.config/opencode/opencode.json"
-
-  info "Configuring OpenCode..."
-
-  mkdir -p "$plugins_dir"
-  cp "$TMP_SCRIPTS/opencode/plugins/mnemo.ts" "$plugins_dir/"
-  cp "$TMP_SCRIPTS/opencode/plugins/mnemo-protocol.md" "$plugins_dir/"
-  ok "Plugin installed to ${plugins_dir}"
-
-  local result
-  result=$(printf '{"mcp":{"mnemo":{"type":"local","command":["%s","mcp","--tools=agent"]}}}' \
-    "$mnemo_bin" | "$mnemo_bin" json-merge "$opencode_json")
-  ok "~/.config/opencode/opencode.json: ${result}"
-
-  "$mnemo_bin" install-instructions --agent=opencode
-  ok "Global OpenCode plugin and instructions installed. Run 'mnemo init --agent=opencode' in projects that should use mnemo."
+  info "Configuring ${agent}..."
+  "$mnemo_bin" setup refresh --agent="$agent" --mnemo-bin="$mnemo_bin"
+  ok "Global ${agent} setup refreshed. Run 'mnemo init --agent=${agent}' in projects that should use mnemo."
 }
 
 
@@ -398,18 +219,6 @@ detect_agents() {
     found=" claudecode"
   fi
   echo "$found"
-}
-
-setup_agent() {
-  local agent="$1" mnemo_bin="$2"
-  case "$agent" in
-    claudecode) setup_claudecode "$mnemo_bin" ;;
-    cursor) setup_cursor "$mnemo_bin" ;;
-    windsurf) setup_windsurf "$mnemo_bin" ;;
-    codex) setup_codex "$mnemo_bin" ;;
-    opencode) setup_opencode "$mnemo_bin" ;;
-    *) err "Unknown agent: ${agent}. Valid options: auto | claudecode | cursor | windsurf | codex | opencode | all" ;;
-  esac
 }
 
 # ── main ───────────────────────────────────────────────────────────────────────
@@ -452,8 +261,6 @@ main() {
     mnemo_bin=$(command -v mnemo 2>/dev/null) || err "mnemo not found in ${INSTALL_DIR} or PATH"
     warn "Using mnemo from PATH: ${mnemo_bin} (expected: ${INSTALL_DIR}/mnemo)"
   fi
-
-  download_scripts "$version"
 
   case "$AGENT" in
     auto)
