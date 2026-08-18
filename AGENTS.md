@@ -25,7 +25,7 @@ Known prior failure: `post-compaction.sh` referenced in hook config, real script
 
 ### 3. Never change version references partially
 
-The binary version is injected at build time via ldflags — no code change needed. Plugin metadata files contain the version string explicitly and must be updated on every release.
+The binary version is injected at build time via ldflags — no code change needed. The MCP server must advertise that same binary version; do not hardcode a separate MCP version string. Plugin metadata files contain the version string explicitly and must be updated on every release.
 
 Required files on every version bump:
 
@@ -66,14 +66,11 @@ Do not tag from a feature branch or from stale local `main`.
 
 Distinguish clearly between binary installation, plugin installation, hook registration, setup-side file modifications, and MCP configuration. If the plugin depends on the binary being in `PATH`, state that explicitly near the install steps.
 
-### 7. Project identity derivation must stay consistent across hooks
+### 7. Project identity is the `.mnemo` id
 
-All hooks must derive `PROJECT` the same way:
+In this repository, shipped hooks and plugins must resolve `PROJECT` from the `id` field of `.mnemo`. They must not derive identity from the filesystem path.
 
-- inside `HOME`: full path relative to `HOME`, normalized (`tr '/' '-'`, lowercased)
-- outside `HOME`: same normalization from CWD
-
-Any inconsistency fragments stored memory across sessions. Any change to this logic is a storage compatibility change.
+Any second identity scheme fragments stored memory. Changing this is a storage compatibility change.
 
 ### 8. Tests must validate the shipped plugin, not only installer internals
 
@@ -89,7 +86,7 @@ Before committing any change that touches hooks, plugin metadata, setup/install 
 - [ ] Affected hook or setup flow works end-to-end
 - [ ] Hook filenames in `hooks.json` match actual embedded scripts
 - [ ] Version strings updated in all required metadata files
-- [ ] PROJECT derivation is consistent across all hooks
+- [ ] Shipped hooks resolve PROJECT from `.mnemo` id
 - [ ] No previously working path was broken
 
 State what was verified in the commit message. Do not claim completion without verification evidence.
@@ -100,7 +97,8 @@ State what was verified in the commit message. Do not claim completion without v
 - Update only one version file
 - Trust tests that ignore shipped plugin files
 - Change docs without checking actual implementation
-- Introduce a second way to derive project identity
+- Introduce a second way to resolve project identity besides the `.mnemo` id
+- Hardcode an MCP server version separate from the binary version
 - Assume release metadata is centralized if it is not
 
 ## Expected output style

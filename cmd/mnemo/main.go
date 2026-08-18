@@ -116,7 +116,11 @@ func runMCP(s *store.Store) {
 	}
 
 	allowlist := mcpserver.ResolveTools(tools)
-	srv := mcpserver.NewServerWithTools(s, allowlist)
+	srv, err := mcpserver.NewServerWithTools(s, version, allowlist)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: mcp server: %v\n", err)
+		os.Exit(1)
+	}
 
 	if err := server.ServeStdio(srv); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: mcp server error: %v\n", err)

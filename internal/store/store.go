@@ -1,8 +1,8 @@
-// Package store implements the persistent memory engine for Engram.
+// Package store implements the persistent memory engine for mnemo.
 //
 // It uses SQLite with FTS5 full-text search to store and retrieve
-// observations from AI coding sessions. This is the core of Engram —
-// everything else (HTTP server, MCP server, CLI, plugins) talks to this.
+// observations from AI coding sessions. CLI, MCP, and agent integrations
+// talk to this package.
 package store
 
 import (

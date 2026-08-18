@@ -6,7 +6,10 @@ import (
 )
 
 func TestEmbeddedToolDescriptionsAreRegistered(t *testing.T) {
-	srv := NewServerWithTools(nil, nil)
+	srv, err := NewServerWithTools(nil, "test", nil)
+	if err != nil {
+		t.Fatalf("NewServerWithTools: %v", err)
+	}
 	tools := srv.ListTools()
 
 	cases := map[string]string{
@@ -33,5 +36,14 @@ func TestEmbeddedToolDescriptionsAreRegistered(t *testing.T) {
 		if got := tool.Tool.Description; got != strings.TrimSpace(want) {
 			t.Fatalf("%s description mismatch\nwant:\n%s\n\ngot:\n%s", name, strings.TrimSpace(want), got)
 		}
+	}
+}
+
+func TestNewServerWithToolsRequiresVersion(t *testing.T) {
+	if _, err := NewServerWithTools(nil, "", nil); err == nil {
+		t.Fatal("expected error when version is empty")
+	}
+	if _, err := NewServerWithTools(nil, "   ", nil); err == nil {
+		t.Fatal("expected error when version is whitespace")
 	}
 }
