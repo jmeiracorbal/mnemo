@@ -130,10 +130,16 @@ All supported agents now use global hook/configuration surfaces where available.
 
 ```
 project/
-└── .mnemo                        ← project ID + configured agents
+├── .mnemo                        ← project ID + configured agents
+├── AGENTS.md                     ← mnemo memory authority (managed section)
+├── CLAUDE.md                     ← Claude-specific block (when --agent=claudecode)
+├── .cursor/rules/mnemo.mdc       ← Cursor project rules (when --agent=cursor)
+└── .windsurf/rules/mnemo.md      ← Windsurf project rules (when --agent=windsurf)
 ```
 
-`mnemo init` no longer appends mnemo protocol sections to project `AGENTS.md`, `CLAUDE.md`, Cursor rules, or Windsurf rules. Those instructions are installed globally by `install.sh` / `mnemo install-instructions` and are activated by the `.mnemo` marker.
+By default, `mnemo init` writes project-level memory authority rules so agents in cloud/CI workspaces prioritize mnemo over `MEMORY.md` and native memory. Use `--no-project-rules` to create only the `.mnemo` marker. Global hooks, MCP, and the optional `mnemo-memory` skill are installed by `install.sh` / `mnemo setup refresh` (or `mnemo setup <agent>`).
+
+Run `mnemo setup cursor` (or any supported agent) as an Engram-style alias for `mnemo setup refresh --agent=cursor`.
 
 ## The `.mnemo` marker
 

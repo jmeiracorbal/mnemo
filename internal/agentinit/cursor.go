@@ -64,6 +64,7 @@ func cursorRuntimeAssets() []assetTarget {
 	return []assetTarget{
 		{Asset: "scripts/cursor/hooks/before-submit-prompt.sh", Path: filepath.Join(".cursor", "hooks", "before-submit-prompt.sh"), Mode: 0755},
 		{Asset: "scripts/cursor/hooks/stop.sh", Path: filepath.Join(".cursor", "hooks", "stop.sh"), Mode: 0755},
+		{Asset: "assets/protocol/session-start-protocol.md", Path: filepath.Join(".cursor", "hooks", "session-start-protocol.md"), Mode: 0644},
 	}
 }
 
