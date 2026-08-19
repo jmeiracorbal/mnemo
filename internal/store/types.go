@@ -321,6 +321,24 @@ type ProjectMergeResult struct {
 	EnrollmentTransferred bool             `json:"enrollment_transferred"`
 }
 
+type ProjectRenameSelector struct {
+	ID   string `json:"id,omitempty"`
+	Path string `json:"path,omitempty"`
+}
+
+type ProjectRenamePlan struct {
+	Project       ProjectSummary `json:"project"`
+	Selector      string         `json:"selector"`
+	SelectorValue string         `json:"selector_value"`
+	NewName       string         `json:"new_name"`
+	WillChange    bool           `json:"will_change"`
+}
+
+type ProjectRenameResult struct {
+	Plan    ProjectRenamePlan `json:"plan"`
+	Renamed bool              `json:"renamed"`
+}
+
 type PassiveCaptureParams struct {
 	SessionID string `json:"session_id"`
 	Content   string `json:"content"`

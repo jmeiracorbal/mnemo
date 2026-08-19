@@ -14,6 +14,7 @@ Usage:
   mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
   mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]  Merge one project into another
   mnemo projects merge --auto-by-path (--dry-run|--yes) [--json]  Merge duplicate project identities by shared directory
+  mnemo projects rename (--id=PROJECT|--path=DIR) --name=NAME (--dry-run|--yes) [--json]  Rename project display metadata
   mnemo memories review [--project=PROJECT] [--topic=TOPIC_KEY] [--json]  Review potential memory conflicts
   mnemo memories mark-reviewed OBSERVATION_ID [--reason=TEXT]  Mark a memory as reviewed
   mnemo memories mark-stale OBSERVATION_ID [--reason=TEXT]  Mark a memory as stale
@@ -81,6 +82,14 @@ Projects list options:
   --unused-since=AGE   Show projects not seen since AGE (for example 90d, 24h, or 2026-01-01)
   --empty              Show projects with no observations or prompts
   --json               Emit a stable JSON project list
+
+Projects rename options:
+  --id=PROJECT         Select a project by stable project ID
+  --path=DIR           Select a project by latest session directory
+  --name=NAME          Set project display name
+  --dry-run            Preview the rename without writing changes
+  --yes                Apply the rename
+  --json               Emit stable JSON output
 
 Tool profiles for mcp:
   --tools=agent    17 tools for AI agents (default when using plugin)

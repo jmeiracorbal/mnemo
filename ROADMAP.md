@@ -8,14 +8,12 @@ Build on project inventory and consolidation before introducing more destructive
 
 ```bash
 mnemo projects prune
-mnemo projects rename --id <project> --name <name>
-mnemo projects rename --path <dir> --name <name>
 ```
 
 Near-term goals:
 
 - keep `prune` behind explicit safety checks after merge/consolidation is reliable;
-- revisit `rename` after consolidation, using explicit selectors (`--id`, `--path`, or a shared selector flag) instead of ambiguous positional arguments.
+- continue using explicit selectors and dry-run/apply guardrails for project maintenance commands.
 
 ## Local sync
 

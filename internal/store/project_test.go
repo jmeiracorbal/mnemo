@@ -1,6 +1,9 @@
 package store
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestListProjectSummariesIncludesRegisteredAndActivityProjects(t *testing.T) {
 	s := newTestStore(t)
@@ -204,6 +207,106 @@ func TestMergeProjectsConsolidatesProjectData(t *testing.T) {
 	}
 	if sourceMutations != 0 || destinationMutations != 3 {
 		t.Fatalf("unexpected sync mutation counts: source=%d destination=%d", sourceMutations, destinationMutations)
+	}
+}
+
+func TestRenameProjectUpdatesMetadataWithoutChangingActivityProjectID(t *testing.T) {
+	s := newTestStore(t)
+
+	if err := s.CreateSession("s-alpha", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("create alpha session: %v", err)
+	}
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "s-alpha",
+		Type:      "decision",
+		Title:     "Alpha rename",
+		Content:   "Keep activity project id stable",
+		Project:   "alpha",
+		Scope:     "project",
+	}); err != nil {
+		t.Fatalf("add alpha observation: %v", err)
+	}
+
+	result, err := s.RenameProject(ProjectRenameSelector{ID: "alpha"}, "Alpha Project")
+	if err != nil {
+		t.Fatalf("rename project: %v", err)
+	}
+	if !result.Renamed || result.Plan.Project.ID != "alpha" || result.Plan.NewName != "Alpha Project" {
+		t.Fatalf("unexpected rename result: %+v", result)
+	}
+
+	project, err := s.GetProjectByID("alpha")
+	if err != nil {
+		t.Fatalf("get project metadata: %v", err)
+	}
+	if project == nil || project.Name != "Alpha Project" {
+		t.Fatalf("project metadata = %+v, want renamed metadata", project)
+	}
+
+	projects, err := s.ListProjectSummaries()
+	if err != nil {
+		t.Fatalf("list project summaries: %v", err)
+	}
+	summary := findProjectSummary(projects, "alpha")
+	if summary == nil || summary.Name != "Alpha Project" || summary.ObservationCount != 1 || summary.SessionCount != 1 {
+		t.Fatalf("unexpected renamed summary: %+v in %+v", summary, projects)
+	}
+
+	results, err := s.Search("Alpha rename", SearchOptions{Project: "alpha", Limit: 10})
+	if err != nil {
+		t.Fatalf("search renamed project id: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected activity to remain under project id alpha, got %d", len(results))
+	}
+	results, err = s.Search("Alpha rename", SearchOptions{Project: "Alpha Project", Limit: 10})
+	if err != nil {
+		t.Fatalf("search display name: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected no activity under display name, got %d", len(results))
+	}
+}
+
+func TestRenameProjectSelectsByPath(t *testing.T) {
+	s := newTestStore(t)
+
+	if err := s.CreateSession("s-alpha", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("create alpha session: %v", err)
+	}
+
+	result, err := s.RenameProject(ProjectRenameSelector{Path: "/tmp/alpha/."}, "Alpha Project")
+	if err != nil {
+		t.Fatalf("rename project by path: %v", err)
+	}
+	if !result.Renamed || result.Plan.Selector != "path" || result.Plan.SelectorValue != "/tmp/alpha" {
+		t.Fatalf("unexpected path rename result: %+v", result)
+	}
+	project, err := s.GetProjectByID("alpha")
+	if err != nil {
+		t.Fatalf("get project metadata: %v", err)
+	}
+	if project == nil || project.Name != "Alpha Project" {
+		t.Fatalf("project metadata = %+v, want renamed metadata", project)
+	}
+}
+
+func TestBuildProjectRenamePlanByPathRejectsAmbiguousPath(t *testing.T) {
+	s := newTestStore(t)
+
+	if err := s.CreateSession("s-alpha", "alpha", "/tmp/shared"); err != nil {
+		t.Fatalf("create alpha session: %v", err)
+	}
+	if err := s.CreateSession("s-beta", "beta", "/tmp/shared"); err != nil {
+		t.Fatalf("create beta session: %v", err)
+	}
+
+	_, err := s.BuildProjectRenamePlan(ProjectRenameSelector{Path: "/tmp/shared/."}, "Shared")
+	if err == nil {
+		t.Fatal("expected ambiguous path error")
+	}
+	if !strings.Contains(err.Error(), "matches multiple projects") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
