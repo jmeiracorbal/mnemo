@@ -68,6 +68,8 @@ func main() {
 		runInit(s)
 	case "projects":
 		runProjects(s)
+	case "memories":
+		runMemories(s)
 	case "migrate":
 		runMigrateProjects(s)
 	case "mcp":

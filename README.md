@@ -51,6 +51,7 @@ mnemo --version
 - **Full CLI:** save, search, export, import, inspect, and diagnose memories from the terminal
 - **Project inventory:** `mnemo projects list` shows known projects; `mnemo projects merge` consolidates duplicate identities with dry-run planning
 - **Project maintenance skill:** helps agents detect duplicate project identities and propose safe merge plans
+- **Memory conflict review:** `mnemo memories review` surfaces duplicate or conflicting memories and the curation skill guides approved repairs
 - **Read-only diagnostics:** `mnemo doctor` checks project activation, global agent setup, MCP config, hooks/plugins, competing memory surfaces, and local store health
 - **Setup lifecycle:** `mnemo setup status`, `print-config`, `refresh`, and `uninstall` inspect and maintain global agent configuration
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
@@ -103,6 +104,16 @@ npx skills add jmeiracorbal/mnemo --skill mnemo-project-maintenance --global
 This command installs only the skill and agent links. It does not install the `mnemo` binary, hooks, MCP configuration, or the Claude Code plugin. Install mnemo first and ensure `mnemo` is available in `PATH`, because the skill invokes the CLI.
 
 Use it when an agent should inspect `mnemo projects list`, propose duplicate project merges, and apply only explicitly approved repairs.
+
+For proactive memory-quality checks, install the optional curation skill separately:
+
+```bash
+npx skills add jmeiracorbal/mnemo --skill mnemo-memory-curation --global
+```
+
+This command also installs only the skill and agent links. Install mnemo first and ensure `mnemo` is available in `PATH`, because the skill invokes `mnemo memories ...` commands.
+
+Use it when an agent should notice likely memory conflicts during normal work, warn the user, and apply only explicitly approved repairs through mnemo commands.
 
 ### 3. Enable mnemo per project
 
@@ -293,6 +304,11 @@ mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for 
 mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
 mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]  Merge one project into another
 mnemo projects merge --auto-by-path (--dry-run|--yes) [--json]  Merge duplicate project identities by shared directory
+mnemo memories review [--project=PROJECT] [--topic=TOPIC_KEY] [--json]  Review potential memory conflicts
+mnemo memories mark-reviewed OBSERVATION_ID [--reason=TEXT]  Mark a memory as reviewed
+mnemo memories mark-stale OBSERVATION_ID [--reason=TEXT]  Mark a memory as stale
+mnemo memories supersede OLD_ID --by=NEW_ID [--reason=TEXT]  Mark a memory as superseded by another
+mnemo memories consolidate-topic --from=TOPIC --to=TOPIC (--dry-run|--yes) [--json]  Consolidate memory topic keys
 mnemo save <title> <content>         Save a memory
 mnemo search <query>                 Search memories
 mnemo context [project]              Show context from previous sessions

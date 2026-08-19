@@ -28,6 +28,15 @@ type Observation struct {
 	DeletedAt      sql.NullString `json:"deleted_at"`
 }
 
+type ObservationReview struct {
+	ObservationID int64          `json:"observation_id"`
+	State         string         `json:"state"`
+	Reason        string         `json:"reason"`
+	SupersededBy  sql.NullInt64  `json:"superseded_by"`
+	ReviewedAt    sql.NullString `json:"reviewed_at"`
+	UpdatedAt     string         `json:"updated_at"`
+}
+
 type ObservationTag struct {
 	ObservationID int64  `json:"observation_id"`
 	Tag           string `json:"tag"`

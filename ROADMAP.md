@@ -35,27 +35,17 @@ Goals:
 
 ## Memory curation
 
-Add a separate, explicitly invoked Agent Skill for memory maintenance. It should use admin and tag-management tools without expanding the normal `mnemo-memory` workflow.
+Build on memory conflict review with deeper, explicitly invoked maintenance flows. These should use explicit mnemo maintenance commands without expanding the normal `mnemo-memory` workflow or requiring agents to edit the store directly.
 
 Planned responsibilities:
 
 - inspect memory statistics and timelines;
-- identify duplicate, stale, or low-value observations;
+- identify low-value observations beyond duplicate or conflicting memories;
 - merge inconsistent tags and review tag usage;
-- consolidate evolving topics safely;
 - propose deletions before performing destructive operations;
-- produce a concise curation report.
+- produce broader curation reports across projects, tags, and time ranges.
 
-The skill must require a valid `.mnemo` marker, default to read-only analysis, and request explicit confirmation before deletion or broad mutation.
-
-## Memory conflicts and review
-
-Add higher-level review tools for memory quality:
-
-- compare possibly related memories;
-- surface contradictory decisions or stale patterns;
-- mark observations as reviewed;
-- identify topic keys that should be consolidated.
+The skill workflow must require a valid `.mnemo` marker, default to read-only analysis, and request explicit confirmation before deletion or broad mutation.
 
 ## Agent trace
 
