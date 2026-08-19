@@ -65,7 +65,7 @@ Near-term goals:
 
 - unificar el escritor de setup para que el binario sea la única autoridad sobre MCP, hooks, instrucciones globales y runtime files;
 - unificar la fuente de verdad del esquema para que sqlc y las migraciones no evolucionen por caminos paralelos;
-- repartir mejor las responsabilidades de `cmd/mnemo`, separando comandos de memoria, setup, diagnóstico y utilidades operativas;
+- `cmd/mnemo` separa memoria, init/migrate, MCP, setup, doctor, projects y utilidades operativas; `main.go` solo enruta;
 - `internal/agentinit` posee la lógica por agente (rutas, snippets, runtime, uninstall y doctor). `cmd/mnemo` orquesta CLI y no vuelve a ramificar por agente.
 
 ## Later-stage ideas

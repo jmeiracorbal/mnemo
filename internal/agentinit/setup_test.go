@@ -50,13 +50,16 @@ func TestRefreshWritesCodexFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
-	if len(updated) != 6 {
-		t.Fatalf("updated paths = %d, want 6 (%v)", len(updated), updated)
+	if len(updated) != 8 {
+		t.Fatalf("updated paths = %d, want 8 (%v)", len(updated), updated)
 	}
 
 	config := readTestFile(t, filepath.Join(home, ".codex", "config.toml"))
 	if !strings.Contains(config, `[mcp_servers.mnemo]`) || !strings.Contains(config, `command = "/bin/mnemo"`) {
 		t.Fatalf("unexpected codex config:\n%s", config)
+	}
+	if !strings.Contains(config, "experimental_compact_prompt_file") {
+		t.Fatalf("codex config missing compact prompt file:\n%s", config)
 	}
 	assertExecutable(t, filepath.Join(home, ".codex", "hooks", "session-start.sh"))
 }

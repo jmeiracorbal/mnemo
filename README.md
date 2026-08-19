@@ -45,14 +45,14 @@ mnemo --version
 ## Features
 
 - **Session hooks:** starts/ends sessions and injects memory context at the beginning of every conversation
-- **18 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_tag_stats`, and more, available directly inside your editor
+- **18 MCP tools:** `mem_save`, `mem_search`, `mem_context`, `mem_current_project`, `mem_doctor`, `mem_tag_stats`, and more, available directly inside your editor
 - **Passive capture:** extracts learnings from conversation transcripts automatically at session end
 - **Portable Agent Skill:** teaches compatible agents the complete mnemo workflow without weakening the always-active safety rules
 - **Full CLI:** save, search, export, import, inspect, and diagnose memories from the terminal
 - **Project inventory:** `mnemo projects list` shows known projects; `mnemo projects merge` consolidates duplicate identities with dry-run planning
 - **Project maintenance skill:** helps agents detect duplicate project identities and propose safe merge plans
 - **Memory conflict review:** `mnemo memories review` surfaces duplicate or conflicting memories and the curation skill guides approved repairs
-- **Read-only diagnostics:** `mnemo doctor` checks project activation, global agent setup, MCP config, hooks/plugins, and local store health
+- **Read-only diagnostics:** `mnemo doctor` checks project activation, global agent setup, MCP config, hooks/plugins, competing memory surfaces, and local store health
 - **Setup lifecycle:** `mnemo setup status`, `print-config`, `refresh`, and `uninstall` inspect and maintain global agent configuration
 - **Own storage:** isolated `~/.mnemo/memory.db`, created automatically on first run
 - **Claude Code + Cursor + Windsurf + Codex + OpenCode:** native integration for all five agents via their respective hook systems
@@ -81,7 +81,9 @@ This installs hook scripts to the agent's global directory and registers the MCP
 
 ### 2. Install the Agent Skill globally
 
-For the best agent behavior, install the portable `mnemo-memory` skill:
+`install.sh` and `mnemo setup refresh` embed the `mnemo-memory` skill at `~/.agents/skills/mnemo-memory/` and link Claude Code and Windsurf to it. You normally do not need a separate skill install step.
+
+If you prefer the skills CLI or need to refresh the skill manually:
 
 ```bash
 npx skills add jmeiracorbal/mnemo --skill mnemo-memory --global
@@ -91,7 +93,7 @@ The [skills CLI](https://github.com/vercel-labs/skills) keeps the canonical copy
 
 The skill is global, but it is guarded by the project marker. Its first step is to locate and validate `.mnemo`; outside an initialized project it performs no memory operation and never falls back to native or plaintext memory.
 
-The skill is recommended rather than required. Hooks, MCP, and the always-active project protocol remain functional without it. `mnemo init` prints the installation command when the canonical global skill is missing.
+The skill is recommended rather than required. Hooks, MCP, and the always-active project protocol remain functional without it. `mnemo init` prints the manual installation command only when the canonical global skill is missing after setup.
 
 For project inventory cleanup, install the optional maintenance skill separately:
 
@@ -119,6 +121,7 @@ Run from the project root:
 
 ```bash
 mnemo init --agent=claudecode   # or cursor, windsurf, codex, opencode, all
+# optional: --no-project-rules for .mnemo marker only
 ```
 
 This creates a `.mnemo` marker and records the selected agent in it. Agent hooks, MCP configuration, and the short conditional protocol live globally after installation; they activate only when a project has a valid `.mnemo` file.
@@ -141,10 +144,16 @@ All supported agents now use global hook/configuration surfaces where available.
 
 ```
 project/
-└── .mnemo                        ← project ID + configured agents
+├── .mnemo                        ← project ID + configured agents
+├── AGENTS.md                     ← mnemo memory authority (managed section)
+├── CLAUDE.md                     ← Claude-specific block (when --agent=claudecode)
+├── .cursor/rules/mnemo.mdc       ← Cursor project rules (when --agent=cursor)
+└── .windsurf/rules/mnemo.md      ← Windsurf project rules (when --agent=windsurf)
 ```
 
-`mnemo init` no longer appends mnemo protocol sections to project `AGENTS.md`, `CLAUDE.md`, Cursor rules, or Windsurf rules. Those instructions are installed globally by `install.sh` / `mnemo install-instructions` and are activated by the `.mnemo` marker.
+By default, `mnemo init` writes project-level memory authority rules inside managed `<!-- mnemo:start -->` … `<!-- mnemo:end -->` sections (or dedicated Cursor rule files) so agents in cloud/CI workspaces prioritize mnemo over `MEMORY.md` and native memory. Use `--no-project-rules` to create only the `.mnemo` marker. Global hooks, MCP, and the `mnemo-memory` skill are installed by `install.sh` / `mnemo setup refresh` (or `mnemo setup <agent>`).
+
+Run `mnemo setup cursor` (or any supported agent) as an Engram-style alias for `mnemo setup refresh --agent=cursor`.
 
 ## The `.mnemo` marker
 
@@ -193,7 +202,8 @@ Restart Claude Code after updating.
 
 | Hook | Trigger | Action |
 |---|---|---|
-| `SessionStart` (startup/resume/clear) | New session | Registers session, injects memory context |
+| `SessionStart` (startup/resume/clear) | New session | Registers session, injects memory context and deferred-tool loading protocol |
+| `UserPromptSubmit` | Each user message | Re-emits ToolSearch on first message; periodic save reminders |
 | `SessionStart` (compact) | After compaction | Recovers context from mnemo after context window reset |
 | `PostCompact` | During compaction | Persists compaction summary to mnemo |
 | `Stop` | Session ends | Marks session completed, warns if nothing was saved |
@@ -203,14 +213,14 @@ Restart Claude Code after updating.
 
 | Hook | Trigger | Action |
 |---|---|---|
-| `beforeSubmitPrompt` | First prompt of a conversation | Registers session, injects memory context |
+| `beforeSubmitPrompt` | First prompt of a conversation | Registers session, injects memory context and memory authority protocol |
 | `stop` | Conversation ends | Reads transcript JSONL for passive capture, closes session |
 
 ### Windsurf
 
 | Hook | Trigger | Action |
 |---|---|---|
-| `pre_user_prompt` | First prompt of a conversation | Registers session, injects memory context |
+| `pre_user_prompt` | First prompt of a conversation | Registers session, injects memory context and memory authority protocol |
 | `post_cascade_response_with_transcript` | After response | Reads transcript JSONL for passive capture, closes session |
 
 ### Codex
@@ -283,12 +293,13 @@ claude mcp add -s user mnemo-admin -- ~/.local/bin/mnemo mcp --tools=admin
 
 ```
 mnemo mcp [--tools=PROFILE]          Start MCP server (stdio)
-mnemo init [--agent=AGENT]           Activate mnemo in the current project (.mnemo)
+mnemo init [--agent=AGENT] [--no-project-rules]  Activate mnemo in the current project (.mnemo)
 mnemo install-instructions [--agent=AGENT]  Install global agent instructions
 mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
 mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
 mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual setup config snippets
 mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]  Refresh installed global setup files
+mnemo setup AGENT [--home=DIR] [--mnemo-bin=PATH]  Alias for setup refresh --agent=AGENT
 mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for an agent
 mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
 mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]  Merge one project into another
