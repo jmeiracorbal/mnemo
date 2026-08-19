@@ -1,6 +1,10 @@
 -- name: EnsureProject :exec
 INSERT OR IGNORE INTO projects (id, name) VALUES (?, ?);
 
+-- name: UpsertProjectName :exec
+INSERT INTO projects (id, name) VALUES (?, ?)
+ON CONFLICT(id) DO UPDATE SET name = excluded.name;
+
 -- name: GetProjectByID :one
 SELECT id, name, created_at FROM projects WHERE id = ?;
 

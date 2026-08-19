@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
@@ -202,6 +203,96 @@ func (s *Store) MergeProjects(from, to string) (*ProjectMergeResult, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+func (s *Store) BuildProjectRenamePlan(selector ProjectRenameSelector, newName string) (*ProjectRenamePlan, error) {
+	newName = strings.TrimSpace(newName)
+	if newName == "" {
+		return nil, fmt.Errorf("project name must not be empty")
+	}
+
+	selector.ID = strings.TrimSpace(selector.ID)
+	selector.Path = strings.TrimSpace(selector.Path)
+	if (selector.ID == "") == (selector.Path == "") {
+		return nil, fmt.Errorf("select exactly one project with id or path")
+	}
+
+	projects, err := s.ListProjectSummaries()
+	if err != nil {
+		return nil, err
+	}
+
+	var project ProjectSummary
+	selectorName := "id"
+	selectorValue := selector.ID
+	if selector.ID != "" {
+		found := false
+		for _, candidate := range projects {
+			if candidate.ID == selector.ID {
+				project = candidate
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("project %q not found", selector.ID)
+		}
+	} else {
+		selectorName = "path"
+		selectorValue = normalizeProjectPath(selector.Path)
+		var matches []ProjectSummary
+		for _, candidate := range projects {
+			if normalizeProjectPath(candidate.Directory) == selectorValue {
+				matches = append(matches, candidate)
+			}
+		}
+		switch len(matches) {
+		case 0:
+			return nil, fmt.Errorf("project path %q not found", selector.Path)
+		case 1:
+			project = matches[0]
+		default:
+			ids := make([]string, 0, len(matches))
+			for _, match := range matches {
+				ids = append(ids, match.ID)
+			}
+			return nil, fmt.Errorf("project path %q matches multiple projects: %s", selector.Path, strings.Join(ids, ", "))
+		}
+	}
+
+	return &ProjectRenamePlan{
+		Project:       project,
+		Selector:      selectorName,
+		SelectorValue: selectorValue,
+		NewName:       newName,
+		WillChange:    project.Name != newName,
+	}, nil
+}
+
+func (s *Store) RenameProject(selector ProjectRenameSelector, newName string) (*ProjectRenameResult, error) {
+	plan, err := s.BuildProjectRenamePlan(selector, newName)
+	if err != nil {
+		return nil, err
+	}
+	result := &ProjectRenameResult{Plan: *plan, Renamed: plan.WillChange}
+	if !plan.WillChange {
+		return result, nil
+	}
+	if err := s.q.UpsertProjectName(context.Background(), dbgen.UpsertProjectNameParams{
+		ID:   plan.Project.ID,
+		Name: plan.NewName,
+	}); err != nil {
+		return nil, fmt.Errorf("rename project metadata: %w", err)
+	}
+	return result, nil
+}
+
+func normalizeProjectPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	return filepath.Clean(path)
 }
 
 func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) {

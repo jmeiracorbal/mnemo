@@ -93,7 +93,7 @@ mnemo search "SQLite" --project myapp
 | **Portable Agent Skills** | Skills teach compatible agents when and how to use mnemo without falling back to native memory. |
 | **Passive capture** | Extracts useful learnings from transcripts and subagent output. |
 | **Diagnostics** | `mnemo doctor` checks project activation, global setup, MCP, hooks, competing memory surfaces and store health. |
-| **Project maintenance** | `mnemo projects list` and `mnemo projects merge` help consolidate duplicate project identities. |
+| **Project maintenance** | `mnemo projects list`, `mnemo projects merge` and `mnemo projects rename` help curate duplicate or unclear project identities. |
 | **Memory curation** | `mnemo memories review` surfaces duplicate or conflicting observations for approved repair. |
 
 ## Supported Agents

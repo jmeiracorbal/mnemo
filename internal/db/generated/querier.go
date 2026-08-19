@@ -119,6 +119,7 @@ type Querier interface {
 	UpdatePulledObservation(ctx context.Context, arg UpdatePulledObservationParams) error
 	UpdateSyncAckState(ctx context.Context, arg UpdateSyncAckStateParams) error
 	UpsertMemoryReviewState(ctx context.Context, arg UpsertMemoryReviewStateParams) error
+	UpsertProjectName(ctx context.Context, arg UpsertProjectNameParams) error
 	UpsertSession(ctx context.Context, arg UpsertSessionParams) error
 }
 
