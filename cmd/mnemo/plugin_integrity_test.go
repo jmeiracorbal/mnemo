@@ -209,6 +209,29 @@ func TestShippedMnemoProjectMaintenanceSkill(t *testing.T) {
 	}
 }
 
+func TestShippedMnemoMemoryCurationSkill(t *testing.T) {
+	skillPath := filepath.Join("..", "..", "skills", "mnemo-memory-curation", "SKILL.md")
+	data, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("read shipped memory curation skill: %v", err)
+	}
+	content := string(data)
+	required := []string{
+		"name: mnemo-memory-curation",
+		"description:",
+		"mnemo memories review --json",
+		"mnemo memories supersede OLD_ID --by=NEW_ID --reason=TEXT",
+		"Notify the user when likely conflicts are found during normal work",
+		"Never edit `~/.mnemo/memory.db`",
+		"mem_save",
+	}
+	for _, value := range required {
+		if !strings.Contains(content, value) {
+			t.Errorf("shipped memory curation skill missing %q", value)
+		}
+	}
+}
+
 type shippedSkillFrontmatter struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
@@ -236,6 +259,11 @@ func TestShippedSkillsHaveOpenAIMetadata(t *testing.T) {
 			DisplayName:      "mnemo Project Maintenance",
 			ShortDescription: "Detect and safely merge duplicate projects",
 			DefaultPrompt:    "Use $mnemo-project-maintenance to inspect mnemo project inventory, propose duplicate project merges, and apply only explicitly approved repairs.",
+		},
+		"mnemo-memory-curation": {
+			DisplayName:      "mnemo Memory Curation",
+			ShortDescription: "Detect and safely repair memory conflicts",
+			DefaultPrompt:    "Use $mnemo-memory-curation to proactively review mnemo memory conflicts, warn the user, and apply only explicitly approved repairs.",
 		},
 	}
 

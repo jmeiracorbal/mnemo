@@ -1,0 +1,4 @@
+interface:
+  display_name: "mnemo Memory Curation"
+  short_description: "Detect and safely repair memory conflicts"
+  default_prompt: "Use $mnemo-memory-curation to proactively review mnemo memory conflicts, warn the user, and apply only explicitly approved repairs."

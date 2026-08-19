@@ -14,6 +14,11 @@ Usage:
   mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
   mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]  Merge one project into another
   mnemo projects merge --auto-by-path (--dry-run|--yes) [--json]  Merge duplicate project identities by shared directory
+  mnemo memories review [--project=PROJECT] [--topic=TOPIC_KEY] [--json]  Review potential memory conflicts
+  mnemo memories mark-reviewed OBSERVATION_ID [--reason=TEXT]  Mark a memory as reviewed
+  mnemo memories mark-stale OBSERVATION_ID [--reason=TEXT]  Mark a memory as stale
+  mnemo memories supersede OLD_ID --by=NEW_ID [--reason=TEXT]  Mark a memory as superseded by another
+  mnemo memories consolidate-topic --from=TOPIC --to=TOPIC (--dry-run|--yes) [--json]  Consolidate memory topic keys
   mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
   mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
   mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual setup config snippets
@@ -60,6 +65,13 @@ Setup refresh options:
 Setup uninstall options:
   --agent=AGENT        Remove one agent or all agents (required)
   --home=DIR           Override home directory for global agent files
+
+Memory review options:
+  --project=PROJECT    Limit review/consolidation to one project
+  --scope=SCOPE        Limit review/consolidation to project or personal scope
+  --topic=TOPIC_KEY    Review one topic key
+  --limit=N            Limit conflict groups returned by review (default: 20)
+  --json               Emit stable JSON output
 
 Projects list options:
   --sort=FIELD         id | name | observations | last-seen (default: last-seen)

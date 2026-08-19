@@ -70,6 +70,8 @@ type Querier interface {
 	InsertSyncedChunk(ctx context.Context, chunkID string) error
 	IsProjectEnrolled(ctx context.Context, project string) (bool, error)
 	ListEnrolledProjects(ctx context.Context) ([]SyncEnrolledProject, error)
+	ListMemoryReviewCandidates(ctx context.Context, arg ListMemoryReviewCandidatesParams) ([]ListMemoryReviewCandidatesRow, error)
+	ListObservationIDsByTopic(ctx context.Context, arg ListObservationIDsByTopicParams) ([]int64, error)
 	ListObservationProjects(ctx context.Context) ([]sql.NullString, error)
 	ListObservationTags(ctx context.Context, observationID int64) ([]string, error)
 	ListObservations(ctx context.Context, arg ListObservationsParams) ([]ListObservationsRow, error)
@@ -116,6 +118,7 @@ type Querier interface {
 	UpdatePrompt(ctx context.Context, arg UpdatePromptParams) error
 	UpdatePulledObservation(ctx context.Context, arg UpdatePulledObservationParams) error
 	UpdateSyncAckState(ctx context.Context, arg UpdateSyncAckStateParams) error
+	UpsertMemoryReviewState(ctx context.Context, arg UpsertMemoryReviewStateParams) error
 	UpsertSession(ctx context.Context, arg UpsertSessionParams) error
 }
 

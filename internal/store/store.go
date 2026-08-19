@@ -97,10 +97,10 @@ type sqlRowScanner struct {
 	rows *sql.Rows
 }
 
-func (r sqlRowScanner) Next() bool        { return r.rows.Next() }
+func (r sqlRowScanner) Next() bool             { return r.rows.Next() }
 func (r sqlRowScanner) Scan(dest ...any) error { return r.rows.Scan(dest...) }
-func (r sqlRowScanner) Err() error        { return r.rows.Err() }
-func (r sqlRowScanner) Close() error      { return r.rows.Close() }
+func (r sqlRowScanner) Err() error             { return r.rows.Err() }
+func (r sqlRowScanner) Close() error           { return r.rows.Close() }
 
 type storeHooks struct {
 	exec    func(db execer, query string, args ...any) (sql.Result, error)
