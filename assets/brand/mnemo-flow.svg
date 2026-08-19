@@ -1,0 +1,37 @@
+<svg width="920" height="320" viewBox="0 0 920 320" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">mnemo architecture flow</title>
+  <desc id="desc">Agents connect to mnemo through hooks, MCP tools, and skills. mnemo stores project-scoped memories in SQLite with FTS5.</desc>
+  <rect width="920" height="320" rx="28" fill="#F8FAFC"/>
+  <defs>
+    <linearGradient id="g" x1="70" y1="44" x2="850" y2="276" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F5C7A"/>
+      <stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0F172A" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="46" y="70" width="210" height="180" rx="22" fill="white" stroke="#E2E8F0"/>
+    <rect x="354" y="70" width="210" height="180" rx="22" fill="white" stroke="#E2E8F0"/>
+    <rect x="662" y="70" width="210" height="180" rx="22" fill="white" stroke="#E2E8F0"/>
+  </g>
+  <text x="151" y="108" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="19" font-weight="700" fill="#0F172A">AI coding agents</text>
+  <text x="151" y="142" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">Claude Code · Codex</text>
+  <text x="151" y="166" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">Cursor · Windsurf</text>
+  <text x="151" y="190" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">OpenCode</text>
+  <text x="459" y="108" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="19" font-weight="700" fill="#0F172A">mnemo</text>
+  <text x="459" y="142" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">MCP tools</text>
+  <text x="459" y="166" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">session hooks</text>
+  <text x="459" y="190" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">portable skills</text>
+  <text x="767" y="108" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="19" font-weight="700" fill="#0F172A">Local memory</text>
+  <text x="767" y="142" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">SQLite + FTS5</text>
+  <text x="767" y="166" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">project-scoped</text>
+  <text x="767" y="190" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">offline-first</text>
+  <path d="M276 160H334" stroke="url(#g)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M326 148L340 160L326 172" stroke="url(#g)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M584 160H642" stroke="url(#g)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M634 148L648 160L634 172" stroke="url(#g)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="306" y="252" width="308" height="34" rx="17" fill="#ECFEFF" stroke="#A5F3FC"/>
+  <text x="460" y="274" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="13" font-weight="600" fill="#0F5C7A">One memory layer across every agent</text>
+</svg>
