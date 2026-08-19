@@ -94,6 +94,15 @@ CREATE TABLE projects (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE observation_reviews (
+    observation_id INTEGER PRIMARY KEY REFERENCES observations(id) ON DELETE CASCADE,
+    state TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    superseded_by INTEGER REFERENCES observations(id),
+    reviewed_at TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE VIRTUAL TABLE observations_fts USING fts5(
     title,
     content,
@@ -129,6 +138,8 @@ CREATE UNIQUE INDEX ux_user_prompts_sync_id ON user_prompts(sync_id) WHERE sync_
 CREATE INDEX idx_sync_mutations_target_seq ON sync_mutations(target_key, seq);
 CREATE INDEX idx_sync_mutations_pending ON sync_mutations(target_key, acked_at, seq);
 CREATE INDEX idx_sync_mutations_project ON sync_mutations(project);
+CREATE INDEX idx_review_state ON observation_reviews(state);
+CREATE INDEX idx_review_superseded_by ON observation_reviews(superseded_by);
 CREATE INDEX idx_obs_tags_obs ON observation_tags(observation_id);
 CREATE INDEX idx_obs_tags_tag ON observation_tags(tag);
 CREATE INDEX idx_ses_tags_ses ON session_tags(session_id);
