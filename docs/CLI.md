@@ -15,6 +15,7 @@ mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for 
 mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
 mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]  Merge one project into another
 mnemo projects merge --auto-by-path (--dry-run|--yes) [--json]  Merge duplicate project identities by shared directory
+mnemo projects rename (--id=PROJECT|--path=DIR) --name=NAME (--dry-run|--yes) [--json]  Rename project display metadata
 mnemo memories review [--project=PROJECT] [--topic=TOPIC_KEY] [--json]  Review potential memory conflicts
 mnemo memories mark-reviewed OBSERVATION_ID [--reason=TEXT]  Mark a memory as reviewed
 mnemo memories mark-stale OBSERVATION_ID [--reason=TEXT]  Mark a memory as stale
@@ -88,6 +89,13 @@ Merge duplicate project identities by shared directory:
 ```bash
 mnemo projects merge --auto-by-path --dry-run --json
 mnemo projects merge --auto-by-path --yes
+```
+
+Rename project display metadata without changing the stable project ID:
+
+```bash
+mnemo projects rename --id=myapp --name="My App" --dry-run
+mnemo projects rename --path=/path/to/myapp --name="My App" --yes
 ```
 
 Review memory conflicts:

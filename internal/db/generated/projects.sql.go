@@ -160,3 +160,18 @@ func (q *Queries) ListProjects(ctx context.Context) ([]Project, error) {
 	}
 	return items, nil
 }
+
+const upsertProjectName = `-- name: UpsertProjectName :exec
+INSERT INTO projects (id, name) VALUES (?, ?)
+ON CONFLICT(id) DO UPDATE SET name = excluded.name
+`
+
+type UpsertProjectNameParams struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (q *Queries) UpsertProjectName(ctx context.Context, arg UpsertProjectNameParams) error {
+	_, err := q.db.ExecContext(ctx, upsertProjectName, arg.ID, arg.Name)
+	return err
+}

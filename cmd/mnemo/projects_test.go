@@ -71,6 +71,30 @@ func TestParseProjectsMergeArgsAutoByPath(t *testing.T) {
 	}
 }
 
+func TestParseProjectsRenameArgsByID(t *testing.T) {
+	opts, err := parseProjectsRenameArgs([]string{"--id=alpha", "--name=Alpha Project", "--dry-run", "--json"})
+	if err != nil {
+		t.Fatalf("parse projects rename args: %v", err)
+	}
+	if opts.ID != "alpha" || opts.Path != "" || opts.Name != "Alpha Project" || !opts.DryRun || !opts.JSON || opts.Yes {
+		t.Fatalf("unexpected options: %+v", opts)
+	}
+}
+
+func TestParseProjectsRenameArgsRejectsAmbiguousSelector(t *testing.T) {
+	_, err := parseProjectsRenameArgs([]string{"--id=alpha", "--path=/tmp/alpha", "--name=Alpha", "--dry-run"})
+	if err == nil {
+		t.Fatal("expected selector conflict")
+	}
+}
+
+func TestParseProjectsRenameArgsRequiresSafetyFlag(t *testing.T) {
+	_, err := parseProjectsRenameArgs([]string{"--id=alpha", "--name=Alpha"})
+	if err == nil {
+		t.Fatal("expected safety flag error")
+	}
+}
+
 func TestProjectsListFiltersAndSorts(t *testing.T) {
 	projects := []store.ProjectSummary{
 		{ID: "beta", Name: "Beta", ObservationCount: 2, LastSeenAt: "2026-01-15 10:00:00"},
@@ -178,6 +202,44 @@ func TestPreferProjectMergeDestinationPrefersUUIDThenActivity(t *testing.T) {
 	lessActiveProject := store.ProjectSummary{ID: "11111111-2222-3333-4444-555555555555", ObservationCount: 1}
 	if !preferProjectMergeDestination(activeProject, lessActiveProject) {
 		t.Fatal("expected more active UUID project to be preferred")
+	}
+}
+
+func TestPrintProjectsListUsesRenamedProjectName(t *testing.T) {
+	projects := []store.ProjectSummary{{
+		ID:               "alpha",
+		Name:             "Alpha Project",
+		Directory:        "/tmp/alpha",
+		ObservationCount: 1,
+		SessionCount:     2,
+		PromptCount:      3,
+		LastSeenAt:       "2026-01-15 10:00:00",
+	}}
+	var out bytes.Buffer
+
+	printProjectsListTo(&out, projects)
+
+	got := out.String()
+	if !strings.Contains(got, "Alpha Project") {
+		t.Fatalf("table output missing renamed project name:\n%s", got)
+	}
+	if strings.Contains(got, "/tmp/alpha") {
+		t.Fatalf("table output should prefer explicit project name over directory:\n%s", got)
+	}
+}
+
+func TestPrintProjectsListFallsBackToDirectoryForUnrenamedProject(t *testing.T) {
+	projects := []store.ProjectSummary{{
+		ID:        "alpha",
+		Name:      "alpha",
+		Directory: "/tmp/alpha",
+	}}
+	var out bytes.Buffer
+
+	printProjectsListTo(&out, projects)
+
+	if got := out.String(); !strings.Contains(got, "/tmp/alpha") {
+		t.Fatalf("table output missing directory fallback:\n%s", got)
 	}
 }
 

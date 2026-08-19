@@ -97,7 +97,7 @@ mnemo search "SQLite" --project miapp
 | **Agent Skills portables** | Enseñan a los agentes compatibles cuándo y cómo usar mnemo sin recurrir a memoria nativa. |
 | **Captura pasiva** | Extrae aprendizajes útiles de transcripciones y salidas de subagentes. |
 | **Diagnóstico** | `mnemo doctor` comprueba activación, setup global, MCP, hooks, memorias competidoras y salud del store. |
-| **Mantenimiento de proyectos** | `mnemo projects list` y `mnemo projects merge` consolidan identidades duplicadas. |
+| **Mantenimiento de proyectos** | `mnemo projects list`, `mnemo projects merge` y `mnemo projects rename` ayudan a depurar identidades duplicadas o poco claras. |
 | **Curación de memoria** | `mnemo memories review` detecta observaciones duplicadas o conflictivas para reparación aprobada. |
 
 ## Agentes soportados
