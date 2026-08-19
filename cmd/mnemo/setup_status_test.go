@@ -100,6 +100,24 @@ func TestBuildSetupStatusReportChecksClaudeCodePluginHooks(t *testing.T) {
 	}
 }
 
+func TestBuildSetupStatusReportAllowsClaudeCodeWithoutPluginRegistry(t *testing.T) {
+	home := t.TempDir()
+
+	if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
+		t.Fatalf("install instructions: %v", err)
+	}
+	writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo"}}}`)
+
+	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
+	if report.Status != "ok" || report.Summary.OK != 1 || report.Summary.Warnings != 0 || report.Summary.Errors != 0 {
+		t.Fatalf("unexpected report: %+v", report)
+	}
+	row := report.Rows[0]
+	if row.Agent != "Claude" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "n/a" || row.Instructions != "yes" {
+		t.Fatalf("unexpected row: %+v", row)
+	}
+}
+
 func TestBuildSetupStatusReportCountsRuntimeErrors(t *testing.T) {
 	home := t.TempDir()
 

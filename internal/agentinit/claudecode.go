@@ -72,10 +72,13 @@ func claudeCodeCheckMCP(home string) Check {
 func claudeCodeCheckRuntime(home string) Check {
 	installPath, err := claudeMnemoPluginInstallPath(home)
 	if err != nil {
-		path := filepath.Join(home, ".claude", "plugins", "installed_plugins.json")
+		// install.sh/setup refresh configure Claude Code through MCP and global
+		// instructions. The Claude plugin is optional in that path, so an absent
+		// plugin registry or mnemo plugin is not a broken runtime surface.
 		if errors.Is(err, errClaudePluginRegistryNotFound) || errors.Is(err, errClaudeMnemoPluginNotFound) {
-			return checkWarning("claudecode", "runtime_files.claudecode", err.Error(), path)
+			return Check{}
 		}
+		path := filepath.Join(home, ".claude", "plugins", "installed_plugins.json")
 		return checkError("claudecode", "runtime_files.claudecode", err.Error(), path)
 	}
 	paths := []string{
