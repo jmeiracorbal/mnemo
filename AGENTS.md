@@ -59,8 +59,9 @@ When a PR has been approved, merged, and published to `main`, always follow the 
 6. Commit the version/docs update.
 7. Create the matching release tag.
 8. Push both the commit and the tag.
+9. Perform a clean release download/install test from the remote installer, using an isolated temporary `HOME` and `MNEMO_INSTALL_DIR` rather than the local git checkout. Verify that the downloaded binary reports the new tag, global setup has no warnings after install, project init/doctor succeeds in a fresh project, and at least one affected command works end-to-end.
 
-Do not tag from a feature branch or from stale local `main`.
+Do not tag from a feature branch or from stale local `main`. Do not treat a local rebuild from the git checkout as a substitute for the clean download/install verification.
 
 ### 6. Keep documentation accurate about what the plugin really does
 
