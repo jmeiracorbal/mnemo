@@ -45,6 +45,30 @@ Planned responsibilities:
 
 The skill workflow must require a valid `.mnemo` marker, default to read-only analysis, and request explicit confirmation before deletion or broad mutation.
 
+## Static agent memory migration
+
+Help users move from static agent memory files to mnemo as the canonical memory store, so agentic systems stop accumulating heavy `MEMORY.md`, multi-file Claude memories, editor rules, or other plaintext memory surfaces.
+
+Planned capabilities:
+
+- detect competing or oversized memory files such as `MEMORY.md`, Claude memory files, Cursor/Windsurf rules used as memory, and other static memory surfaces;
+- provide a dry-run importer that parses candidate memories into mnemo observations before writing anything;
+- preserve provenance for imported memories, including source file path, heading or section, import timestamp, and confidence;
+- deduplicate imported chunks against existing mnemo observations;
+- classify imported memories as decision, bugfix, discovery, pattern, config, preference, or manual;
+- keep instructions separate from memory, avoiding blind imports of agent operating instructions;
+- after approved import, replace heavy memory files with a minimal mnemo authority stub or archive them only by explicit user choice;
+- extend `mnemo doctor` to warn about competing static memory files and suggest the migration flow;
+- add an Agent Skill that can detect static-memory drift, propose a dry-run migration, request approval, run the approved import, and repair the project to use mnemo as the only memory store.
+
+Potential commands:
+
+```bash
+mnemo memories ingest --path MEMORY.md --dry-run --json
+mnemo memories ingest --agent=claudecode --path . --dry-run --json
+mnemo memories ingest --agent=all --path . --yes
+```
+
 ## Agent trace
 
 Add optional project trace metadata related to agent sessions and command execution.
