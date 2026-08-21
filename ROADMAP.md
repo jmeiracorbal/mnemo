@@ -69,15 +69,28 @@ mnemo memories ingest --agent=claudecode --path . --dry-run --json
 mnemo memories ingest --agent=all --path . --yes
 ```
 
-## Agent trace
+## Agent trace and memory provenance
 
-Add optional project trace metadata related to agent sessions and command execution.
+Add optional project trace metadata related to agent sessions, command execution, and memory provenance.
 
 Goals:
 
 - relate commands and actions to a project and session;
 - record commands executed for each project;
-- use trace data to improve passive capture and debugging.
+- record which agent and source created each session, prompt, passive capture, and observation;
+- distinguish memories created through CLI, MCP, hooks, skills, imports, and passive capture;
+- keep provenance metadata separate from project identity, which remains based on the `.mnemo` marker id;
+- expose filters and reports such as `--agent`, `--source`, and stats by agent to support review, trust, and debugging;
+- use trace and provenance data to improve passive capture, curation, and conflict review.
+
+Potential metadata fields:
+
+```txt
+agent: codex | claudecode | cursor | windsurf | opencode | cli | unknown
+source: mcp | cli | hook | passive_capture | import | skill
+tool: mem_save | capture | session_end | ingest | ...
+model: optional model identifier when available
+```
 
 ## Architecture alignment
 
