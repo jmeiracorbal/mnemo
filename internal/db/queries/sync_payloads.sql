@@ -1,5 +1,5 @@
 -- name: ListSessionsMissingSyncMutation :many
-SELECT id, project, directory, ended_at, summary
+SELECT id, project, directory, ended_at, summary, provenance_id
 FROM sessions
 WHERE sessions.project = sqlc.arg('project_name')
   AND NOT EXISTS (
@@ -13,7 +13,7 @@ ORDER BY started_at ASC, id ASC;
 
 -- name: ListObservationsMissingSyncMutation :many
 SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key
+       tool_name, project, scope, topic_key, provenance_id
 FROM observations
 WHERE ifnull(observations.project, '') = sqlc.arg('project_name')
   AND deleted_at IS NULL
@@ -27,7 +27,7 @@ WHERE ifnull(observations.project, '') = sqlc.arg('project_name')
 ORDER BY id ASC;
 
 -- name: ListPromptsMissingSyncMutation :many
-SELECT ifnull(sync_id, '') AS sync_id, session_id, content, project
+SELECT ifnull(sync_id, '') AS sync_id, session_id, content, project, provenance_id
 FROM user_prompts
 WHERE ifnull(user_prompts.project, '') = sqlc.arg('project_name')
   AND NOT EXISTS (
@@ -40,25 +40,27 @@ WHERE ifnull(user_prompts.project, '') = sqlc.arg('project_name')
 ORDER BY id ASC;
 
 -- name: ApplySessionPayload :exec
-INSERT INTO sessions (id, project, directory, ended_at, summary)
+INSERT INTO sessions (id, project, directory, ended_at, summary, provenance_id)
 VALUES (
   sqlc.arg('id'), sqlc.arg('project'), sqlc.arg('directory'),
-  sqlc.narg('ended_at'), sqlc.narg('summary')
+  sqlc.narg('ended_at'), sqlc.narg('summary'), sqlc.narg('provenance_id')
 )
 ON CONFLICT(id) DO UPDATE SET
   project = excluded.project,
   directory = excluded.directory,
   ended_at = COALESCE(excluded.ended_at, sessions.ended_at),
-  summary = COALESCE(excluded.summary, sessions.summary);
+  summary = COALESCE(excluded.summary, sessions.summary),
+  provenance_id = COALESCE(excluded.provenance_id, sessions.provenance_id);
 
 -- name: InsertPulledObservation :one
 INSERT INTO observations (
   sync_id, session_id, type, title, content, tool_name, project, scope, topic_key,
-  normalized_hash, revision_count, duplicate_count, updated_at, deleted_at
+  normalized_hash, revision_count, duplicate_count, updated_at, deleted_at, provenance_id
 ) VALUES (
   sqlc.narg('sync_id'), sqlc.arg('session_id'), sqlc.arg('type'), sqlc.arg('title'),
   sqlc.arg('content'), sqlc.narg('tool_name'), sqlc.narg('project'), sqlc.arg('scope'),
-  sqlc.narg('topic_key'), sqlc.narg('normalized_hash'), 1, 1, datetime('now'), NULL
+  sqlc.narg('topic_key'), sqlc.narg('normalized_hash'), 1, 1, datetime('now'), NULL,
+  sqlc.narg('provenance_id')
 )
 RETURNING id;
 
@@ -73,6 +75,7 @@ UPDATE observations SET
   scope = sqlc.arg('scope'),
   topic_key = sqlc.narg('topic_key'),
   normalized_hash = sqlc.narg('normalized_hash'),
+  provenance_id = COALESCE(sqlc.narg('provenance_id'), provenance_id),
   revision_count = revision_count + 1,
   updated_at = datetime('now'),
   deleted_at = NULL

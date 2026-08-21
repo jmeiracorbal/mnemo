@@ -23,6 +23,30 @@ func removeMCPServer(path, rootKey, serverName string) (bool, error) {
 	})
 }
 
+func removeNestedMCPServer(path, rootKey, nestedKey, serverName string) (bool, error) {
+	return updateJSONFile(path, func(root map[string]any) bool {
+		parent, ok := root[rootKey].(map[string]any)
+		if !ok {
+			return false
+		}
+		servers, ok := parent[nestedKey].(map[string]any)
+		if !ok {
+			return false
+		}
+		if _, ok := servers[serverName]; !ok {
+			return false
+		}
+		delete(servers, serverName)
+		if len(servers) == 0 {
+			delete(parent, nestedKey)
+		}
+		if len(parent) == 0 {
+			delete(root, rootKey)
+		}
+		return true
+	})
+}
+
 func removeHookCommands(path string, eventCommands map[string]string) (bool, error) {
 	return updateJSONFile(path, func(root map[string]any) bool {
 		hooks, ok := root["hooks"].(map[string]any)

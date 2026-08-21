@@ -43,7 +43,7 @@ func cursorConfigSnippets(home, mnemoBin string) []ConfigSnippet {
 			Agent:   cursorLabel(),
 			Path:    filepath.Join(home, ".cursor", "mcp.json"),
 			Format:  "json",
-			Content: mcpServersJSON(mnemoBin),
+			Content: mcpServersJSON(mnemoBin, AgentCursor),
 		},
 		{
 			Agent:  cursorLabel(),
@@ -95,7 +95,7 @@ func cursorCheckInstructions(home string) Check {
 
 func cursorCheckMCP(home string) Check {
 	path := filepath.Join(home, ".cursor", "mcp.json")
-	return checkJSONHas(path, "mcp_config.cursor", "cursor", "mcpServers", "mnemo")
+	return checkJSONMCPWithEnv(path, "mcp_config.cursor", "cursor", "env", "mcpServers", "mnemo")
 }
 
 func cursorCheckRuntime(home string) Check {

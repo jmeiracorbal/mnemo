@@ -27,6 +27,7 @@ var allowedColumnDefinitions = map[string]bool{
 	"TEXT NOT NULL DEFAULT 'project'": true,
 	"INTEGER NOT NULL DEFAULT 1":      true,
 	"TEXT NOT NULL DEFAULT ''":        true,
+	"INTEGER REFERENCES provenance_contexts(id)": true,
 }
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -222,6 +223,9 @@ func (s *Store) migrate() error {
 	if _, err := s.execHook(s.db, dbschema.ApplyTableSQL()); err != nil {
 		return err
 	}
+	if err := s.seedProvenanceCatalog(); err != nil {
+		return err
+	}
 
 	observationColumns := []struct {
 		name       string
@@ -246,8 +250,17 @@ func (s *Store) migrate() error {
 	if err := s.migrateLegacyObservationsTable(); err != nil {
 		return err
 	}
+	if err := s.addColumnIfNotExists("observations", "provenance_id", "INTEGER REFERENCES provenance_contexts(id)"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfNotExists("sessions", "provenance_id", "INTEGER REFERENCES provenance_contexts(id)"); err != nil {
+		return err
+	}
 
 	if err := s.addColumnIfNotExists("user_prompts", "sync_id", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfNotExists("user_prompts", "provenance_id", "INTEGER REFERENCES provenance_contexts(id)"); err != nil {
 		return err
 	}
 

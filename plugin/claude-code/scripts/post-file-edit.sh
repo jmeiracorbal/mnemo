@@ -1,4 +1,6 @@
 #!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-claudecode}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
 # mnemo — PostToolUse hook for Edit/Write tool calls
 # Saves file-change observations deterministically. No LLM involvement.
 # Uses topic_key = file-change/<rel_path> so repeated edits upsert, not duplicate.

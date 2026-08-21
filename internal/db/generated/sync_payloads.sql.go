@@ -11,24 +11,26 @@ import (
 )
 
 const applySessionPayload = `-- name: ApplySessionPayload :exec
-INSERT INTO sessions (id, project, directory, ended_at, summary)
+INSERT INTO sessions (id, project, directory, ended_at, summary, provenance_id)
 VALUES (
   ?1, ?2, ?3,
-  ?4, ?5
+  ?4, ?5, ?6
 )
 ON CONFLICT(id) DO UPDATE SET
   project = excluded.project,
   directory = excluded.directory,
   ended_at = COALESCE(excluded.ended_at, sessions.ended_at),
-  summary = COALESCE(excluded.summary, sessions.summary)
+  summary = COALESCE(excluded.summary, sessions.summary),
+  provenance_id = COALESCE(excluded.provenance_id, sessions.provenance_id)
 `
 
 type ApplySessionPayloadParams struct {
-	ID        string         `json:"id"`
-	Project   string         `json:"project"`
-	Directory string         `json:"directory"`
-	EndedAt   sql.NullString `json:"ended_at"`
-	Summary   sql.NullString `json:"summary"`
+	ID           string         `json:"id"`
+	Project      string         `json:"project"`
+	Directory    string         `json:"directory"`
+	EndedAt      sql.NullString `json:"ended_at"`
+	Summary      sql.NullString `json:"summary"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ApplySessionPayload(ctx context.Context, arg ApplySessionPayloadParams) error {
@@ -38,6 +40,7 @@ func (q *Queries) ApplySessionPayload(ctx context.Context, arg ApplySessionPaylo
 		arg.Directory,
 		arg.EndedAt,
 		arg.Summary,
+		arg.ProvenanceID,
 	)
 	return err
 }
@@ -54,11 +57,12 @@ func (q *Queries) DeleteObservationByID(ctx context.Context, id int64) error {
 const insertPulledObservation = `-- name: InsertPulledObservation :one
 INSERT INTO observations (
   sync_id, session_id, type, title, content, tool_name, project, scope, topic_key,
-  normalized_hash, revision_count, duplicate_count, updated_at, deleted_at
+  normalized_hash, revision_count, duplicate_count, updated_at, deleted_at, provenance_id
 ) VALUES (
   ?1, ?2, ?3, ?4,
   ?5, ?6, ?7, ?8,
-  ?9, ?10, 1, 1, datetime('now'), NULL
+  ?9, ?10, 1, 1, datetime('now'), NULL,
+  ?11
 )
 RETURNING id
 `
@@ -74,6 +78,7 @@ type InsertPulledObservationParams struct {
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	NormalizedHash sql.NullString `json:"normalized_hash"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) InsertPulledObservation(ctx context.Context, arg InsertPulledObservationParams) (int64, error) {
@@ -88,6 +93,7 @@ func (q *Queries) InsertPulledObservation(ctx context.Context, arg InsertPulledO
 		arg.Scope,
 		arg.TopicKey,
 		arg.NormalizedHash,
+		arg.ProvenanceID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -96,7 +102,7 @@ func (q *Queries) InsertPulledObservation(ctx context.Context, arg InsertPulledO
 
 const listObservationsMissingSyncMutation = `-- name: ListObservationsMissingSyncMutation :many
 SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key
+       tool_name, project, scope, topic_key, provenance_id
 FROM observations
 WHERE ifnull(observations.project, '') = ?1
   AND deleted_at IS NULL
@@ -118,16 +124,17 @@ type ListObservationsMissingSyncMutationParams struct {
 }
 
 type ListObservationsMissingSyncMutationRow struct {
-	ID        int64          `json:"id"`
-	SyncID    interface{}    `json:"sync_id"`
-	SessionID string         `json:"session_id"`
-	Type      string         `json:"type"`
-	Title     string         `json:"title"`
-	Content   string         `json:"content"`
-	ToolName  sql.NullString `json:"tool_name"`
-	Project   sql.NullString `json:"project"`
-	Scope     string         `json:"scope"`
-	TopicKey  sql.NullString `json:"topic_key"`
+	ID           int64          `json:"id"`
+	SyncID       interface{}    `json:"sync_id"`
+	SessionID    string         `json:"session_id"`
+	Type         string         `json:"type"`
+	Title        string         `json:"title"`
+	Content      string         `json:"content"`
+	ToolName     sql.NullString `json:"tool_name"`
+	Project      sql.NullString `json:"project"`
+	Scope        string         `json:"scope"`
+	TopicKey     sql.NullString `json:"topic_key"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ListObservationsMissingSyncMutation(ctx context.Context, arg ListObservationsMissingSyncMutationParams) ([]ListObservationsMissingSyncMutationRow, error) {
@@ -155,6 +162,7 @@ func (q *Queries) ListObservationsMissingSyncMutation(ctx context.Context, arg L
 			&i.Project,
 			&i.Scope,
 			&i.TopicKey,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -170,7 +178,7 @@ func (q *Queries) ListObservationsMissingSyncMutation(ctx context.Context, arg L
 }
 
 const listPromptsMissingSyncMutation = `-- name: ListPromptsMissingSyncMutation :many
-SELECT ifnull(sync_id, '') AS sync_id, session_id, content, project
+SELECT ifnull(sync_id, '') AS sync_id, session_id, content, project, provenance_id
 FROM user_prompts
 WHERE ifnull(user_prompts.project, '') = ?1
   AND NOT EXISTS (
@@ -191,10 +199,11 @@ type ListPromptsMissingSyncMutationParams struct {
 }
 
 type ListPromptsMissingSyncMutationRow struct {
-	SyncID    interface{}    `json:"sync_id"`
-	SessionID string         `json:"session_id"`
-	Content   string         `json:"content"`
-	Project   sql.NullString `json:"project"`
+	SyncID       interface{}    `json:"sync_id"`
+	SessionID    string         `json:"session_id"`
+	Content      string         `json:"content"`
+	Project      sql.NullString `json:"project"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ListPromptsMissingSyncMutation(ctx context.Context, arg ListPromptsMissingSyncMutationParams) ([]ListPromptsMissingSyncMutationRow, error) {
@@ -216,6 +225,7 @@ func (q *Queries) ListPromptsMissingSyncMutation(ctx context.Context, arg ListPr
 			&i.SessionID,
 			&i.Content,
 			&i.Project,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -231,7 +241,7 @@ func (q *Queries) ListPromptsMissingSyncMutation(ctx context.Context, arg ListPr
 }
 
 const listSessionsMissingSyncMutation = `-- name: ListSessionsMissingSyncMutation :many
-SELECT id, project, directory, ended_at, summary
+SELECT id, project, directory, ended_at, summary, provenance_id
 FROM sessions
 WHERE sessions.project = ?1
   AND NOT EXISTS (
@@ -252,11 +262,12 @@ type ListSessionsMissingSyncMutationParams struct {
 }
 
 type ListSessionsMissingSyncMutationRow struct {
-	ID        string         `json:"id"`
-	Project   string         `json:"project"`
-	Directory string         `json:"directory"`
-	EndedAt   sql.NullString `json:"ended_at"`
-	Summary   sql.NullString `json:"summary"`
+	ID           string         `json:"id"`
+	Project      string         `json:"project"`
+	Directory    string         `json:"directory"`
+	EndedAt      sql.NullString `json:"ended_at"`
+	Summary      sql.NullString `json:"summary"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ListSessionsMissingSyncMutation(ctx context.Context, arg ListSessionsMissingSyncMutationParams) ([]ListSessionsMissingSyncMutationRow, error) {
@@ -279,6 +290,7 @@ func (q *Queries) ListSessionsMissingSyncMutation(ctx context.Context, arg ListS
 			&i.Directory,
 			&i.EndedAt,
 			&i.Summary,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -320,10 +332,11 @@ UPDATE observations SET
   scope = ?7,
   topic_key = ?8,
   normalized_hash = ?9,
+  provenance_id = COALESCE(?10, provenance_id),
   revision_count = revision_count + 1,
   updated_at = datetime('now'),
   deleted_at = NULL
-WHERE id = ?10
+WHERE id = ?11
 `
 
 type UpdatePulledObservationParams struct {
@@ -336,6 +349,7 @@ type UpdatePulledObservationParams struct {
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	NormalizedHash sql.NullString `json:"normalized_hash"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 	ID             int64          `json:"id"`
 }
 
@@ -350,6 +364,7 @@ func (q *Queries) UpdatePulledObservation(ctx context.Context, arg UpdatePulledO
 		arg.Scope,
 		arg.TopicKey,
 		arg.NormalizedHash,
+		arg.ProvenanceID,
 		arg.ID,
 	)
 	return err
