@@ -64,23 +64,24 @@ func (q *Queries) DeleteSessionTagByName(ctx context.Context, tag string) error 
 
 const listObservationsAffectedByTag = `-- name: ListObservationsAffectedByTag :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title,
-       o.content, o.tool_name, o.project, o.scope, o.topic_key
+       o.content, o.tool_name, o.project, o.scope, o.topic_key, o.provenance_id
 FROM observations o
 JOIN observation_tags ot ON ot.observation_id = o.id
 WHERE ot.tag = ? AND o.deleted_at IS NULL
 `
 
 type ListObservationsAffectedByTagRow struct {
-	ID        int64          `json:"id"`
-	SyncID    interface{}    `json:"sync_id"`
-	SessionID string         `json:"session_id"`
-	Type      string         `json:"type"`
-	Title     string         `json:"title"`
-	Content   string         `json:"content"`
-	ToolName  sql.NullString `json:"tool_name"`
-	Project   sql.NullString `json:"project"`
-	Scope     string         `json:"scope"`
-	TopicKey  sql.NullString `json:"topic_key"`
+	ID           int64          `json:"id"`
+	SyncID       interface{}    `json:"sync_id"`
+	SessionID    string         `json:"session_id"`
+	Type         string         `json:"type"`
+	Title        string         `json:"title"`
+	Content      string         `json:"content"`
+	ToolName     sql.NullString `json:"tool_name"`
+	Project      sql.NullString `json:"project"`
+	Scope        string         `json:"scope"`
+	TopicKey     sql.NullString `json:"topic_key"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ListObservationsAffectedByTag(ctx context.Context, tag string) ([]ListObservationsAffectedByTagRow, error) {
@@ -103,6 +104,7 @@ func (q *Queries) ListObservationsAffectedByTag(ctx context.Context, tag string)
 			&i.Project,
 			&i.Scope,
 			&i.TopicKey,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -213,18 +215,19 @@ func (q *Queries) ListRelatedSessionTags(ctx context.Context, arg ListRelatedSes
 }
 
 const listSessionsAffectedByTag = `-- name: ListSessionsAffectedByTag :many
-SELECT s.id, s.project, s.directory, s.ended_at, s.summary
+SELECT s.id, s.project, s.directory, s.ended_at, s.summary, s.provenance_id
 FROM sessions s
 JOIN session_tags st ON st.session_id = s.id
 WHERE st.tag = ?
 `
 
 type ListSessionsAffectedByTagRow struct {
-	ID        string         `json:"id"`
-	Project   string         `json:"project"`
-	Directory string         `json:"directory"`
-	EndedAt   sql.NullString `json:"ended_at"`
-	Summary   sql.NullString `json:"summary"`
+	ID           string         `json:"id"`
+	Project      string         `json:"project"`
+	Directory    string         `json:"directory"`
+	EndedAt      sql.NullString `json:"ended_at"`
+	Summary      sql.NullString `json:"summary"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ListSessionsAffectedByTag(ctx context.Context, tag string) ([]ListSessionsAffectedByTagRow, error) {
@@ -242,6 +245,7 @@ func (q *Queries) ListSessionsAffectedByTag(ctx context.Context, tag string) ([]
 			&i.Directory,
 			&i.EndedAt,
 			&i.Summary,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}

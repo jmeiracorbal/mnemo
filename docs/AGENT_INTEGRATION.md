@@ -14,6 +14,8 @@ mnemo supports Claude Code, Cursor, Windsurf, Codex and OpenCode through global 
 
 All supported agents use global hook/configuration surfaces where available. Their global instructions are conditional: if `.mnemo` is missing or invalid, agents skip mnemo entirely and do not create fallback memory files.
 
+MCP setup records lightweight provenance for supported configurations by setting `MNEMO_AGENT`, `MNEMO_MCP_CLIENT` and `MNEMO_MCP_TRANSPORT` in the generated MCP server entry. mnemo stores that metadata in normalized SQLite tables separate from the project identity in `.mnemo`.
+
 ## What `mnemo init` creates
 
 ```text

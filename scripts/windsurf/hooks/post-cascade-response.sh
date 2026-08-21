@@ -1,4 +1,6 @@
 #!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-windsurf}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
 # mnemo — post_cascade_response_with_transcript hook for Windsurf
 # Fires after a conversation response. Reads transcript JSONL for passive
 # capture, then closes the mnemo session.

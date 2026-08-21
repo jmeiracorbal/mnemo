@@ -13,7 +13,7 @@ import (
 const listObservations = `-- name: ListObservations :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
        o.tool_name, o.project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
-       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at
+       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id
 FROM observations o
 WHERE o.deleted_at IS NULL
   AND (?1 = '' OR o.project = ?1)
@@ -56,6 +56,7 @@ type ListObservationsRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ListObservations(ctx context.Context, arg ListObservationsParams) ([]ListObservationsRow, error) {
@@ -90,6 +91,7 @@ func (q *Queries) ListObservations(ctx context.Context, arg ListObservationsPara
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -107,7 +109,7 @@ func (q *Queries) ListObservations(ctx context.Context, arg ListObservationsPara
 const listRecentObservations = `-- name: ListRecentObservations :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
        o.tool_name, o.project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
-       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at,
+       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id,
        (CASE WHEN ?1 != '' AND o.topic_key = ?1 THEN 1 ELSE 0 END) +
        (SELECT COUNT(*) FROM observation_tags bt
         WHERE bt.observation_id = o.id
@@ -156,6 +158,7 @@ type ListRecentObservationsRow struct {
 	CreatedAt       string         `json:"created_at"`
 	UpdatedAt       string         `json:"updated_at"`
 	DeletedAt       sql.NullString `json:"deleted_at"`
+	ProvenanceID    sql.NullInt64  `json:"provenance_id"`
 	PreferenceScore int64          `json:"preference_score"`
 }
 
@@ -193,6 +196,7 @@ func (q *Queries) ListRecentObservations(ctx context.Context, arg ListRecentObse
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.ProvenanceID,
 			&i.PreferenceScore,
 		); err != nil {
 			return nil, err
@@ -210,7 +214,7 @@ func (q *Queries) ListRecentObservations(ctx context.Context, arg ListRecentObse
 
 const listRecentPrompts = `-- name: ListRecentPrompts :many
 SELECT id, ifnull(sync_id, '') AS sync_id, session_id, content,
-       ifnull(project, '') AS project, created_at
+       ifnull(project, '') AS project, created_at, provenance_id
 FROM user_prompts
 WHERE (?1 = '' OR project = ?1)
 ORDER BY created_at DESC
@@ -223,12 +227,13 @@ type ListRecentPromptsParams struct {
 }
 
 type ListRecentPromptsRow struct {
-	ID        int64       `json:"id"`
-	SyncID    interface{} `json:"sync_id"`
-	SessionID string      `json:"session_id"`
-	Content   string      `json:"content"`
-	Project   interface{} `json:"project"`
-	CreatedAt string      `json:"created_at"`
+	ID           int64         `json:"id"`
+	SyncID       interface{}   `json:"sync_id"`
+	SessionID    string        `json:"session_id"`
+	Content      string        `json:"content"`
+	Project      interface{}   `json:"project"`
+	CreatedAt    string        `json:"created_at"`
+	ProvenanceID sql.NullInt64 `json:"provenance_id"`
 }
 
 func (q *Queries) ListRecentPrompts(ctx context.Context, arg ListRecentPromptsParams) ([]ListRecentPromptsRow, error) {
@@ -247,6 +252,7 @@ func (q *Queries) ListRecentPrompts(ctx context.Context, arg ListRecentPromptsPa
 			&i.Content,
 			&i.Project,
 			&i.CreatedAt,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -264,7 +270,7 @@ func (q *Queries) ListRecentPrompts(ctx context.Context, arg ListRecentPromptsPa
 const listSessionObservations = `-- name: ListSessionObservations :many
 SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
        tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at
+       last_seen_at, created_at, updated_at, deleted_at, provenance_id
 FROM observations
 WHERE session_id = ?1 AND deleted_at IS NULL
 ORDER BY created_at ASC
@@ -293,6 +299,7 @@ type ListSessionObservationsRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ListSessionObservations(ctx context.Context, arg ListSessionObservationsParams) ([]ListSessionObservationsRow, error) {
@@ -321,6 +328,7 @@ func (q *Queries) ListSessionObservations(ctx context.Context, arg ListSessionOb
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -338,7 +346,7 @@ func (q *Queries) ListSessionObservations(ctx context.Context, arg ListSessionOb
 const searchObservationsByFilter = `-- name: SearchObservationsByFilter :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
        o.tool_name, o.project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
-       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at,
+       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id,
        CAST((SELECT COUNT(*) FROM observation_tags bt
              WHERE bt.observation_id = o.id
                AND bt.tag IN (SELECT value FROM json_each(?1))) AS REAL) AS relevance
@@ -389,6 +397,7 @@ type SearchObservationsByFilterRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 	Relevance      float64        `json:"relevance"`
 }
 
@@ -427,6 +436,7 @@ func (q *Queries) SearchObservationsByFilter(ctx context.Context, arg SearchObse
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.ProvenanceID,
 			&i.Relevance,
 		); err != nil {
 			return nil, err
@@ -445,7 +455,7 @@ func (q *Queries) SearchObservationsByFilter(ctx context.Context, arg SearchObse
 const searchObservationsFTS = `-- name: SearchObservationsFTS :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
        o.tool_name, o.project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
-       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at,
+       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id,
        CAST(observations_fts.rank - CAST((SELECT COUNT(*) FROM observation_tags bt
                         WHERE bt.observation_id = o.id
                           AND bt.tag IN (SELECT value FROM json_each(?1))) AS REAL) * 0.5 AS REAL) AS relevance
@@ -498,6 +508,7 @@ type SearchObservationsFTSRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 	Relevance      float64        `json:"relevance"`
 }
 
@@ -537,6 +548,7 @@ func (q *Queries) SearchObservationsFTS(ctx context.Context, arg SearchObservati
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.ProvenanceID,
 			&i.Relevance,
 		); err != nil {
 			return nil, err
@@ -554,7 +566,7 @@ func (q *Queries) SearchObservationsFTS(ctx context.Context, arg SearchObservati
 
 const searchPromptsFTS = `-- name: SearchPromptsFTS :many
 SELECT p.id, ifnull(p.sync_id, '') AS sync_id, p.session_id, p.content,
-       ifnull(p.project, '') AS project, p.created_at
+       ifnull(p.project, '') AS project, p.created_at, p.provenance_id
 FROM prompts_fts(?1)
 JOIN user_prompts p ON p.id = prompts_fts.rowid
 WHERE (?2 = '' OR p.project = ?2)
@@ -569,12 +581,13 @@ type SearchPromptsFTSParams struct {
 }
 
 type SearchPromptsFTSRow struct {
-	ID        int64       `json:"id"`
-	SyncID    interface{} `json:"sync_id"`
-	SessionID string      `json:"session_id"`
-	Content   string      `json:"content"`
-	Project   interface{} `json:"project"`
-	CreatedAt string      `json:"created_at"`
+	ID           int64         `json:"id"`
+	SyncID       interface{}   `json:"sync_id"`
+	SessionID    string        `json:"session_id"`
+	Content      string        `json:"content"`
+	Project      interface{}   `json:"project"`
+	CreatedAt    string        `json:"created_at"`
+	ProvenanceID sql.NullInt64 `json:"provenance_id"`
 }
 
 func (q *Queries) SearchPromptsFTS(ctx context.Context, arg SearchPromptsFTSParams) ([]SearchPromptsFTSRow, error) {
@@ -593,6 +606,7 @@ func (q *Queries) SearchPromptsFTS(ctx context.Context, arg SearchPromptsFTSPara
 			&i.Content,
 			&i.Project,
 			&i.CreatedAt,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}

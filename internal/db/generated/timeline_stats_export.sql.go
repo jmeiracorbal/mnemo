@@ -46,7 +46,7 @@ func (q *Queries) CountSessions(ctx context.Context) (int64, error) {
 const exportObservations = `-- name: ExportObservations :many
 SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
        tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at
+       last_seen_at, created_at, updated_at, deleted_at, provenance_id
 FROM observations ORDER BY id
 `
 
@@ -67,6 +67,7 @@ type ExportObservationsRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ExportObservations(ctx context.Context) ([]ExportObservationsRow, error) {
@@ -95,6 +96,7 @@ func (q *Queries) ExportObservations(ctx context.Context) ([]ExportObservationsR
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -111,17 +113,18 @@ func (q *Queries) ExportObservations(ctx context.Context) ([]ExportObservationsR
 
 const exportPrompts = `-- name: ExportPrompts :many
 SELECT id, ifnull(sync_id, '') AS sync_id, session_id, content,
-       ifnull(project, '') AS project, created_at
+       ifnull(project, '') AS project, created_at, provenance_id
 FROM user_prompts ORDER BY id
 `
 
 type ExportPromptsRow struct {
-	ID        int64       `json:"id"`
-	SyncID    interface{} `json:"sync_id"`
-	SessionID string      `json:"session_id"`
-	Content   string      `json:"content"`
-	Project   interface{} `json:"project"`
-	CreatedAt string      `json:"created_at"`
+	ID           int64         `json:"id"`
+	SyncID       interface{}   `json:"sync_id"`
+	SessionID    string        `json:"session_id"`
+	Content      string        `json:"content"`
+	Project      interface{}   `json:"project"`
+	CreatedAt    string        `json:"created_at"`
+	ProvenanceID sql.NullInt64 `json:"provenance_id"`
 }
 
 func (q *Queries) ExportPrompts(ctx context.Context) ([]ExportPromptsRow, error) {
@@ -140,6 +143,7 @@ func (q *Queries) ExportPrompts(ctx context.Context) ([]ExportPromptsRow, error)
 			&i.Content,
 			&i.Project,
 			&i.CreatedAt,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -155,7 +159,7 @@ func (q *Queries) ExportPrompts(ctx context.Context) ([]ExportPromptsRow, error)
 }
 
 const exportSessions = `-- name: ExportSessions :many
-SELECT id, project, directory, started_at, ended_at, summary
+SELECT id, project, directory, started_at, ended_at, summary, provenance_id
 FROM sessions ORDER BY started_at
 `
 
@@ -175,6 +179,7 @@ func (q *Queries) ExportSessions(ctx context.Context) ([]Session, error) {
 			&i.StartedAt,
 			&i.EndedAt,
 			&i.Summary,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -223,7 +228,7 @@ func (q *Queries) ListObservationProjects(ctx context.Context) ([]sql.NullString
 const listTimelineAfter = `-- name: ListTimelineAfter :many
 SELECT id, session_id, type, title, content, tool_name, project,
        scope, topic_key, revision_count, duplicate_count, last_seen_at,
-       created_at, updated_at, deleted_at
+       created_at, updated_at, deleted_at, provenance_id
 FROM observations
 WHERE session_id = ?1
   AND id > ?2
@@ -254,6 +259,7 @@ type ListTimelineAfterRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ListTimelineAfter(ctx context.Context, arg ListTimelineAfterParams) ([]ListTimelineAfterRow, error) {
@@ -281,6 +287,7 @@ func (q *Queries) ListTimelineAfter(ctx context.Context, arg ListTimelineAfterPa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}
@@ -298,7 +305,7 @@ func (q *Queries) ListTimelineAfter(ctx context.Context, arg ListTimelineAfterPa
 const listTimelineBefore = `-- name: ListTimelineBefore :many
 SELECT id, session_id, type, title, content, tool_name, project,
        scope, topic_key, revision_count, duplicate_count, last_seen_at,
-       created_at, updated_at, deleted_at
+       created_at, updated_at, deleted_at, provenance_id
 FROM observations
 WHERE session_id = ?1
   AND id < ?2
@@ -329,6 +336,7 @@ type ListTimelineBeforeRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) ListTimelineBefore(ctx context.Context, arg ListTimelineBeforeParams) ([]ListTimelineBeforeRow, error) {
@@ -356,6 +364,7 @@ func (q *Queries) ListTimelineBefore(ctx context.Context, arg ListTimelineBefore
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
 		}

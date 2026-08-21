@@ -1,4 +1,6 @@
 #!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-codex}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
 # mnemo — SessionStart hook for Codex CLI
 # Fires on session startup and resume.
 #

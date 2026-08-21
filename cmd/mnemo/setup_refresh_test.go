@@ -95,7 +95,10 @@ command = "other"
 	if !strings.Contains(content, `[mcp_servers.mnemo]`) || !strings.Contains(content, `command = "/bin/mnemo"`) {
 		t.Fatalf("mnemo MCP config was not refreshed:\n%s", content)
 	}
-	if strings.Contains(content, `[mcp_servers.mnemo.env]`) || strings.Contains(content, "STALE") {
+	if !strings.Contains(content, `[mcp_servers.mnemo.env]`) || !strings.Contains(content, `MNEMO_AGENT = "codex"`) {
+		t.Fatalf("mnemo MCP provenance env was not refreshed:\n%s", content)
+	}
+	if strings.Contains(content, "STALE") {
 		t.Fatalf("stale mnemo nested table was not removed:\n%s", content)
 	}
 	if !strings.Contains(content, `[mcp_servers.other]`) {

@@ -16,8 +16,16 @@ function mnemoProject(root: string): string | null {
   }
 }
 
-function run(cmd: string[]): { ok: boolean; out: string } {
-  const r = Bun.spawnSync(cmd, { stderr: "ignore" })
+function mnemoEnv(source: string): Record<string, string> {
+  return {
+    ...process.env,
+    MNEMO_AGENT: process.env.MNEMO_AGENT ?? "opencode",
+    MNEMO_SOURCE: process.env.MNEMO_SOURCE ?? source,
+  } as Record<string, string>
+}
+
+function run(cmd: string[], source = "hook"): { ok: boolean; out: string } {
+  const r = Bun.spawnSync(cmd, { stderr: "ignore", env: mnemoEnv(source) })
   return { ok: r.exitCode === 0, out: r.stdout?.toString().trim() ?? "" }
 }
 
@@ -35,7 +43,7 @@ export const Mnemo: Plugin = async (ctx) => {
       const sessionId: string = (event.properties as any)?.info?.id
       if (!sessionId || sessions.has(sessionId)) return
 
-      run(["mnemo", "session", "start", sessionId, "--project", project, "--dir", ctx.directory])
+      run(["mnemo", "session", "start", sessionId, "--project", project, "--dir", ctx.directory], "hook")
       const c = run(["mnemo", "context", project])
       sessions.set(sessionId, { context: c.ok ? c.out : "", injected: false })
     },

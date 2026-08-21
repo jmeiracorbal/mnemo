@@ -1,4 +1,6 @@
 #!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-claudecode}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
 # mnemo — PostCompact hook for Claude Code plugin
 # Injects memory protocol and context after compaction so the agent
 # persists the compacted summary and recovers session state.

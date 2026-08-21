@@ -4,27 +4,30 @@ import "testing"
 
 func TestReviewMemoryConflictsDetectsAndResolvesDuplicateTitle(t *testing.T) {
 	s := newTestStore(t)
-	if err := s.CreateSession("s-review", "alpha", "/tmp/alpha"); err != nil {
+	provenance := ProvenanceInput{AgentID: AgentCursor, SourceKindID: SourceMCP, ToolID: ToolMemSave}
+	if err := s.CreateSessionWithProvenance("s-review", "alpha", "/tmp/alpha", provenance); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 	firstID, err := s.AddObservation(AddObservationParams{
-		SessionID: "s-review",
-		Type:      "decision",
-		Title:     "Cache strategy",
-		Content:   "Use a local cache for package metadata.",
-		Project:   "alpha",
-		Scope:     "project",
+		SessionID:  "s-review",
+		Type:       "decision",
+		Title:      "Cache strategy",
+		Content:    "Use a local cache for package metadata.",
+		Project:    "alpha",
+		Scope:      "project",
+		Provenance: provenance,
 	})
 	if err != nil {
 		t.Fatalf("add first: %v", err)
 	}
 	secondID, err := s.AddObservation(AddObservationParams{
-		SessionID: "s-review",
-		Type:      "decision",
-		Title:     "Cache   strategy",
-		Content:   "Avoid the local cache for package metadata.",
-		Project:   "alpha",
-		Scope:     "project",
+		SessionID:  "s-review",
+		Type:       "decision",
+		Title:      "Cache   strategy",
+		Content:    "Avoid the local cache for package metadata.",
+		Project:    "alpha",
+		Scope:      "project",
+		Provenance: provenance,
 	})
 	if err != nil {
 		t.Fatalf("add second: %v", err)
@@ -42,6 +45,9 @@ func TestReviewMemoryConflictsDetectsAndResolvesDuplicateTitle(t *testing.T) {
 	}
 	if len(report.Groups[0].Observations) != 2 {
 		t.Fatalf("observations = %d, want 2", len(report.Groups[0].Observations))
+	}
+	if report.Groups[0].Observations[0].Provenance == nil || report.Groups[0].Observations[0].Provenance.AgentID != AgentCursor {
+		t.Fatalf("review observation missing provenance: %+v", report.Groups[0].Observations[0])
 	}
 
 	if err := s.SupersedeMemory(firstID, secondID, "newer decision is canonical"); err != nil {

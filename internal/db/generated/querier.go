@@ -19,6 +19,7 @@ type Querier interface {
 	CopySessionTag(ctx context.Context, arg CopySessionTagParams) error
 	CountLiveObservations(ctx context.Context) (int64, error)
 	CountObservationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error)
+	CountObservationsByAgent(ctx context.Context) ([]CountObservationsByAgentRow, error)
 	CountObservationsByHash(ctx context.Context, normalizedHash sql.NullString) (int64, error)
 	CountObservationsForSessionProject(ctx context.Context, sessionID string) (int64, error)
 	CountPendingMutations(ctx context.Context, targetKey string) (int64, error)
@@ -54,6 +55,8 @@ type Querier interface {
 	GetObservationBySyncIDIncludingDeleted(ctx context.Context, syncID sql.NullString) (GetObservationBySyncIDIncludingDeletedRow, error)
 	GetObservationDeletedAt(ctx context.Context, id int64) (sql.NullString, error)
 	GetProjectByID(ctx context.Context, id string) (Project, error)
+	GetProvenanceContext(ctx context.Context, id int64) (GetProvenanceContextRow, error)
+	GetProvenanceContextID(ctx context.Context, arg GetProvenanceContextIDParams) (int64, error)
 	GetSession(ctx context.Context, id string) (Session, error)
 	GetSessionPayload(ctx context.Context, id string) (GetSessionPayloadRow, error)
 	GetSyncState(ctx context.Context, targetKey string) (SyncState, error)
@@ -64,6 +67,7 @@ type Querier interface {
 	InsertObservation(ctx context.Context, arg InsertObservationParams) (int64, error)
 	InsertObservationTag(ctx context.Context, arg InsertObservationTagParams) error
 	InsertPrompt(ctx context.Context, arg InsertPromptParams) (int64, error)
+	InsertProvenanceContext(ctx context.Context, arg InsertProvenanceContextParams) (int64, error)
 	InsertPulledObservation(ctx context.Context, arg InsertPulledObservationParams) (int64, error)
 	InsertSessionTag(ctx context.Context, arg InsertSessionTagParams) error
 	InsertSyncMutation(ctx context.Context, arg InsertSyncMutationParams) (int64, error)
@@ -118,9 +122,14 @@ type Querier interface {
 	UpdatePrompt(ctx context.Context, arg UpdatePromptParams) error
 	UpdatePulledObservation(ctx context.Context, arg UpdatePulledObservationParams) error
 	UpdateSyncAckState(ctx context.Context, arg UpdateSyncAckStateParams) error
+	UpsertAgent(ctx context.Context, arg UpsertAgentParams) error
+	UpsertMCPClient(ctx context.Context, arg UpsertMCPClientParams) error
 	UpsertMemoryReviewState(ctx context.Context, arg UpsertMemoryReviewStateParams) error
+	UpsertModel(ctx context.Context, arg UpsertModelParams) error
 	UpsertProjectName(ctx context.Context, arg UpsertProjectNameParams) error
 	UpsertSession(ctx context.Context, arg UpsertSessionParams) error
+	UpsertSourceKind(ctx context.Context, arg UpsertSourceKindParams) error
+	UpsertTool(ctx context.Context, arg UpsertToolParams) error
 }
 
 var _ Querier = (*Queries)(nil)

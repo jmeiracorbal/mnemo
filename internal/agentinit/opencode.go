@@ -31,15 +31,23 @@ func openCodeRemoveInstructions(home string) (string, bool, error) {
 }
 
 func openCodeConfigSnippets(home, mnemoBin string) []ConfigSnippet {
+	server := map[string]any{
+		"type":    "local",
+		"command": []string{mnemoBin, "mcp", "--tools=agent"},
+		"environment": map[string]string{
+			"MNEMO_AGENT":         AgentOpenCode,
+			"MNEMO_MCP_CLIENT":    AgentOpenCode,
+			"MNEMO_MCP_TRANSPORT": "stdio",
+		},
+	}
 	return []ConfigSnippet{{
 		Agent:  openCodeLabel(),
 		Path:   filepath.Join(home, ".config", "opencode", "opencode.json"),
 		Format: "json",
 		Content: prettyJSON(map[string]any{
 			"mcp": map[string]any{
-				"mnemo": map[string]any{
-					"type":    "local",
-					"command": []string{mnemoBin, "mcp", "--tools=agent"},
+				"servers": map[string]any{
+					"mnemo": server,
 				},
 			},
 		}),
@@ -55,8 +63,22 @@ func openCodeRuntimeAssets() []assetTarget {
 
 func openCodeUninstallConfig(home string) ([]string, error) {
 	path := filepath.Join(home, ".config", "opencode", "opencode.json")
+	var removed []string
 	changed, err := removeMCPServer(path, "mcp", "mnemo")
-	return appendChanged(path, changed, err)
+	if err != nil {
+		return removed, err
+	}
+	if changed {
+		removed = append(removed, path)
+	}
+	changed, err = removeNestedMCPServer(path, "mcp", "servers", "mnemo")
+	if err != nil {
+		return removed, err
+	}
+	if changed && len(removed) == 0 {
+		removed = append(removed, path)
+	}
+	return removed, nil
 }
 
 func openCodeCheckInstructions(home string) Check {
@@ -65,7 +87,7 @@ func openCodeCheckInstructions(home string) Check {
 
 func openCodeCheckMCP(home string) Check {
 	path := filepath.Join(home, ".config", "opencode", "opencode.json")
-	return checkJSONHas(path, "mcp_config.opencode", "opencode", "mcp", "mnemo")
+	return checkJSONMCPWithEnv(path, "mcp_config.opencode", "opencode", "environment", "mcp", "servers", "mnemo")
 }
 
 func openCodeCheckRuntime(home string) Check {

@@ -1,4 +1,6 @@
 #!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-windsurf}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
 # mnemo — pre_user_prompt hook for Windsurf
 # Fires before every prompt. First occurrence of a trajectory_id creates the
 # session, emits general context, and searches for memories relevant to the

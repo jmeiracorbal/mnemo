@@ -1,4 +1,6 @@
 #!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-claudecode}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
 # mnemo — PostToolUse hook for Bash tool calls
 # Captures git commit events as decision observations. No LLM involvement.
 

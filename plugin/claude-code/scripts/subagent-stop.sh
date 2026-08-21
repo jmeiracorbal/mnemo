@@ -1,4 +1,6 @@
 #!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-claudecode}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
 # mnemo — SubagentStop hook for Claude Code plugin
 # Extracts learnings from subagent output (async, does not block).
 

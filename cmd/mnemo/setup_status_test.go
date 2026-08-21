@@ -27,7 +27,7 @@ func TestBuildSetupStatusReportReportsConfiguredCodex(t *testing.T) {
 	if _, err := agentinit.InstallGlobalInstructions(home, "codex"); err != nil {
 		t.Fatalf("install instructions: %v", err)
 	}
-	writeFile(t, filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.mnemo]\ncommand = \"mnemo\"\nargs = [\"mcp\", \"--tools=agent\"]\n")
+	writeFile(t, filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.mnemo]\ncommand = \"mnemo\"\nargs = [\"mcp\", \"--tools=agent\"]\n\n[mcp_servers.mnemo.env]\nMNEMO_AGENT = \"codex\"\nMNEMO_MCP_CLIENT = \"codex\"\nMNEMO_MCP_TRANSPORT = \"stdio\"\n")
 	writeFile(t, filepath.Join(home, ".codex", "hooks.json"), `{"hooks":{"SessionStart":[],"Stop":[]}}`)
 	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "session-start.sh"))
 	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "stop.sh"))
@@ -43,6 +43,27 @@ func TestBuildSetupStatusReportReportsConfiguredCodex(t *testing.T) {
 	row := report.Rows[0]
 	if row.Agent != "Codex" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "yes" || row.Instructions != "yes" {
 		t.Fatalf("unexpected row: %+v", row)
+	}
+}
+
+func TestBuildSetupStatusReportWarnsOnMissingMCPProvenanceEnv(t *testing.T) {
+	home := t.TempDir()
+
+	if _, err := agentinit.InstallGlobalInstructions(home, "codex"); err != nil {
+		t.Fatalf("install instructions: %v", err)
+	}
+	writeFile(t, filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.mnemo]\ncommand = \"mnemo\"\nargs = [\"mcp\", \"--tools=agent\"]\n")
+	writeFile(t, filepath.Join(home, ".codex", "hooks.json"), `{"hooks":{"SessionStart":[],"Stop":[]}}`)
+	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "session-start.sh"))
+	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "stop.sh"))
+	writeFile(t, filepath.Join(home, ".codex", "hooks", "mnemo-protocol.md"), "protocol")
+
+	report := buildSetupStatusReport(setupStatusOptions{Agent: "codex", Home: home})
+	if report.Status != "warning" || report.Summary.Warnings != 1 {
+		t.Fatalf("unexpected report: %+v", report)
+	}
+	if got := report.Rows[0].MCP; got != "no" {
+		t.Fatalf("mcp = %q, want no", got)
 	}
 }
 
@@ -72,7 +93,7 @@ func TestBuildSetupStatusReportChecksClaudeCodePluginHooks(t *testing.T) {
 			if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
 				t.Fatalf("install instructions: %v", err)
 			}
-			writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo"}}}`)
+			writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo","env":{"MNEMO_AGENT":"claudecode","MNEMO_MCP_CLIENT":"claudecode"}}}}`)
 			writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), fmt.Sprintf(registry, installPath))
 			writeFile(t, filepath.Join(installPath, ".claude-plugin", "plugin.json"), `{"name":"mnemo"}`)
 			writeFile(t, filepath.Join(installPath, "hooks", "hooks.json"), `{"hooks":{}}`)
@@ -106,7 +127,7 @@ func TestBuildSetupStatusReportAllowsClaudeCodeWithoutPluginRegistry(t *testing.
 	if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
 		t.Fatalf("install instructions: %v", err)
 	}
-	writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo"}}}`)
+	writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo","env":{"MNEMO_AGENT":"claudecode","MNEMO_MCP_CLIENT":"claudecode"}}}}`)
 
 	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
 	if report.Status != "ok" || report.Summary.OK != 1 || report.Summary.Warnings != 0 || report.Summary.Errors != 0 {
@@ -124,7 +145,7 @@ func TestBuildSetupStatusReportCountsRuntimeErrors(t *testing.T) {
 	if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
 		t.Fatalf("install instructions: %v", err)
 	}
-	writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo"}}}`)
+	writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo","env":{"MNEMO_AGENT":"claudecode","MNEMO_MCP_CLIENT":"claudecode"}}}}`)
 	writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), `{`)
 
 	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})

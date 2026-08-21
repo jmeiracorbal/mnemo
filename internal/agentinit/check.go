@@ -170,7 +170,7 @@ func checkFiles(agent, id, okMessage string, paths []string, executableScripts b
 	return checkOK(agent, id, okMessage, strings.Join(paths, ","))
 }
 
-func checkJSONHas(path, id, agent string, keys ...string) Check {
+func checkJSONMCPWithEnv(path, id, agent, envKey string, keys ...string) Check {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return checkWarning(agent, id, "MCP config not found", path)
@@ -182,25 +182,38 @@ func checkJSONHas(path, id, agent string, keys ...string) Check {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return checkError(agent, id, "parse MCP config JSON: "+err.Error(), path)
 	}
-	if !jsonPathExists(raw, keys...) {
+	server, ok := jsonPathValue(raw, keys...)
+	if !ok {
 		return checkWarning(agent, id, "MCP config does not contain mnemo server", path)
+	}
+	if !jsonPathEquals(server, agent, envKey, "MNEMO_AGENT") {
+		return checkWarning(agent, id, "MCP config is missing mnemo provenance environment", path)
 	}
 	return checkOK(agent, id, "MCP config contains mnemo server", path)
 }
 
-func jsonPathExists(v any, keys ...string) bool {
+func jsonPathValue(v any, keys ...string) (any, bool) {
 	current := v
 	for _, key := range keys {
 		m, ok := current.(map[string]any)
 		if !ok {
-			return false
+			return nil, false
 		}
 		current, ok = m[key]
 		if !ok {
-			return false
+			return nil, false
 		}
 	}
-	return true
+	return current, true
+}
+
+func jsonPathEquals(v any, want string, keys ...string) bool {
+	value, ok := jsonPathValue(v, keys...)
+	if !ok {
+		return false
+	}
+	got, ok := value.(string)
+	return ok && got == want
 }
 
 func checkOK(agent, id, message, path string) Check {
