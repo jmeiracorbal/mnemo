@@ -1,10 +1,56 @@
+CREATE TABLE agents (
+    id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'agent',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE source_kinds (
+    id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE tools (
+    id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE models (
+    id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL DEFAULT '',
+    display_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE mcp_clients (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    version TEXT NOT NULL DEFAULT '',
+    transport TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE provenance_contexts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id TEXT NOT NULL DEFAULT 'unknown' REFERENCES agents(id),
+    source_kind_id TEXT NOT NULL DEFAULT 'unknown' REFERENCES source_kinds(id),
+    tool_id TEXT NOT NULL DEFAULT 'unknown' REFERENCES tools(id),
+    model_id TEXT NOT NULL DEFAULT 'unknown' REFERENCES models(id),
+    mcp_client_id TEXT NOT NULL DEFAULT 'none' REFERENCES mcp_clients(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(agent_id, source_kind_id, tool_id, model_id, mcp_client_id)
+);
+
 CREATE TABLE sessions (
     id TEXT PRIMARY KEY,
     project TEXT NOT NULL,
     directory TEXT NOT NULL,
     started_at TEXT NOT NULL DEFAULT (datetime('now')),
     ended_at TEXT,
-    summary TEXT
+    summary TEXT,
+    provenance_id INTEGER REFERENCES provenance_contexts(id)
 );
 
 CREATE TABLE observations (
@@ -25,6 +71,7 @@ CREATE TABLE observations (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     deleted_at TEXT,
+    provenance_id INTEGER REFERENCES provenance_contexts(id),
     FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
 
@@ -35,6 +82,7 @@ CREATE TABLE user_prompts (
     content TEXT NOT NULL,
     project TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    provenance_id INTEGER REFERENCES provenance_contexts(id),
     FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
 
@@ -130,11 +178,19 @@ CREATE UNIQUE INDEX ux_observations_sync_id ON observations(sync_id) WHERE sync_
 CREATE INDEX idx_obs_topic ON observations(topic_key, project, scope, updated_at DESC);
 CREATE INDEX idx_obs_deleted ON observations(deleted_at);
 CREATE INDEX idx_obs_dedupe ON observations(normalized_hash, project, scope, type, title, created_at DESC);
+CREATE INDEX idx_obs_provenance ON observations(provenance_id);
 CREATE INDEX idx_prompts_session ON user_prompts(session_id);
 CREATE INDEX idx_prompts_project ON user_prompts(project);
 CREATE INDEX idx_prompts_created ON user_prompts(created_at DESC);
 CREATE INDEX idx_prompts_sync_id ON user_prompts(sync_id);
 CREATE UNIQUE INDEX ux_user_prompts_sync_id ON user_prompts(sync_id) WHERE sync_id IS NOT NULL AND sync_id <> '';
+CREATE INDEX idx_prompts_provenance ON user_prompts(provenance_id);
+CREATE INDEX idx_sessions_provenance ON sessions(provenance_id);
+CREATE INDEX idx_provenance_agent ON provenance_contexts(agent_id);
+CREATE INDEX idx_provenance_source ON provenance_contexts(source_kind_id);
+CREATE INDEX idx_provenance_tool ON provenance_contexts(tool_id);
+CREATE INDEX idx_provenance_model ON provenance_contexts(model_id);
+CREATE INDEX idx_provenance_mcp_client ON provenance_contexts(mcp_client_id);
 CREATE INDEX idx_sync_mutations_target_seq ON sync_mutations(target_key, seq);
 CREATE INDEX idx_sync_mutations_pending ON sync_mutations(target_key, acked_at, seq);
 CREATE INDEX idx_sync_mutations_project ON sync_mutations(project);

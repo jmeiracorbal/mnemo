@@ -1,4 +1,6 @@
 #!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-cursor}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
 # mnemo — stop hook for Cursor 2.6+
 # Fires when a conversation completes. Reads transcript_path (JSONL) for
 # passive capture, then closes the mnemo session.

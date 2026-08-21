@@ -2,7 +2,12 @@
   "mcpServers": {
     "mnemo": {
       "command": "mnemo",
-      "args": ["mcp", "--tools=agent"]
+      "args": ["mcp", "--tools=agent"],
+      "env": {
+        "MNEMO_AGENT": "claudecode",
+        "MNEMO_MCP_CLIENT": "claudecode",
+        "MNEMO_MCP_TRANSPORT": "stdio"
+      }
     }
   }
 }

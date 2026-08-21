@@ -1,4 +1,6 @@
 #!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-cursor}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
 # mnemo — beforeSubmitPrompt hook for Cursor 2.6+
 # Fires before every prompt. We use it as session start by tracking
 # conversation_id — first time we see it we create the session, emit general

@@ -37,6 +37,54 @@ func TestConfigSnippetsForAll(t *testing.T) {
 	}
 }
 
+func TestConfigSnippetsIncludeAgentProvenanceEnvironment(t *testing.T) {
+	for _, agent := range SupportedAgents {
+		snippets, err := ConfigSnippets("/home/test", "/bin/mnemo", agent)
+		if err != nil {
+			t.Fatalf("config snippets for %s: %v", agent, err)
+		}
+		var mcpSnippet *ConfigSnippet
+		for i := range snippets {
+			if strings.Contains(snippets[i].Content, "mcp") && strings.Contains(snippets[i].Content, "mnemo") {
+				mcpSnippet = &snippets[i]
+				break
+			}
+		}
+		if mcpSnippet == nil {
+			t.Fatalf("%s: missing MCP snippet", agent)
+		}
+		if !strings.Contains(mcpSnippet.Content, "MNEMO_AGENT") || !strings.Contains(mcpSnippet.Content, agent) {
+			t.Fatalf("%s: MCP snippet missing agent provenance env:\n%s", agent, mcpSnippet.Content)
+		}
+	}
+}
+
+func TestOpenCodeConfigUsesCurrentMCPServersShapeAndRemovesLegacyEntry(t *testing.T) {
+	home := t.TempDir()
+	configPath := filepath.Join(home, ".config", "opencode", "opencode.json")
+	writeTestFile(t, configPath, `{
+  "mcp": {
+    "mnemo": {"type": "local", "command": ["/old/mnemo", "mcp"]},
+    "other": {"type": "local", "command": ["/bin/other"]}
+  }
+}`)
+
+	if _, err := Refresh(home, "/bin/mnemo", "opencode"); err != nil {
+		t.Fatalf("refresh opencode: %v", err)
+	}
+
+	content := readTestFile(t, configPath)
+	if strings.Contains(content, `"mnemo": {"type": "local", "command": ["/old/mnemo", "mcp"]}`) {
+		t.Fatalf("legacy OpenCode MCP entry was not removed:\n%s", content)
+	}
+	if !strings.Contains(content, `"servers"`) || !strings.Contains(content, `"MNEMO_AGENT": "opencode"`) {
+		t.Fatalf("OpenCode MCP config missing v2 servers shape or provenance env:\n%s", content)
+	}
+	if !strings.Contains(content, `"other"`) {
+		t.Fatalf("unrelated OpenCode MCP config was not preserved:\n%s", content)
+	}
+}
+
 func TestConfigSnippetsRejectsUnsupportedAgent(t *testing.T) {
 	_, err := ConfigSnippets("/home/test", "mnemo", "future-agent")
 	if err == nil || !strings.Contains(err.Error(), `unsupported agent "future-agent"`) {

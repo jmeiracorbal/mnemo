@@ -42,6 +42,7 @@ type MemoryConflictObservation struct {
 	CreatedAt   string            `json:"created_at"`
 	UpdatedAt   string            `json:"updated_at"`
 	ReviewState *MemoryReviewInfo `json:"review_state,omitempty"`
+	Provenance  *Provenance       `json:"provenance,omitempty"`
 }
 
 type MemoryConflictGroup struct {
@@ -172,6 +173,13 @@ func (s *Store) listMemoryReviewCandidates(opts MemoryReviewOptions) ([]memoryRe
 				UpdatedAt: row.UpdatedAt,
 			},
 			normalizedHash: dbString(row.NormalizedHash),
+		}
+		if row.ProvenanceID.Valid {
+			provenance, err := s.getProvenance(row.ProvenanceID.Int64)
+			if err != nil {
+				return nil, fmt.Errorf("review memory conflicts: provenance: %w", err)
+			}
+			c.Provenance = provenance
 		}
 		c.normalizedTitle = normalizeConflictText(c.Title)
 		if state != "" {

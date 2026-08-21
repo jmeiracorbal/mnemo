@@ -109,6 +109,11 @@ func ConfigSnippets(home, mnemoBin, agent string) ([]ConfigSnippet, error) {
 func applyConfig(snippet ConfigSnippet) error {
 	switch snippet.Format {
 	case "json":
+		if snippet.Agent == openCodeLabel() {
+			if _, err := removeMCPServer(snippet.Path, "mcp", "mnemo"); err != nil {
+				return err
+			}
+		}
 		var patch any
 		if err := json.Unmarshal([]byte(snippet.Content), &patch); err != nil {
 			return fmt.Errorf("parse generated JSON for %s: %w", snippet.Path, err)
@@ -209,12 +214,17 @@ func writeSetupAssets(home string, targets []assetTarget) ([]string, error) {
 	return updated, nil
 }
 
-func mcpServersJSON(mnemoBin string) string {
+func mcpServersJSON(mnemoBin, agent string) string {
 	return prettyJSON(map[string]any{
 		"mcpServers": map[string]any{
 			"mnemo": map[string]any{
 				"command": mnemoBin,
 				"args":    []string{"mcp", "--tools=agent"},
+				"env": map[string]string{
+					"MNEMO_AGENT":         agent,
+					"MNEMO_MCP_CLIENT":    agent,
+					"MNEMO_MCP_TRANSPORT": "stdio",
+				},
 			},
 		},
 	})

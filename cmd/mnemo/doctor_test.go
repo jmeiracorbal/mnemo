@@ -27,7 +27,7 @@ func TestBuildDoctorReportChecksCodexGlobalInstall(t *testing.T) {
 	if _, err := agentinit.InstallGlobalInstructions(home, "codex"); err != nil {
 		t.Fatalf("install instructions: %v", err)
 	}
-	writeFile(t, filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.mnemo]\ncommand = \"mnemo\"\nargs = [\"mcp\", \"--tools=agent\"]\n")
+	writeFile(t, filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.mnemo]\ncommand = \"mnemo\"\nargs = [\"mcp\", \"--tools=agent\"]\n\n[mcp_servers.mnemo.env]\nMNEMO_AGENT = \"codex\"\nMNEMO_MCP_CLIENT = \"codex\"\nMNEMO_MCP_TRANSPORT = \"stdio\"\n")
 	writeFile(t, filepath.Join(home, ".codex", "hooks.json"), `{"hooks":{"SessionStart":[],"Stop":[]}}`)
 	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "session-start.sh"))
 	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "stop.sh"))

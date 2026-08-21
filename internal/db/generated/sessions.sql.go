@@ -84,7 +84,7 @@ func (q *Queries) EndSession(ctx context.Context, arg EndSessionParams) error {
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, project, directory, started_at, ended_at, summary
+SELECT id, project, directory, started_at, ended_at, summary, provenance_id
 FROM sessions WHERE id = ?
 `
 
@@ -98,19 +98,21 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 		&i.StartedAt,
 		&i.EndedAt,
 		&i.Summary,
+		&i.ProvenanceID,
 	)
 	return i, err
 }
 
 const getSessionPayload = `-- name: GetSessionPayload :one
-SELECT project, directory, ended_at, summary FROM sessions WHERE id = ?
+SELECT project, directory, ended_at, summary, provenance_id FROM sessions WHERE id = ?
 `
 
 type GetSessionPayloadRow struct {
-	Project   string         `json:"project"`
-	Directory string         `json:"directory"`
-	EndedAt   sql.NullString `json:"ended_at"`
-	Summary   sql.NullString `json:"summary"`
+	Project      string         `json:"project"`
+	Directory    string         `json:"directory"`
+	EndedAt      sql.NullString `json:"ended_at"`
+	Summary      sql.NullString `json:"summary"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) GetSessionPayload(ctx context.Context, id string) (GetSessionPayloadRow, error) {
@@ -121,6 +123,7 @@ func (q *Queries) GetSessionPayload(ctx context.Context, id string) (GetSessionP
 		&i.Directory,
 		&i.EndedAt,
 		&i.Summary,
+		&i.ProvenanceID,
 	)
 	return i, err
 }
@@ -167,7 +170,7 @@ func (q *Queries) ListSessionTags(ctx context.Context, sessionID string) ([]stri
 }
 
 const listSessions = `-- name: ListSessions :many
-SELECT s.id, s.project, s.started_at, s.ended_at, s.summary,
+SELECT s.id, s.project, s.started_at, s.ended_at, s.summary, s.provenance_id,
        COUNT(o.id) AS observation_count
 FROM sessions s
 LEFT JOIN observations o ON o.session_id = s.id AND o.deleted_at IS NULL
@@ -188,6 +191,7 @@ type ListSessionsRow struct {
 	StartedAt        string         `json:"started_at"`
 	EndedAt          sql.NullString `json:"ended_at"`
 	Summary          sql.NullString `json:"summary"`
+	ProvenanceID     sql.NullInt64  `json:"provenance_id"`
 	ObservationCount int64          `json:"observation_count"`
 }
 
@@ -206,6 +210,7 @@ func (q *Queries) ListSessions(ctx context.Context, arg ListSessionsParams) ([]L
 			&i.StartedAt,
 			&i.EndedAt,
 			&i.Summary,
+			&i.ProvenanceID,
 			&i.ObservationCount,
 		); err != nil {
 			return nil, err
@@ -222,20 +227,27 @@ func (q *Queries) ListSessions(ctx context.Context, arg ListSessionsParams) ([]L
 }
 
 const upsertSession = `-- name: UpsertSession :exec
-INSERT INTO sessions (id, project, directory)
-VALUES (?, ?, ?)
+INSERT INTO sessions (id, project, directory, provenance_id)
+VALUES (?, ?, ?, ?4)
 ON CONFLICT(id) DO UPDATE SET
   project = CASE WHEN sessions.project = '' THEN excluded.project ELSE sessions.project END,
-  directory = CASE WHEN sessions.directory = '' THEN excluded.directory ELSE sessions.directory END
+  directory = CASE WHEN sessions.directory = '' THEN excluded.directory ELSE sessions.directory END,
+  provenance_id = COALESCE(sessions.provenance_id, excluded.provenance_id)
 `
 
 type UpsertSessionParams struct {
-	ID        string `json:"id"`
-	Project   string `json:"project"`
-	Directory string `json:"directory"`
+	ID           string        `json:"id"`
+	Project      string        `json:"project"`
+	Directory    string        `json:"directory"`
+	ProvenanceID sql.NullInt64 `json:"provenance_id"`
 }
 
 func (q *Queries) UpsertSession(ctx context.Context, arg UpsertSessionParams) error {
-	_, err := q.db.ExecContext(ctx, upsertSession, arg.ID, arg.Project, arg.Directory)
+	_, err := q.db.ExecContext(ctx, upsertSession,
+		arg.ID,
+		arg.Project,
+		arg.Directory,
+		arg.ProvenanceID,
+	)
 	return err
 }

@@ -23,8 +23,13 @@ func (s *Store) AllObservations(project, scope string, limit int, tags ...string
 		return nil, err
 	}
 	results := make([]Observation, 0, len(rows))
+	provenanceIDs := make([]sql.NullInt64, 0, len(rows))
 	for _, row := range rows {
 		results = append(results, observationFromListRow(row))
+		provenanceIDs = append(provenanceIDs, row.ProvenanceID)
+	}
+	if err := s.attachObservationsProvenance(results, provenanceIDs); err != nil {
+		return nil, err
 	}
 	if err := s.loadTagsForObservations(results); err != nil {
 		return nil, err
@@ -46,6 +51,10 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 	var observationID int64
 	err := s.withTx(func(tx *sql.Tx) error {
 		q := s.q.WithTx(tx)
+		provenanceID, err := s.optionalProvenanceTx(tx, p.Provenance)
+		if err != nil {
+			return err
+		}
 		var obs *Observation
 		if topicKey != "" {
 			existingID, err := q.FindObservationByTopic(context.Background(), dbgen.FindObservationByTopicParams{
@@ -55,6 +64,7 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 				if err := q.UpdateObservationByTopic(context.Background(), dbgen.UpdateObservationByTopicParams{
 					Type: p.Type, Title: title, Content: content, ToolName: sqlNullString(p.ToolName),
 					TopicKey: sqlNullString(topicKey), NormalizedHash: sqlNullString(normHash), ID: existingID,
+					ProvenanceID: provenanceID,
 				}); err != nil {
 					return err
 				}
@@ -99,7 +109,7 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 		observationID, err = q.InsertObservation(context.Background(), dbgen.InsertObservationParams{
 			SyncID: sqlNullString(syncID), SessionID: p.SessionID, Type: p.Type, Title: title, Content: content,
 			ToolName: sqlNullString(p.ToolName), Project: sqlNullString(p.Project), Scope: scope,
-			TopicKey: sqlNullString(topicKey), NormalizedHash: sqlNullString(normHash),
+			TopicKey: sqlNullString(topicKey), NormalizedHash: sqlNullString(normHash), ProvenanceID: provenanceID,
 		})
 		if err != nil {
 			return err
@@ -144,8 +154,13 @@ func (s *Store) recentObservations(project, scope string, limit int, opts Contex
 		return nil, err
 	}
 	results := make([]Observation, 0, len(rows))
+	provenanceIDs := make([]sql.NullInt64, 0, len(rows))
 	for _, row := range rows {
 		results = append(results, observationFromRecentRow(row))
+		provenanceIDs = append(provenanceIDs, row.ProvenanceID)
+	}
+	if err := s.attachObservationsProvenance(results, provenanceIDs); err != nil {
+		return nil, err
 	}
 	if err := s.loadTagsForObservations(results); err != nil {
 		return nil, err
@@ -161,6 +176,9 @@ func (s *Store) GetObservation(id int64) (*Observation, error) {
 	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 		row.ToolName, row.Project, row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
 		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+	if err := s.attachObservationProvenance(&o, row.ProvenanceID); err != nil {
+		return nil, err
+	}
 	if err := s.loadTagsForObservation(&o); err != nil {
 		return nil, err
 	}
@@ -294,13 +312,17 @@ func (s *Store) Timeline(observationID int64, before, after int) (*TimelineResul
 	}
 	beforeEntries := make([]TimelineEntry, 0, len(beforeRows))
 	for _, row := range beforeRows {
-		beforeEntries = append(beforeEntries, TimelineEntry{
+		entry := TimelineEntry{
 			ID: row.ID, SessionID: row.SessionID, Type: row.Type, Title: row.Title, Content: row.Content,
 			ToolName: nullablePtr(row.ToolName), Project: nullablePtr(row.Project), Scope: row.Scope,
 			TopicKey: nullablePtr(row.TopicKey), RevisionCount: int(row.RevisionCount),
 			DuplicateCount: int(row.DuplicateCount), LastSeenAt: nullablePtr(row.LastSeenAt),
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, DeletedAt: nullablePtr(row.DeletedAt),
-		})
+		}
+		if err := s.attachTimelineEntryProvenance(&entry, row.ProvenanceID); err != nil {
+			return nil, fmt.Errorf("timeline: before provenance: %w", err)
+		}
+		beforeEntries = append(beforeEntries, entry)
 	}
 	for i, j := 0, len(beforeEntries)-1; i < j; i, j = i+1, j-1 {
 		beforeEntries[i], beforeEntries[j] = beforeEntries[j], beforeEntries[i]
@@ -314,13 +336,17 @@ func (s *Store) Timeline(observationID int64, before, after int) (*TimelineResul
 	}
 	afterEntries := make([]TimelineEntry, 0, len(afterRows))
 	for _, row := range afterRows {
-		afterEntries = append(afterEntries, TimelineEntry{
+		entry := TimelineEntry{
 			ID: row.ID, SessionID: row.SessionID, Type: row.Type, Title: row.Title, Content: row.Content,
 			ToolName: nullablePtr(row.ToolName), Project: nullablePtr(row.Project), Scope: row.Scope,
 			TopicKey: nullablePtr(row.TopicKey), RevisionCount: int(row.RevisionCount),
 			DuplicateCount: int(row.DuplicateCount), LastSeenAt: nullablePtr(row.LastSeenAt),
 			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, DeletedAt: nullablePtr(row.DeletedAt),
-		})
+		}
+		if err := s.attachTimelineEntryProvenance(&entry, row.ProvenanceID); err != nil {
+			return nil, fmt.Errorf("timeline: after provenance: %w", err)
+		}
+		afterEntries = append(afterEntries, entry)
 	}
 
 	totalInRange, _ := s.q.CountSessionObservations(context.Background(), focus.SessionID)
@@ -361,8 +387,13 @@ func (s *Store) searchByFilter(opts SearchOptions, limit int) ([]SearchResult, e
 		return nil, fmt.Errorf("search: %w", err)
 	}
 	results := make([]SearchResult, 0, len(rows))
+	provenanceIDs := make([]sql.NullInt64, 0, len(rows))
 	for _, row := range rows {
 		results = append(results, searchResultFromFilterRow(row))
+		provenanceIDs = append(provenanceIDs, row.ProvenanceID)
+	}
+	if err := s.attachSearchResultsProvenance(results, provenanceIDs); err != nil {
+		return nil, err
 	}
 	if err := s.loadTagsForSearchResults(results); err != nil {
 		return nil, err
@@ -383,8 +414,13 @@ func (s *Store) searchFTS(query string, opts SearchOptions, limit int) ([]Search
 		return nil, fmt.Errorf("search: %w", err)
 	}
 	results := make([]SearchResult, 0, len(rows))
+	provenanceIDs := make([]sql.NullInt64, 0, len(rows))
 	for _, row := range rows {
 		results = append(results, searchResultFromFTSRow(row))
+		provenanceIDs = append(provenanceIDs, row.ProvenanceID)
+	}
+	if err := s.attachSearchResultsProvenance(results, provenanceIDs); err != nil {
+		return nil, err
 	}
 	if err := s.loadTagsForSearchResults(results); err != nil {
 		return nil, err
@@ -400,6 +436,9 @@ func (s *Store) GetObservationBySyncID(syncID string) (*Observation, error) {
 	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 		row.ToolName, row.Project, row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
 		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+	if err := s.attachObservationProvenance(&o, row.ProvenanceID); err != nil {
+		return nil, err
+	}
 	return &o, nil
 }
 
@@ -412,18 +451,23 @@ func (s *Store) AddPrompt(p AddPromptParams) (int64, error) {
 	var promptID int64
 	err := s.withTx(func(tx *sql.Tx) error {
 		syncID := newSyncID("prompt")
-		var err error
+		provenanceID, err := s.optionalProvenanceTx(tx, p.Provenance)
+		if err != nil {
+			return err
+		}
 		promptID, err = s.q.WithTx(tx).InsertPrompt(context.Background(), dbgen.InsertPromptParams{
 			SyncID: sqlNullString(syncID), SessionID: p.SessionID, Content: content, Project: sqlNullString(p.Project),
+			ProvenanceID: provenanceID,
 		})
 		if err != nil {
 			return err
 		}
 		return s.enqueueSyncMutationTx(tx, SyncEntityPrompt, syncID, SyncOpUpsert, syncPromptPayload{
-			SyncID:    syncID,
-			SessionID: p.SessionID,
-			Content:   content,
-			Project:   nullableString(p.Project),
+			SyncID:     syncID,
+			SessionID:  p.SessionID,
+			Content:    content,
+			Project:    nullableString(p.Project),
+			Provenance: nullableProvenanceInput(p.Provenance),
 		})
 	})
 	if err != nil {
@@ -444,11 +488,16 @@ func (s *Store) RecentPrompts(project string, limit int) ([]Prompt, error) {
 		return nil, err
 	}
 	results := make([]Prompt, 0, len(rows))
+	provenanceIDs := make([]sql.NullInt64, 0, len(rows))
 	for _, row := range rows {
 		results = append(results, Prompt{
 			ID: row.ID, SyncID: dbString(row.SyncID), SessionID: row.SessionID,
 			Content: row.Content, Project: dbString(row.Project), CreatedAt: row.CreatedAt,
 		})
+		provenanceIDs = append(provenanceIDs, row.ProvenanceID)
+	}
+	if err := s.attachPromptsProvenance(results, provenanceIDs); err != nil {
+		return nil, err
 	}
 	return results, nil
 }
@@ -465,11 +514,16 @@ func (s *Store) SearchPrompts(query string, project string, limit int) ([]Prompt
 		return nil, fmt.Errorf("search prompts: %w", err)
 	}
 	results := make([]Prompt, 0, len(rows))
+	provenanceIDs := make([]sql.NullInt64, 0, len(rows))
 	for _, row := range rows {
 		results = append(results, Prompt{
 			ID: row.ID, SyncID: dbString(row.SyncID), SessionID: row.SessionID,
 			Content: row.Content, Project: dbString(row.Project), CreatedAt: row.CreatedAt,
 		})
+		provenanceIDs = append(provenanceIDs, row.ProvenanceID)
+	}
+	if err := s.attachPromptsProvenance(results, provenanceIDs); err != nil {
+		return nil, err
 	}
 	return results, nil
 }
@@ -487,13 +541,17 @@ func normalizeTagList(raw []string) []string {
 }
 
 func (s *Store) getObservationTx(tx *sql.Tx, id int64) (*Observation, error) {
-	row, err := s.q.WithTx(tx).GetLiveObservation(context.Background(), id)
+	q := s.q.WithTx(tx)
+	row, err := q.GetLiveObservation(context.Background(), id)
 	if err != nil {
 		return nil, err
 	}
 	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 		row.ToolName, row.Project, row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
 		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+	if err := attachObservationProvenanceTx(q, &o, row.ProvenanceID); err != nil {
+		return nil, err
+	}
 	if err := s.loadTagsForObservationTx(tx, &o); err != nil {
 		return nil, err
 	}
@@ -510,6 +568,9 @@ func (s *Store) getObservationBySyncIDTx(tx *sql.Tx, syncID string, includeDelet
 		o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 			row.ToolName, row.Project, row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
 			row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+		if err := attachObservationProvenanceTx(q, &o, row.ProvenanceID); err != nil {
+			return nil, err
+		}
 		return &o, nil
 	}
 	row, err := q.GetLiveObservationBySyncID(context.Background(), sqlNullString(syncID))
@@ -519,5 +580,8 @@ func (s *Store) getObservationBySyncIDTx(tx *sql.Tx, syncID string, includeDelet
 	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 		row.ToolName, row.Project, row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
 		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+	if err := attachObservationProvenanceTx(q, &o, row.ProvenanceID); err != nil {
+		return nil, err
+	}
 	return &o, nil
 }

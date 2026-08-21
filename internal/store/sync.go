@@ -274,7 +274,8 @@ func (s *Store) repairEnrolledProjectSyncMutations() error {
 }
 
 func (s *Store) backfillSessionSyncMutationsTx(tx *sql.Tx, project string) error {
-	rows, err := s.q.WithTx(tx).ListSessionsMissingSyncMutation(context.Background(), dbgen.ListSessionsMissingSyncMutationParams{
+	q := s.q.WithTx(tx)
+	rows, err := q.ListSessionsMissingSyncMutation(context.Background(), dbgen.ListSessionsMissingSyncMutationParams{
 		ProjectName: project, TargetKey: DefaultSyncTargetKey, Entity: SyncEntitySession, Source: SyncSourceLocal,
 	})
 	if err != nil {
@@ -284,6 +285,7 @@ func (s *Store) backfillSessionSyncMutationsTx(tx *sql.Tx, project string) error
 		payload := syncSessionPayload{
 			ID: row.ID, Project: row.Project, Directory: row.Directory,
 			EndedAt: nullablePtr(row.EndedAt), Summary: nullablePtr(row.Summary),
+			Provenance: provenanceInputForID(q, row.ProvenanceID),
 		}
 		var sess Session
 		sess.ID = payload.ID
@@ -303,7 +305,8 @@ func (s *Store) backfillSessionSyncMutationsTx(tx *sql.Tx, project string) error
 }
 
 func (s *Store) backfillObservationSyncMutationsTx(tx *sql.Tx, project string) error {
-	rows, err := s.q.WithTx(tx).ListObservationsMissingSyncMutation(context.Background(), dbgen.ListObservationsMissingSyncMutationParams{
+	q := s.q.WithTx(tx)
+	rows, err := q.ListObservationsMissingSyncMutation(context.Background(), dbgen.ListObservationsMissingSyncMutationParams{
 		ProjectName: sqlNullString(project), TargetKey: DefaultSyncTargetKey,
 		Entity: SyncEntityObservation, Source: SyncSourceLocal,
 	})
@@ -316,6 +319,7 @@ func (s *Store) backfillObservationSyncMutationsTx(tx *sql.Tx, project string) e
 			SyncID: dbString(row.SyncID), SessionID: row.SessionID, Type: row.Type,
 			Title: row.Title, Content: row.Content, ToolName: nullablePtr(row.ToolName),
 			Project: nullablePtr(row.Project), Scope: row.Scope, TopicKey: nullablePtr(row.TopicKey),
+			Provenance: provenanceInputForID(q, row.ProvenanceID),
 		}
 		var o Observation
 		o.ID = obsID
@@ -335,7 +339,8 @@ func (s *Store) backfillObservationSyncMutationsTx(tx *sql.Tx, project string) e
 }
 
 func (s *Store) backfillPromptSyncMutationsTx(tx *sql.Tx, project string) error {
-	rows, err := s.q.WithTx(tx).ListPromptsMissingSyncMutation(context.Background(), dbgen.ListPromptsMissingSyncMutationParams{
+	q := s.q.WithTx(tx)
+	rows, err := q.ListPromptsMissingSyncMutation(context.Background(), dbgen.ListPromptsMissingSyncMutationParams{
 		ProjectName: sqlNullString(project), TargetKey: DefaultSyncTargetKey,
 		Entity: SyncEntityPrompt, Source: SyncSourceLocal,
 	})
@@ -346,6 +351,7 @@ func (s *Store) backfillPromptSyncMutationsTx(tx *sql.Tx, project string) error 
 		proj := nullablePtr(row.Project)
 		payload := syncPromptPayload{
 			SyncID: dbString(row.SyncID), SessionID: row.SessionID, Content: row.Content, Project: proj,
+			Provenance: provenanceInputForID(q, row.ProvenanceID),
 		}
 		if err := s.enqueueSyncMutationTx(tx, SyncEntityPrompt, payload.SyncID, SyncOpUpsert, payload); err != nil {
 			return err
@@ -379,9 +385,23 @@ func (s *Store) enqueueSyncMutationTx(tx *sql.Tx, entity, entityKey, op string, 
 }
 
 func (s *Store) applySessionPayloadTx(tx *sql.Tx, payload syncSessionPayload) error {
-	if err := s.q.WithTx(tx).ApplySessionPayload(context.Background(), dbgen.ApplySessionPayloadParams{
+	q := s.q.WithTx(tx)
+	provenanceInput := provenanceInputFromPtr(payload.Provenance)
+	if !hasProvenanceInput(provenanceInput) {
+		if _, err := q.GetSessionPayload(context.Background(), payload.ID); err == sql.ErrNoRows {
+			provenanceInput = SyncPullProvenance()
+		} else if err != nil {
+			return err
+		}
+	}
+	provenanceID, err := s.optionalProvenanceTx(tx, provenanceInput)
+	if err != nil {
+		return err
+	}
+	if err := q.ApplySessionPayload(context.Background(), dbgen.ApplySessionPayloadParams{
 		ID: payload.ID, Project: payload.Project, Directory: payload.Directory,
 		EndedAt: sqlNullStringPtr(payload.EndedAt), Summary: sqlNullStringPtr(payload.Summary),
+		ProvenanceID: provenanceID,
 	}); err != nil {
 		return err
 	}
@@ -397,11 +417,20 @@ func (s *Store) applyObservationUpsertTx(tx *sql.Tx, payload syncObservationPayl
 	q := s.q.WithTx(tx)
 	existing, err := s.getObservationBySyncIDTx(tx, payload.SyncID, true)
 	if err == sql.ErrNoRows {
+		provenanceInput := provenanceInputFromPtr(payload.Provenance)
+		if !hasProvenanceInput(provenanceInput) {
+			provenanceInput = SyncPullProvenance()
+		}
+		provenanceID, err := s.optionalProvenanceTx(tx, provenanceInput)
+		if err != nil {
+			return err
+		}
 		newID, err := q.InsertPulledObservation(context.Background(), dbgen.InsertPulledObservationParams{
 			SyncID: sqlNullString(payload.SyncID), SessionID: payload.SessionID, Type: payload.Type,
 			Title: payload.Title, Content: payload.Content, ToolName: sqlNullStringPtr(payload.ToolName),
 			Project: sqlNullStringPtr(payload.Project), Scope: normalizeScope(payload.Scope),
 			TopicKey: sqlNullStringPtr(payload.TopicKey), NormalizedHash: sqlNullString(hashNormalized(payload.Content)),
+			ProvenanceID: provenanceID,
 		})
 		if err != nil {
 			return err
@@ -416,11 +445,15 @@ func (s *Store) applyObservationUpsertTx(tx *sql.Tx, payload syncObservationPayl
 	if err != nil {
 		return err
 	}
+	provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromPtr(payload.Provenance))
+	if err != nil {
+		return err
+	}
 	err = q.UpdatePulledObservation(context.Background(), dbgen.UpdatePulledObservationParams{
 		SessionID: payload.SessionID, Type: payload.Type, Title: payload.Title, Content: payload.Content,
 		ToolName: sqlNullStringPtr(payload.ToolName), Project: sqlNullStringPtr(payload.Project),
 		Scope: normalizeScope(payload.Scope), TopicKey: sqlNullStringPtr(payload.TopicKey),
-		NormalizedHash: sqlNullString(hashNormalized(payload.Content)), ID: existing.ID,
+		NormalizedHash: sqlNullString(hashNormalized(payload.Content)), ProvenanceID: provenanceID, ID: existing.ID,
 	})
 	if err != nil {
 		return err
@@ -458,17 +491,29 @@ func (s *Store) applyPromptUpsertTx(tx *sql.Tx, payload syncPromptPayload) error
 	q := s.q.WithTx(tx)
 	existingID, err := q.FindPromptBySyncID(context.Background(), sqlNullString(payload.SyncID))
 	if err == sql.ErrNoRows {
+		provenanceInput := provenanceInputFromPtr(payload.Provenance)
+		if !hasProvenanceInput(provenanceInput) {
+			provenanceInput = SyncPullProvenance()
+		}
+		provenanceID, err := s.optionalProvenanceTx(tx, provenanceInput)
+		if err != nil {
+			return err
+		}
 		_, err = q.InsertPrompt(context.Background(), dbgen.InsertPromptParams{
 			SyncID: sqlNullString(payload.SyncID), SessionID: payload.SessionID,
-			Content: payload.Content, Project: sqlNullStringPtr(payload.Project),
+			Content: payload.Content, Project: sqlNullStringPtr(payload.Project), ProvenanceID: provenanceID,
 		})
 		return err
 	}
 	if err != nil {
 		return err
 	}
+	provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromPtr(payload.Provenance))
+	if err != nil {
+		return err
+	}
 	return q.UpdatePrompt(context.Background(), dbgen.UpdatePromptParams{
 		SessionID: payload.SessionID, Content: payload.Content,
-		Project: sqlNullStringPtr(payload.Project), ID: existingID,
+		Project: sqlNullStringPtr(payload.Project), ProvenanceID: provenanceID, ID: existingID,
 	})
 }

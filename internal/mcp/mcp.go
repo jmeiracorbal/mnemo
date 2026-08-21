@@ -788,21 +788,23 @@ func handleSave(s *store.Store) server.ToolHandlerFunc {
 		}
 		suggestedTopicKey := suggestTopicKey(typ, title, content)
 
-		if err := s.CreateSession(sessionID, project, ""); err != nil {
+		provenance := store.MCPProvenance(store.ToolMemSave)
+		if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
 			return nil, fmt.Errorf("create session: %w", err)
 		}
 
 		truncated := len(content) > s.MaxObservationLength()
 
 		_, err := s.AddObservation(store.AddObservationParams{
-			SessionID: sessionID,
-			Type:      typ,
-			Title:     title,
-			Content:   content,
-			Project:   project,
-			Scope:     scope,
-			TopicKey:  topicKey,
-			Tags:      tags,
+			SessionID:  sessionID,
+			Type:       typ,
+			Title:      title,
+			Content:    content,
+			Project:    project,
+			Scope:      scope,
+			TopicKey:   topicKey,
+			Tags:       tags,
+			Provenance: provenance,
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to save: " + err.Error()), nil
@@ -930,14 +932,16 @@ func handleSavePrompt(s *store.Store) server.ToolHandlerFunc {
 			sessionID = defaultSessionID(project)
 		}
 
-		if err := s.CreateSession(sessionID, project, ""); err != nil {
+		provenance := store.MCPProvenance(store.ToolMemSavePrompt)
+		if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
 			return nil, fmt.Errorf("create session: %w", err)
 		}
 
 		_, err := s.AddPrompt(store.AddPromptParams{
-			SessionID: sessionID,
-			Content:   content,
-			Project:   project,
+			SessionID:  sessionID,
+			Content:    content,
+			Project:    project,
+			Provenance: provenance,
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to save prompt: " + err.Error()), nil
@@ -1296,16 +1300,18 @@ func handleSessionSummary(s *store.Store) server.ToolHandlerFunc {
 			sessionID = defaultSessionID(project)
 		}
 
-		if err := s.CreateSession(sessionID, project, ""); err != nil {
+		provenance := store.MCPProvenance(store.ToolMemSessionSummary)
+		if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
 			return nil, fmt.Errorf("create session: %w", err)
 		}
 
 		_, err := s.AddObservation(store.AddObservationParams{
-			SessionID: sessionID,
-			Type:      "session_summary",
-			Title:     fmt.Sprintf("Session summary: %s", project),
-			Content:   content,
-			Project:   project,
+			SessionID:  sessionID,
+			Type:       "session_summary",
+			Title:      fmt.Sprintf("Session summary: %s", project),
+			Content:    content,
+			Project:    project,
+			Provenance: provenance,
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to save session summary: " + err.Error()), nil
@@ -1321,7 +1327,7 @@ func handleSessionStart(s *store.Store) server.ToolHandlerFunc {
 		project, _ := req.GetArguments()["project"].(string)
 		directory, _ := req.GetArguments()["directory"].(string)
 
-		if err := s.CreateSession(id, project, directory); err != nil {
+		if err := s.CreateSessionWithProvenance(id, project, directory, store.MCPProvenance(store.ToolMemSessionStart)); err != nil {
 			return mcp.NewToolResultError("Failed to start session: " + err.Error()), nil
 		}
 
@@ -1362,7 +1368,7 @@ func handleCapturePassive(s *store.Store) server.ToolHandlerFunc {
 
 		if sessionID == "" {
 			sessionID = defaultSessionID(project)
-			_ = s.CreateSession(sessionID, project, "")
+			_ = s.CreateSessionWithProvenance(sessionID, project, "", store.MCPProvenance(store.ToolMemCapturePassive))
 		}
 
 		if source == "" {
@@ -1370,10 +1376,11 @@ func handleCapturePassive(s *store.Store) server.ToolHandlerFunc {
 		}
 
 		result, err := s.PassiveCapture(store.PassiveCaptureParams{
-			SessionID: sessionID,
-			Content:   content,
-			Project:   project,
-			Source:    source,
+			SessionID:  sessionID,
+			Content:    content,
+			Project:    project,
+			Source:     source,
+			Provenance: store.MCPProvenance(store.ToolMemCapturePassive),
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Passive capture failed: " + err.Error()), nil

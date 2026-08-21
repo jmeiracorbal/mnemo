@@ -10,14 +10,19 @@ import (
 )
 
 func (s *Store) CreateSession(id, project, directory string) error {
+	return s.CreateSessionWithProvenance(id, project, directory, ProvenanceInput{})
+}
+
+func (s *Store) CreateSessionWithProvenance(id, project, directory string, provenance ProvenanceInput) error {
 	return s.withTx(func(tx *sql.Tx) error {
-		if err := s.createSessionTx(tx, id, project, directory); err != nil {
+		if err := s.createSessionTx(tx, id, project, directory, provenance); err != nil {
 			return err
 		}
 		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
-			ID:        id,
-			Project:   project,
-			Directory: directory,
+			ID:         id,
+			Project:    project,
+			Directory:  directory,
+			Provenance: nullableProvenanceInput(provenance),
 		})
 	})
 }
@@ -43,11 +48,12 @@ func (s *Store) EndSession(id string, summary string) error {
 		storedSummary := nullablePtr(stored.Summary)
 
 		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
-			ID:        id,
-			Project:   stored.Project,
-			Directory: stored.Directory,
-			EndedAt:   endedAt,
-			Summary:   storedSummary,
+			ID:         id,
+			Project:    stored.Project,
+			Directory:  stored.Directory,
+			EndedAt:    endedAt,
+			Summary:    storedSummary,
+			Provenance: provenanceInputForID(q, stored.ProvenanceID),
 		})
 	})
 }
@@ -60,6 +66,13 @@ func (s *Store) GetSession(id string) (*Session, error) {
 	sess := Session{
 		ID: row.ID, Project: row.Project, Directory: row.Directory, StartedAt: row.StartedAt,
 		EndedAt: nullablePtr(row.EndedAt), Summary: nullablePtr(row.Summary),
+	}
+	if row.ProvenanceID.Valid {
+		if provenance, err := s.getProvenance(row.ProvenanceID.Int64); err == nil {
+			sess.Provenance = provenance
+		} else {
+			return nil, err
+		}
 	}
 	if err := s.loadTagsForSession(&sess); err != nil {
 		return nil, err
@@ -102,12 +115,17 @@ func (s *Store) listSessions(project string, limit int) ([]SessionSummary, error
 		return nil, err
 	}
 	results := make([]SessionSummary, 0, len(rows))
+	provenanceIDs := make([]sql.NullInt64, 0, len(rows))
 	for _, row := range rows {
 		results = append(results, SessionSummary{
 			ID: row.ID, Project: row.Project, StartedAt: row.StartedAt,
 			EndedAt: nullablePtr(row.EndedAt), Summary: nullablePtr(row.Summary),
 			ObservationCount: int(row.ObservationCount),
 		})
+		provenanceIDs = append(provenanceIDs, row.ProvenanceID)
+	}
+	if err := s.attachSessionSummariesProvenance(results, provenanceIDs); err != nil {
+		return nil, err
 	}
 	return results, nil
 }
@@ -124,8 +142,13 @@ func (s *Store) SessionObservations(sessionID string, limit int) ([]Observation,
 		return nil, err
 	}
 	results := make([]Observation, 0, len(rows))
+	provenanceIDs := make([]sql.NullInt64, 0, len(rows))
 	for _, row := range rows {
 		results = append(results, observationFromSessionRow(row))
+		provenanceIDs = append(provenanceIDs, row.ProvenanceID)
+	}
+	if err := s.attachObservationsProvenance(results, provenanceIDs); err != nil {
+		return nil, err
 	}
 	if err := s.loadTagsForObservations(results); err != nil {
 		return nil, err
@@ -217,8 +240,12 @@ func (s *Store) FormatContextOpts(project, scope string, opts ContextOptions) (s
 	return b.String(), nil
 }
 
-func (s *Store) createSessionTx(tx *sql.Tx, id, project, directory string) error {
+func (s *Store) createSessionTx(tx *sql.Tx, id, project, directory string, provenance ProvenanceInput) error {
+	provenanceID, err := s.optionalProvenanceTx(tx, provenance)
+	if err != nil {
+		return err
+	}
 	return s.q.WithTx(tx).UpsertSession(context.Background(), dbgen.UpsertSessionParams{
-		ID: id, Project: project, Directory: directory,
+		ID: id, Project: project, Directory: directory, ProvenanceID: provenanceID,
 	})
 }

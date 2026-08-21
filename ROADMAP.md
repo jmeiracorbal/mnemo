@@ -73,6 +73,14 @@ mnemo memories ingest --agent=all --path . --yes
 
 Add optional project trace metadata related to agent sessions, command execution, and memory provenance.
 
+Status:
+
+- completed: normalized SQLite provenance catalog for agents, source kinds, tools, models, MCP clients, and contexts;
+- completed: nullable `provenance_id` links for sessions, observations, and prompts, preserving legacy rows;
+- completed: CLI/MCP/import write paths can persist provenance when available;
+- next: enforce `.mnemo` marker guardrails in MCP write-tool contracts so direct callers cannot write to an arbitrary `project` without a validated project marker;
+- next: expose user-facing filters and reports such as `--agent`, `--source`, and stats by agent.
+
 Goals:
 
 - relate commands and actions to a project and session;

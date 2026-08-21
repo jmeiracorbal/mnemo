@@ -8,6 +8,14 @@ import (
 // the installer helpers. Keep this list stable for scripts and docs.
 var SupportedAgents = []string{"claudecode", "cursor", "windsurf", "codex", "opencode"}
 
+const (
+	AgentClaudeCode = "claudecode"
+	AgentCursor     = "cursor"
+	AgentWindsurf   = "windsurf"
+	AgentCodex      = "codex"
+	AgentOpenCode   = "opencode"
+)
+
 // ExpandAgents resolves a single agent flag value to one or more concrete agent
 // IDs. It accepts the special value "all".
 func ExpandAgents(agent string) ([]string, error) {

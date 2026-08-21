@@ -27,6 +27,10 @@ func sqlNullStringPtr(value *string) sql.NullString {
 	return sql.NullString{String: *value, Valid: true}
 }
 
+func sqlNullInt64(value int64) sql.NullInt64 {
+	return sql.NullInt64{Int64: value, Valid: value != 0}
+}
+
 func dbString(v any) string {
 	switch value := v.(type) {
 	case nil:
@@ -37,6 +41,44 @@ func dbString(v any) string {
 		return string(value)
 	default:
 		return fmt.Sprint(value)
+	}
+}
+
+func provenanceFromDB(row dbgen.GetProvenanceContextRow) Provenance {
+	return Provenance{
+		ID:                 row.ID,
+		AgentID:            row.AgentID,
+		AgentDisplayName:   row.AgentDisplayName,
+		AgentKind:          row.AgentKind,
+		SourceKindID:       row.SourceKindID,
+		SourceDisplayName:  row.SourceDisplayName,
+		ToolID:             row.ToolID,
+		ToolDisplayName:    row.ToolDisplayName,
+		ModelID:            row.ModelID,
+		ModelProvider:      row.ModelProvider,
+		ModelDisplayName:   row.ModelDisplayName,
+		MCPClientID:        row.McpClientID,
+		MCPClientName:      row.McpClientName,
+		MCPClientVersion:   row.McpClientVersion,
+		MCPClientTransport: row.McpClientTransport,
+		CreatedAt:          row.CreatedAt,
+	}
+}
+
+func provenanceInputFromStored(provenance *Provenance, fallback ProvenanceInput) ProvenanceInput {
+	if provenance == nil {
+		return fallback
+	}
+	return ProvenanceInput{
+		AgentID:          provenance.AgentID,
+		SourceKindID:     provenance.SourceKindID,
+		ToolID:           provenance.ToolID,
+		ModelID:          provenance.ModelID,
+		ModelProvider:    provenance.ModelProvider,
+		MCPClientID:      provenance.MCPClientID,
+		MCPClientName:    provenance.MCPClientName,
+		MCPClientVersion: provenance.MCPClientVersion,
+		MCPTransport:     provenance.MCPClientTransport,
 	}
 }
 
@@ -143,15 +185,16 @@ func observationPayloadFromObservation(obs *Observation) syncObservationPayload 
 		tags = []string{}
 	}
 	return syncObservationPayload{
-		SyncID:    obs.SyncID,
-		SessionID: obs.SessionID,
-		Type:      obs.Type,
-		Title:     obs.Title,
-		Content:   obs.Content,
-		ToolName:  obs.ToolName,
-		Project:   obs.Project,
-		Scope:     obs.Scope,
-		TopicKey:  obs.TopicKey,
-		Tags:      &tags,
+		SyncID:     obs.SyncID,
+		SessionID:  obs.SessionID,
+		Type:       obs.Type,
+		Title:      obs.Title,
+		Content:    obs.Content,
+		ToolName:   obs.ToolName,
+		Project:    obs.Project,
+		Scope:      obs.Scope,
+		TopicKey:   obs.TopicKey,
+		Tags:       &tags,
+		Provenance: nullableProvenanceInput(provenanceInputFromStored(obs.Provenance, ProvenanceInput{})),
 	}
 }

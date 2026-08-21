@@ -280,6 +280,7 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 					SyncID: dbString(row.SyncID), SessionID: row.SessionID, Type: row.Type,
 					Title: row.Title, Content: row.Content, ToolName: nullablePtr(row.ToolName),
 					Project: nullablePtr(row.Project), Scope: row.Scope, TopicKey: nullablePtr(row.TopicKey),
+					Provenance: provenanceInputForID(q, row.ProvenanceID),
 				},
 			})
 		}
@@ -296,6 +297,7 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 			sessList = append(sessList, affectedSess{payload: syncSessionPayload{
 				ID: row.ID, Project: row.Project, Directory: row.Directory,
 				EndedAt: nullablePtr(row.EndedAt), Summary: nullablePtr(row.Summary),
+				Provenance: provenanceInputForID(q, row.ProvenanceID),
 			}})
 		}
 
@@ -361,7 +363,8 @@ func (s *Store) SetSessionTags(id string, tags []string) error {
 		if err := s.setTagsForSessionTx(tx, id, tags); err != nil {
 			return err
 		}
-		row, err := s.q.WithTx(tx).GetSessionPayload(context.Background(), id)
+		q := s.q.WithTx(tx)
+		row, err := q.GetSessionPayload(context.Background(), id)
 		if err != nil {
 			return err
 		}
@@ -375,12 +378,13 @@ func (s *Store) SetSessionTags(id string, tags []string) error {
 			storedTags = []string{}
 		}
 		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
-			ID:        id,
-			Project:   row.Project,
-			Directory: row.Directory,
-			EndedAt:   nullablePtr(row.EndedAt),
-			Summary:   nullablePtr(row.Summary),
-			Tags:      &storedTags,
+			ID:         id,
+			Project:    row.Project,
+			Directory:  row.Directory,
+			EndedAt:    nullablePtr(row.EndedAt),
+			Summary:    nullablePtr(row.Summary),
+			Tags:       &storedTags,
+			Provenance: provenanceInputForID(q, row.ProvenanceID),
 		})
 	})
 }

@@ -37,7 +37,7 @@ func windsurfConfigSnippets(home, mnemoBin string) []ConfigSnippet {
 			Agent:   windsurfLabel(),
 			Path:    filepath.Join(home, ".codeium", "windsurf", "mcp_config.json"),
 			Format:  "json",
-			Content: mcpServersJSON(mnemoBin),
+			Content: mcpServersJSON(mnemoBin, AgentWindsurf),
 		},
 		{
 			Agent:  windsurfLabel(),
@@ -88,7 +88,7 @@ func windsurfCheckInstructions(home string) Check {
 
 func windsurfCheckMCP(home string) Check {
 	path := filepath.Join(home, ".codeium", "windsurf", "mcp_config.json")
-	return checkJSONHas(path, "mcp_config.windsurf", "windsurf", "mcpServers", "mnemo")
+	return checkJSONMCPWithEnv(path, "mcp_config.windsurf", "windsurf", "env", "mcpServers", "mnemo")
 }
 
 func windsurfCheckRuntime(home string) Check {

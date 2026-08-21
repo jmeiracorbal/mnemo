@@ -12,7 +12,7 @@ import (
 
 const listMemoryReviewCandidates = `-- name: ListMemoryReviewCandidates :many
 SELECT o.id, o.type, o.title, ifnull(o.project, '') AS project, o.scope, ifnull(o.topic_key, '') AS topic_key,
-       ifnull(o.normalized_hash, '') AS normalized_hash, o.created_at, o.updated_at,
+       ifnull(o.normalized_hash, '') AS normalized_hash, o.created_at, o.updated_at, o.provenance_id,
        ifnull(r.state, '') AS review_state, ifnull(r.reason, '') AS review_reason, r.superseded_by,
        ifnull(r.reviewed_at, '') AS review_reviewed_at, ifnull(r.updated_at, '') AS review_updated_at
 FROM observations o
@@ -40,6 +40,7 @@ type ListMemoryReviewCandidatesRow struct {
 	NormalizedHash   interface{}   `json:"normalized_hash"`
 	CreatedAt        string        `json:"created_at"`
 	UpdatedAt        string        `json:"updated_at"`
+	ProvenanceID     sql.NullInt64 `json:"provenance_id"`
 	ReviewState      interface{}   `json:"review_state"`
 	ReviewReason     interface{}   `json:"review_reason"`
 	SupersededBy     sql.NullInt64 `json:"superseded_by"`
@@ -66,6 +67,7 @@ func (q *Queries) ListMemoryReviewCandidates(ctx context.Context, arg ListMemory
 			&i.NormalizedHash,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ProvenanceID,
 			&i.ReviewState,
 			&i.ReviewReason,
 			&i.SupersededBy,

@@ -45,7 +45,7 @@ func claudeCodeConfigSnippets(home, mnemoBin string) []ConfigSnippet {
 		Agent:   claudeCodeLabel(),
 		Path:    filepath.Join(home, ".claude", ".mcp.json"),
 		Format:  "json",
-		Content: mcpServersJSON(mnemoBin),
+		Content: mcpServersJSON(mnemoBin, AgentClaudeCode),
 	}}
 }
 
@@ -66,7 +66,7 @@ func claudeCodeCheckInstructions(home string) Check {
 
 func claudeCodeCheckMCP(home string) Check {
 	path := filepath.Join(home, ".claude", ".mcp.json")
-	return checkJSONHas(path, "mcp_config.claudecode", "claudecode", "mcpServers", "mnemo")
+	return checkJSONMCPWithEnv(path, "mcp_config.claudecode", "claudecode", "env", "mcpServers", "mnemo")
 }
 
 func claudeCodeCheckRuntime(home string) Check {

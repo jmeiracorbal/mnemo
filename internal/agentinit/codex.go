@@ -40,7 +40,7 @@ func codexConfigSnippets(home, mnemoBin string) []ConfigSnippet {
 			Agent:   codexLabel(),
 			Path:    filepath.Join(home, ".codex", "config.toml"),
 			Format:  "toml",
-			Content: fmt.Sprintf("[mcp_servers.mnemo]\ncommand = %q\nargs = [\"mcp\", \"--tools=agent\"]\n", mnemoBin),
+			Content: fmt.Sprintf("[mcp_servers.mnemo]\ncommand = %q\nargs = [\"mcp\", \"--tools=agent\"]\n\n[mcp_servers.mnemo.env]\nMNEMO_AGENT = %q\nMNEMO_MCP_CLIENT = %q\nMNEMO_MCP_TRANSPORT = \"stdio\"\n", mnemoBin, AgentCodex, AgentCodex),
 		},
 		{
 			Agent:  codexLabel(),
@@ -116,6 +116,10 @@ func codexCheckMCP(home string) Check {
 	content := string(data)
 	if !strings.Contains(content, "[mcp_servers.mnemo]") || !strings.Contains(content, "mcp") {
 		return checkWarning("codex", "mcp_config.codex", "MCP config does not contain mnemo server", path)
+	}
+	if !strings.Contains(content, "[mcp_servers.mnemo.env]") ||
+		!strings.Contains(content, `MNEMO_AGENT = "codex"`) {
+		return checkWarning("codex", "mcp_config.codex", "MCP config is missing mnemo provenance environment", path)
 	}
 	return checkOK("codex", "mcp_config.codex", "MCP config contains mnemo server", path)
 }

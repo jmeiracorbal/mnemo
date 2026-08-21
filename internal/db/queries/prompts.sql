@@ -1,11 +1,18 @@
 -- name: InsertPrompt :one
-INSERT INTO user_prompts (sync_id, session_id, content, project)
-VALUES (sqlc.arg('sync_id'), sqlc.arg('session_id'), sqlc.arg('content'), sqlc.narg('project'))
+INSERT INTO user_prompts (sync_id, session_id, content, project, provenance_id)
+VALUES (
+  sqlc.arg('sync_id'), sqlc.arg('session_id'), sqlc.arg('content'),
+  sqlc.narg('project'), sqlc.narg('provenance_id')
+)
 RETURNING id;
 
 -- name: FindPromptBySyncID :one
 SELECT id FROM user_prompts WHERE sync_id = ? ORDER BY id DESC LIMIT 1;
 
 -- name: UpdatePrompt :exec
-UPDATE user_prompts SET session_id = ?, content = ?, project = ? WHERE id = ?;
-
+UPDATE user_prompts SET
+  session_id = sqlc.arg('session_id'),
+  content = sqlc.arg('content'),
+  project = sqlc.narg('project'),
+  provenance_id = COALESCE(sqlc.narg('provenance_id'), provenance_id)
+WHERE id = sqlc.arg('id');

@@ -8,6 +8,28 @@ import (
 	"database/sql"
 )
 
+type Agent struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	Kind        string `json:"kind"`
+	CreatedAt   string `json:"created_at"`
+}
+
+type McpClient struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Transport string `json:"transport"`
+	CreatedAt string `json:"created_at"`
+}
+
+type Model struct {
+	ID          string `json:"id"`
+	Provider    string `json:"provider"`
+	DisplayName string `json:"display_name"`
+	CreatedAt   string `json:"created_at"`
+}
+
 type Observation struct {
 	ID             int64          `json:"id"`
 	SyncID         sql.NullString `json:"sync_id"`
@@ -26,6 +48,7 @@ type Observation struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 type ObservationReview struct {
@@ -61,18 +84,35 @@ type PromptsFt struct {
 	Project string `json:"project"`
 }
 
+type ProvenanceContext struct {
+	ID           int64  `json:"id"`
+	AgentID      string `json:"agent_id"`
+	SourceKindID string `json:"source_kind_id"`
+	ToolID       string `json:"tool_id"`
+	ModelID      string `json:"model_id"`
+	McpClientID  string `json:"mcp_client_id"`
+	CreatedAt    string `json:"created_at"`
+}
+
 type Session struct {
-	ID        string         `json:"id"`
-	Project   string         `json:"project"`
-	Directory string         `json:"directory"`
-	StartedAt string         `json:"started_at"`
-	EndedAt   sql.NullString `json:"ended_at"`
-	Summary   sql.NullString `json:"summary"`
+	ID           string         `json:"id"`
+	Project      string         `json:"project"`
+	Directory    string         `json:"directory"`
+	StartedAt    string         `json:"started_at"`
+	EndedAt      sql.NullString `json:"ended_at"`
+	Summary      sql.NullString `json:"summary"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
 type SessionTag struct {
 	SessionID string `json:"session_id"`
 	Tag       string `json:"tag"`
+}
+
+type SourceKind struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	CreatedAt   string `json:"created_at"`
 }
 
 type SyncChunk struct {
@@ -112,11 +152,18 @@ type SyncState struct {
 	UpdatedAt           string         `json:"updated_at"`
 }
 
+type Tool struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	CreatedAt   string `json:"created_at"`
+}
+
 type UserPrompt struct {
-	ID        int64          `json:"id"`
-	SyncID    sql.NullString `json:"sync_id"`
-	SessionID string         `json:"session_id"`
-	Content   string         `json:"content"`
-	Project   sql.NullString `json:"project"`
-	CreatedAt string         `json:"created_at"`
+	ID           int64          `json:"id"`
+	SyncID       sql.NullString `json:"sync_id"`
+	SessionID    string         `json:"session_id"`
+	Content      string         `json:"content"`
+	Project      sql.NullString `json:"project"`
+	CreatedAt    string         `json:"created_at"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }

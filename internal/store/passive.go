@@ -108,13 +108,14 @@ func (s *Store) PassiveCapture(p PassiveCaptureParams) (*PassiveCaptureResult, e
 		}
 
 		_, err = s.AddObservation(AddObservationParams{
-			SessionID: p.SessionID,
-			Type:      "passive",
-			Title:     title,
-			Content:   learning,
-			Project:   p.Project,
-			Scope:     "project",
-			ToolName:  p.Source,
+			SessionID:  p.SessionID,
+			Type:       "passive",
+			Title:      title,
+			Content:    learning,
+			Project:    p.Project,
+			Scope:      "project",
+			ToolName:   p.Source,
+			Provenance: p.Provenance,
 		})
 		if err != nil {
 			return result, fmt.Errorf("passive capture save: %w", err)

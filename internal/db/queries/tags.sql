@@ -32,13 +32,13 @@ GROUP BY st2.tag;
 
 -- name: ListObservationsAffectedByTag :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title,
-       o.content, o.tool_name, o.project, o.scope, o.topic_key
+       o.content, o.tool_name, o.project, o.scope, o.topic_key, o.provenance_id
 FROM observations o
 JOIN observation_tags ot ON ot.observation_id = o.id
 WHERE ot.tag = ? AND o.deleted_at IS NULL;
 
 -- name: ListSessionsAffectedByTag :many
-SELECT s.id, s.project, s.directory, s.ended_at, s.summary
+SELECT s.id, s.project, s.directory, s.ended_at, s.summary, s.provenance_id
 FROM sessions s
 JOIN session_tags st ON st.session_id = s.id
 WHERE st.tag = ?;

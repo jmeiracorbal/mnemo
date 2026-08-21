@@ -113,7 +113,7 @@ func (q *Queries) FindObservationByTopic(ctx context.Context, arg FindObservatio
 const getLiveObservation = `-- name: GetLiveObservation :one
 SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
        tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at
+       last_seen_at, created_at, updated_at, deleted_at, provenance_id
 FROM observations WHERE id = ? AND deleted_at IS NULL
 `
 
@@ -134,6 +134,7 @@ type GetLiveObservationRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) GetLiveObservation(ctx context.Context, id int64) (GetLiveObservationRow, error) {
@@ -156,6 +157,7 @@ func (q *Queries) GetLiveObservation(ctx context.Context, id int64) (GetLiveObse
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ProvenanceID,
 	)
 	return i, err
 }
@@ -163,7 +165,7 @@ func (q *Queries) GetLiveObservation(ctx context.Context, id int64) (GetLiveObse
 const getLiveObservationBySyncID = `-- name: GetLiveObservationBySyncID :one
 SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
        tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at
+       last_seen_at, created_at, updated_at, deleted_at, provenance_id
 FROM observations WHERE sync_id = ? AND deleted_at IS NULL
 ORDER BY id DESC LIMIT 1
 `
@@ -185,6 +187,7 @@ type GetLiveObservationBySyncIDRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) GetLiveObservationBySyncID(ctx context.Context, syncID sql.NullString) (GetLiveObservationBySyncIDRow, error) {
@@ -207,6 +210,7 @@ func (q *Queries) GetLiveObservationBySyncID(ctx context.Context, syncID sql.Nul
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ProvenanceID,
 	)
 	return i, err
 }
@@ -214,7 +218,7 @@ func (q *Queries) GetLiveObservationBySyncID(ctx context.Context, syncID sql.Nul
 const getObservation = `-- name: GetObservation :one
 SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
        tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at
+       last_seen_at, created_at, updated_at, deleted_at, provenance_id
 FROM observations WHERE id = ?
 `
 
@@ -235,6 +239,7 @@ type GetObservationRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) GetObservation(ctx context.Context, id int64) (GetObservationRow, error) {
@@ -257,6 +262,7 @@ func (q *Queries) GetObservation(ctx context.Context, id int64) (GetObservationR
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ProvenanceID,
 	)
 	return i, err
 }
@@ -264,7 +270,7 @@ func (q *Queries) GetObservation(ctx context.Context, id int64) (GetObservationR
 const getObservationBySyncIDIncludingDeleted = `-- name: GetObservationBySyncIDIncludingDeleted :one
 SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
        tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at
+       last_seen_at, created_at, updated_at, deleted_at, provenance_id
 FROM observations WHERE sync_id = ?
 ORDER BY id DESC LIMIT 1
 `
@@ -286,6 +292,7 @@ type GetObservationBySyncIDIncludingDeletedRow struct {
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
 	DeletedAt      sql.NullString `json:"deleted_at"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) GetObservationBySyncIDIncludingDeleted(ctx context.Context, syncID sql.NullString) (GetObservationBySyncIDIncludingDeletedRow, error) {
@@ -308,6 +315,7 @@ func (q *Queries) GetObservationBySyncIDIncludingDeleted(ctx context.Context, sy
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.ProvenanceID,
 	)
 	return i, err
 }
@@ -335,11 +343,12 @@ func (q *Queries) HardDeleteObservation(ctx context.Context, id int64) error {
 const insertObservation = `-- name: InsertObservation :one
 INSERT INTO observations (
   sync_id, session_id, type, title, content, tool_name, project, scope,
-  topic_key, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at
+  topic_key, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at, provenance_id
 ) VALUES (
   ?1, ?2, ?3, ?4,
   ?5, ?6, ?7, ?8,
-  ?9, ?10, 1, 1, datetime('now'), datetime('now')
+  ?9, ?10, 1, 1, datetime('now'), datetime('now'),
+  ?11
 )
 RETURNING id
 `
@@ -355,6 +364,7 @@ type InsertObservationParams struct {
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	NormalizedHash sql.NullString `json:"normalized_hash"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
 func (q *Queries) InsertObservation(ctx context.Context, arg InsertObservationParams) (int64, error) {
@@ -369,6 +379,7 @@ func (q *Queries) InsertObservation(ctx context.Context, arg InsertObservationPa
 		arg.Scope,
 		arg.TopicKey,
 		arg.NormalizedHash,
+		arg.ProvenanceID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -488,10 +499,11 @@ UPDATE observations SET
   tool_name = ?4,
   topic_key = ?5,
   normalized_hash = ?6,
+  provenance_id = COALESCE(?7, provenance_id),
   revision_count = revision_count + 1,
   last_seen_at = datetime('now'),
   updated_at = datetime('now')
-WHERE id = ?7
+WHERE id = ?8
 `
 
 type UpdateObservationByTopicParams struct {
@@ -501,6 +513,7 @@ type UpdateObservationByTopicParams struct {
 	ToolName       sql.NullString `json:"tool_name"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	NormalizedHash sql.NullString `json:"normalized_hash"`
+	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 	ID             int64          `json:"id"`
 }
 
@@ -512,6 +525,7 @@ func (q *Queries) UpdateObservationByTopic(ctx context.Context, arg UpdateObserv
 		arg.ToolName,
 		arg.TopicKey,
 		arg.NormalizedHash,
+		arg.ProvenanceID,
 		arg.ID,
 	)
 	return err

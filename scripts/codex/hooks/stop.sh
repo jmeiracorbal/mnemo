@@ -1,4 +1,6 @@
 #!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-codex}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
 # mnemo — Stop hook for Codex CLI
 # Fires when the agent stops. Reads transcript for passive capture,
 # then closes the mnemo session.

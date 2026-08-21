@@ -45,18 +45,20 @@ func runSave(s *store.Store) {
 	if project != "" {
 		sessionID = "manual-save-" + project
 	}
-	if err := s.CreateSession(sessionID, project, ""); err != nil {
+	provenance := store.CLIProvenance(store.ToolMnemoSave)
+	if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: warning: could not create session: %v\n", err)
 	}
 
 	id, err := s.AddObservation(store.AddObservationParams{
-		SessionID: sessionID,
-		Type:      typ,
-		Title:     title,
-		Content:   content,
-		Project:   project,
-		Scope:     scope,
-		TopicKey:  topicKey,
+		SessionID:  sessionID,
+		Type:       typ,
+		Title:      title,
+		Content:    content,
+		Project:    project,
+		Scope:      scope,
+		TopicKey:   topicKey,
+		Provenance: provenance,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: save failed: %v\n", err)
@@ -166,7 +168,7 @@ func runSession(s *store.Store) {
 				i++
 			}
 		}
-		if err := s.CreateSession(id, project, dir); err != nil {
+		if err := s.CreateSessionWithProvenance(id, project, dir, store.CLIProvenance(store.ToolMemSessionStart)); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo: session start failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -321,15 +323,17 @@ func runCapture(s *store.Store) {
 			sessionID = "manual-save-" + project
 		}
 	}
-	if err := s.CreateSession(sessionID, project, ""); err != nil {
+	provenance := store.CLIProvenance(store.ToolMnemoCapture)
+	if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: warning: could not create session: %v\n", err)
 	}
 
 	result, err := s.PassiveCapture(store.PassiveCaptureParams{
-		SessionID: sessionID,
-		Content:   content,
-		Project:   project,
-		Source:    "subagent-stop",
+		SessionID:  sessionID,
+		Content:    content,
+		Project:    project,
+		Source:     "subagent-stop",
+		Provenance: provenance,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: capture failed: %v\n", err)

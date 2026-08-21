@@ -20,33 +20,35 @@ type ProjectSummary struct {
 }
 
 type Session struct {
-	ID        string   `json:"id"`
-	Project   string   `json:"project"`
-	Directory string   `json:"directory"`
-	StartedAt string   `json:"started_at"`
-	EndedAt   *string  `json:"ended_at,omitempty"`
-	Summary   *string  `json:"summary,omitempty"`
-	Tags      []string `json:"tags,omitempty"`
+	ID         string      `json:"id"`
+	Project    string      `json:"project"`
+	Directory  string      `json:"directory"`
+	StartedAt  string      `json:"started_at"`
+	EndedAt    *string     `json:"ended_at,omitempty"`
+	Summary    *string     `json:"summary,omitempty"`
+	Tags       []string    `json:"tags,omitempty"`
+	Provenance *Provenance `json:"provenance,omitempty"`
 }
 
 type Observation struct {
-	ID             int64    `json:"id"`
-	SyncID         string   `json:"sync_id"`
-	SessionID      string   `json:"session_id"`
-	Type           string   `json:"type"`
-	Title          string   `json:"title"`
-	Content        string   `json:"content"`
-	ToolName       *string  `json:"tool_name,omitempty"`
-	Project        *string  `json:"project,omitempty"`
-	Scope          string   `json:"scope"`
-	TopicKey       *string  `json:"topic_key,omitempty"`
-	Tags           []string `json:"tags,omitempty"`
-	RevisionCount  int      `json:"revision_count"`
-	DuplicateCount int      `json:"duplicate_count"`
-	LastSeenAt     *string  `json:"last_seen_at,omitempty"`
-	CreatedAt      string   `json:"created_at"`
-	UpdatedAt      string   `json:"updated_at"`
-	DeletedAt      *string  `json:"deleted_at,omitempty"`
+	ID             int64       `json:"id"`
+	SyncID         string      `json:"sync_id"`
+	SessionID      string      `json:"session_id"`
+	Type           string      `json:"type"`
+	Title          string      `json:"title"`
+	Content        string      `json:"content"`
+	ToolName       *string     `json:"tool_name,omitempty"`
+	Project        *string     `json:"project,omitempty"`
+	Scope          string      `json:"scope"`
+	TopicKey       *string     `json:"topic_key,omitempty"`
+	Tags           []string    `json:"tags,omitempty"`
+	RevisionCount  int         `json:"revision_count"`
+	DuplicateCount int         `json:"duplicate_count"`
+	LastSeenAt     *string     `json:"last_seen_at,omitempty"`
+	CreatedAt      string      `json:"created_at"`
+	UpdatedAt      string      `json:"updated_at"`
+	DeletedAt      *string     `json:"deleted_at,omitempty"`
+	Provenance     *Provenance `json:"provenance,omitempty"`
 }
 
 type TagInfo struct {
@@ -94,12 +96,13 @@ type SearchResult struct {
 }
 
 type SessionSummary struct {
-	ID               string  `json:"id"`
-	Project          string  `json:"project"`
-	StartedAt        string  `json:"started_at"`
-	EndedAt          *string `json:"ended_at,omitempty"`
-	Summary          *string `json:"summary,omitempty"`
-	ObservationCount int     `json:"observation_count"`
+	ID               string      `json:"id"`
+	Project          string      `json:"project"`
+	StartedAt        string      `json:"started_at"`
+	EndedAt          *string     `json:"ended_at,omitempty"`
+	Summary          *string     `json:"summary,omitempty"`
+	ObservationCount int         `json:"observation_count"`
+	Provenance       *Provenance `json:"provenance,omitempty"`
 }
 
 type Stats struct {
@@ -110,22 +113,23 @@ type Stats struct {
 }
 
 type TimelineEntry struct {
-	ID             int64   `json:"id"`
-	SessionID      string  `json:"session_id"`
-	Type           string  `json:"type"`
-	Title          string  `json:"title"`
-	Content        string  `json:"content"`
-	ToolName       *string `json:"tool_name,omitempty"`
-	Project        *string `json:"project,omitempty"`
-	Scope          string  `json:"scope"`
-	TopicKey       *string `json:"topic_key,omitempty"`
-	RevisionCount  int     `json:"revision_count"`
-	DuplicateCount int     `json:"duplicate_count"`
-	LastSeenAt     *string `json:"last_seen_at,omitempty"`
-	CreatedAt      string  `json:"created_at"`
-	UpdatedAt      string  `json:"updated_at"`
-	DeletedAt      *string `json:"deleted_at,omitempty"`
-	IsFocus        bool    `json:"is_focus"`
+	ID             int64       `json:"id"`
+	SessionID      string      `json:"session_id"`
+	Type           string      `json:"type"`
+	Title          string      `json:"title"`
+	Content        string      `json:"content"`
+	ToolName       *string     `json:"tool_name,omitempty"`
+	Project        *string     `json:"project,omitempty"`
+	Scope          string      `json:"scope"`
+	TopicKey       *string     `json:"topic_key,omitempty"`
+	RevisionCount  int         `json:"revision_count"`
+	DuplicateCount int         `json:"duplicate_count"`
+	LastSeenAt     *string     `json:"last_seen_at,omitempty"`
+	CreatedAt      string      `json:"created_at"`
+	UpdatedAt      string      `json:"updated_at"`
+	DeletedAt      *string     `json:"deleted_at,omitempty"`
+	IsFocus        bool        `json:"is_focus"`
+	Provenance     *Provenance `json:"provenance,omitempty"`
 }
 
 type TimelineResult struct {
@@ -154,15 +158,16 @@ type ContextOptions struct {
 }
 
 type AddObservationParams struct {
-	SessionID string   `json:"session_id"`
-	Type      string   `json:"type"`
-	Title     string   `json:"title"`
-	Content   string   `json:"content"`
-	ToolName  string   `json:"tool_name,omitempty"`
-	Project   string   `json:"project,omitempty"`
-	Scope     string   `json:"scope,omitempty"`
-	TopicKey  string   `json:"topic_key,omitempty"`
-	Tags      []string `json:"tags,omitempty"`
+	SessionID  string          `json:"session_id"`
+	Type       string          `json:"type"`
+	Title      string          `json:"title"`
+	Content    string          `json:"content"`
+	ToolName   string          `json:"tool_name,omitempty"`
+	Project    string          `json:"project,omitempty"`
+	Scope      string          `json:"scope,omitempty"`
+	TopicKey   string          `json:"topic_key,omitempty"`
+	Tags       []string        `json:"tags,omitempty"`
+	Provenance ProvenanceInput `json:"provenance,omitempty"`
 }
 
 type UpdateObservationParams struct {
@@ -176,18 +181,51 @@ type UpdateObservationParams struct {
 }
 
 type Prompt struct {
-	ID        int64  `json:"id"`
-	SyncID    string `json:"sync_id"`
-	SessionID string `json:"session_id"`
-	Content   string `json:"content"`
-	Project   string `json:"project,omitempty"`
-	CreatedAt string `json:"created_at"`
+	ID         int64       `json:"id"`
+	SyncID     string      `json:"sync_id"`
+	SessionID  string      `json:"session_id"`
+	Content    string      `json:"content"`
+	Project    string      `json:"project,omitempty"`
+	CreatedAt  string      `json:"created_at"`
+	Provenance *Provenance `json:"provenance,omitempty"`
 }
 
 type AddPromptParams struct {
-	SessionID string `json:"session_id"`
-	Content   string `json:"content"`
-	Project   string `json:"project,omitempty"`
+	SessionID  string          `json:"session_id"`
+	Content    string          `json:"content"`
+	Project    string          `json:"project,omitempty"`
+	Provenance ProvenanceInput `json:"provenance,omitempty"`
+}
+
+type ProvenanceInput struct {
+	AgentID          string `json:"agent_id,omitempty"`
+	SourceKindID     string `json:"source_kind_id,omitempty"`
+	ToolID           string `json:"tool_id,omitempty"`
+	ModelID          string `json:"model_id,omitempty"`
+	ModelProvider    string `json:"model_provider,omitempty"`
+	MCPClientID      string `json:"mcp_client_id,omitempty"`
+	MCPClientName    string `json:"mcp_client_name,omitempty"`
+	MCPClientVersion string `json:"mcp_client_version,omitempty"`
+	MCPTransport     string `json:"mcp_transport,omitempty"`
+}
+
+type Provenance struct {
+	ID                 int64  `json:"id"`
+	AgentID            string `json:"agent_id"`
+	AgentDisplayName   string `json:"agent_display_name"`
+	AgentKind          string `json:"agent_kind"`
+	SourceKindID       string `json:"source_kind_id"`
+	SourceDisplayName  string `json:"source_display_name"`
+	ToolID             string `json:"tool_id"`
+	ToolDisplayName    string `json:"tool_display_name"`
+	ModelID            string `json:"model_id"`
+	ModelProvider      string `json:"model_provider"`
+	ModelDisplayName   string `json:"model_display_name"`
+	MCPClientID        string `json:"mcp_client_id"`
+	MCPClientName      string `json:"mcp_client_name"`
+	MCPClientVersion   string `json:"mcp_client_version"`
+	MCPClientTransport string `json:"mcp_client_transport"`
+	CreatedAt          string `json:"created_at"`
 }
 
 const (
@@ -243,35 +281,38 @@ type EnrolledProject struct {
 }
 
 type syncSessionPayload struct {
-	ID        string    `json:"id"`
-	Project   string    `json:"project"`
-	Directory string    `json:"directory"`
-	EndedAt   *string   `json:"ended_at,omitempty"`
-	Summary   *string   `json:"summary,omitempty"`
-	Tags      *[]string `json:"tags,omitempty"`
+	ID         string           `json:"id"`
+	Project    string           `json:"project"`
+	Directory  string           `json:"directory"`
+	EndedAt    *string          `json:"ended_at,omitempty"`
+	Summary    *string          `json:"summary,omitempty"`
+	Tags       *[]string        `json:"tags,omitempty"`
+	Provenance *ProvenanceInput `json:"provenance,omitempty"`
 }
 
 type syncObservationPayload struct {
-	SyncID     string    `json:"sync_id"`
-	SessionID  string    `json:"session_id"`
-	Type       string    `json:"type"`
-	Title      string    `json:"title"`
-	Content    string    `json:"content"`
-	ToolName   *string   `json:"tool_name,omitempty"`
-	Project    *string   `json:"project,omitempty"`
-	Scope      string    `json:"scope"`
-	TopicKey   *string   `json:"topic_key,omitempty"`
-	Tags       *[]string `json:"tags,omitempty"`
-	Deleted    bool      `json:"deleted,omitempty"`
-	DeletedAt  *string   `json:"deleted_at,omitempty"`
-	HardDelete bool      `json:"hard_delete,omitempty"`
+	SyncID     string           `json:"sync_id"`
+	SessionID  string           `json:"session_id"`
+	Type       string           `json:"type"`
+	Title      string           `json:"title"`
+	Content    string           `json:"content"`
+	ToolName   *string          `json:"tool_name,omitempty"`
+	Project    *string          `json:"project,omitempty"`
+	Scope      string           `json:"scope"`
+	TopicKey   *string          `json:"topic_key,omitempty"`
+	Tags       *[]string        `json:"tags,omitempty"`
+	Deleted    bool             `json:"deleted,omitempty"`
+	DeletedAt  *string          `json:"deleted_at,omitempty"`
+	HardDelete bool             `json:"hard_delete,omitempty"`
+	Provenance *ProvenanceInput `json:"provenance,omitempty"`
 }
 
 type syncPromptPayload struct {
-	SyncID    string  `json:"sync_id"`
-	SessionID string  `json:"session_id"`
-	Content   string  `json:"content"`
-	Project   *string `json:"project,omitempty"`
+	SyncID     string           `json:"sync_id"`
+	SessionID  string           `json:"session_id"`
+	Content    string           `json:"content"`
+	Project    *string          `json:"project,omitempty"`
+	Provenance *ProvenanceInput `json:"provenance,omitempty"`
 }
 
 type ExportData struct {
@@ -340,10 +381,11 @@ type ProjectRenameResult struct {
 }
 
 type PassiveCaptureParams struct {
-	SessionID string `json:"session_id"`
-	Content   string `json:"content"`
-	Project   string `json:"project,omitempty"`
-	Source    string `json:"source,omitempty"`
+	SessionID  string          `json:"session_id"`
+	Content    string          `json:"content"`
+	Project    string          `json:"project,omitempty"`
+	Source     string          `json:"source,omitempty"`
+	Provenance ProvenanceInput `json:"provenance,omitempty"`
 }
 
 type PassiveCaptureResult struct {

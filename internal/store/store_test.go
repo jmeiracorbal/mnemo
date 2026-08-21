@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -107,6 +108,253 @@ func TestAddObservationDeduplicatesWithinWindow(t *testing.T) {
 	}
 	if obs.DuplicateCount != 2 {
 		t.Fatalf("expected duplicate_count=2, got %d", obs.DuplicateCount)
+	}
+}
+
+func TestProvenanceIsStoredInQueryableTables(t *testing.T) {
+	s := newTestStore(t)
+	provenance := ProvenanceInput{
+		AgentID:          AgentCodex,
+		SourceKindID:     SourceMCP,
+		ToolID:           ToolMemSave,
+		ModelID:          "gpt-5.1-codex",
+		ModelProvider:    "openai",
+		MCPClientID:      "codex",
+		MCPClientName:    "Codex",
+		MCPClientVersion: "1.2.3",
+		MCPTransport:     "stdio",
+	}
+
+	if err := s.CreateSessionWithProvenance("s-provenance", "mnemo", "/tmp/mnemo", provenance); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	obsID, err := s.AddObservation(AddObservationParams{
+		SessionID:  "s-provenance",
+		Type:       "decision",
+		Title:      "Provenance",
+		Content:    "Record provenance in normalized tables",
+		Project:    "mnemo",
+		Scope:      "project",
+		Provenance: provenance,
+	})
+	if err != nil {
+		t.Fatalf("add observation: %v", err)
+	}
+	if _, err := s.AddPrompt(AddPromptParams{
+		SessionID:  "s-provenance",
+		Content:    "Remember which agent wrote this",
+		Project:    "mnemo",
+		Provenance: provenance,
+	}); err != nil {
+		t.Fatalf("add prompt: %v", err)
+	}
+
+	obs, err := s.GetObservation(obsID)
+	if err != nil {
+		t.Fatalf("get observation: %v", err)
+	}
+	if obs.Provenance == nil {
+		t.Fatal("expected observation provenance")
+	}
+	if obs.Provenance.AgentID != AgentCodex || obs.Provenance.ToolID != ToolMemSave || obs.Provenance.ModelID != "gpt-5.1-codex" {
+		t.Fatalf("unexpected observation provenance: %+v", obs.Provenance)
+	}
+
+	afterID, err := s.AddObservation(AddObservationParams{
+		SessionID:  "s-provenance",
+		Type:       "decision",
+		Title:      "Provenance read paths",
+		Content:    "Keep provenance visible from list and timeline read paths",
+		Project:    "mnemo",
+		Scope:      "project",
+		Provenance: provenance,
+	})
+	if err != nil {
+		t.Fatalf("add second observation: %v", err)
+	}
+	assertCodexProvenance := func(t *testing.T, got *Provenance) {
+		t.Helper()
+		if got == nil {
+			t.Fatal("expected provenance")
+		}
+		if got.AgentID != AgentCodex || got.SourceKindID != SourceMCP || got.ToolID != ToolMemSave {
+			t.Fatalf("unexpected provenance: %+v", got)
+		}
+	}
+	all, err := s.AllObservations("mnemo", "project", 10)
+	if err != nil {
+		t.Fatalf("all observations: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 all observations, got %d", len(all))
+	}
+	assertCodexProvenance(t, all[0].Provenance)
+	recent, err := s.RecentObservations("mnemo", "project", 10)
+	if err != nil {
+		t.Fatalf("recent observations: %v", err)
+	}
+	if len(recent) != 2 {
+		t.Fatalf("expected 2 recent observations, got %d", len(recent))
+	}
+	assertCodexProvenance(t, recent[0].Provenance)
+	sessionObs, err := s.SessionObservations("s-provenance", 10)
+	if err != nil {
+		t.Fatalf("session observations: %v", err)
+	}
+	if len(sessionObs) != 2 {
+		t.Fatalf("expected 2 session observations, got %d", len(sessionObs))
+	}
+	assertCodexProvenance(t, sessionObs[0].Provenance)
+	search, err := s.Search("provenance", SearchOptions{Project: "mnemo", Scope: "project", Limit: 10})
+	if err != nil {
+		t.Fatalf("search observations: %v", err)
+	}
+	if len(search) == 0 {
+		t.Fatal("expected search results")
+	}
+	assertCodexProvenance(t, search[0].Provenance)
+	timeline, err := s.Timeline(obsID, 1, 1)
+	if err != nil {
+		t.Fatalf("timeline: %v", err)
+	}
+	if timeline.Focus.Provenance == nil || len(timeline.After) != 1 || timeline.After[0].ID != afterID {
+		t.Fatalf("unexpected timeline provenance/result: %+v", timeline)
+	}
+	assertCodexProvenance(t, timeline.Focus.Provenance)
+	assertCodexProvenance(t, timeline.After[0].Provenance)
+	recentPrompts, err := s.RecentPrompts("mnemo", 10)
+	if err != nil {
+		t.Fatalf("recent prompts: %v", err)
+	}
+	if len(recentPrompts) != 1 {
+		t.Fatalf("expected 1 recent prompt, got %d", len(recentPrompts))
+	}
+	assertCodexProvenance(t, recentPrompts[0].Provenance)
+	promptSearch, err := s.SearchPrompts("agent", "mnemo", 10)
+	if err != nil {
+		t.Fatalf("search prompts: %v", err)
+	}
+	if len(promptSearch) != 1 {
+		t.Fatalf("expected 1 prompt search result, got %d", len(promptSearch))
+	}
+	assertCodexProvenance(t, promptSearch[0].Provenance)
+	recentSessions, err := s.RecentSessions("mnemo", 10)
+	if err != nil {
+		t.Fatalf("recent sessions: %v", err)
+	}
+	if len(recentSessions) != 1 {
+		t.Fatalf("expected 1 recent session, got %d", len(recentSessions))
+	}
+	assertCodexProvenance(t, recentSessions[0].Provenance)
+
+	var agentID, sourceID, toolID, modelID, provider, clientVersion string
+	err = s.db.QueryRow(`
+		SELECT p.agent_id, p.source_kind_id, p.tool_id, p.model_id, m.provider, mc.version
+		FROM observations o
+		JOIN provenance_contexts p ON p.id = o.provenance_id
+		JOIN models m ON m.id = p.model_id
+		JOIN mcp_clients mc ON mc.id = p.mcp_client_id
+		WHERE o.id = ?`, obsID).Scan(&agentID, &sourceID, &toolID, &modelID, &provider, &clientVersion)
+	if err != nil {
+		t.Fatalf("query observation provenance: %v", err)
+	}
+	if agentID != AgentCodex || sourceID != SourceMCP || toolID != ToolMemSave ||
+		modelID != "gpt-5.1-codex" || provider != "openai" || clientVersion != "1.2.3" {
+		t.Fatalf("unexpected SQL provenance: agent=%s source=%s tool=%s model=%s provider=%s client=%s",
+			agentID, sourceID, toolID, modelID, provider, clientVersion)
+	}
+
+	counts, err := s.q.CountObservationsByAgent(context.Background())
+	if err != nil {
+		t.Fatalf("count observations by agent: %v", err)
+	}
+	if len(counts) != 1 || counts[0].AgentID != AgentCodex || counts[0].ObservationCount != 2 {
+		t.Fatalf("unexpected agent counts: %+v", counts)
+	}
+}
+
+func TestProvenanceMigrationKeepsLegacyRowsWritable(t *testing.T) {
+	dataDir := t.TempDir()
+	dbPath := filepath.Join(dataDir, "memory.db")
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open legacy db: %v", err)
+	}
+	_, err = db.Exec(`
+		CREATE TABLE sessions (
+			id TEXT PRIMARY KEY,
+			project TEXT NOT NULL,
+			directory TEXT NOT NULL,
+			started_at TEXT NOT NULL DEFAULT (datetime('now')),
+			ended_at TEXT,
+			summary TEXT
+		);
+		CREATE TABLE observations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id TEXT NOT NULL,
+			type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			content TEXT NOT NULL,
+			tool_name TEXT,
+			project TEXT,
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+		CREATE TABLE user_prompts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			session_id TEXT NOT NULL,
+			content TEXT NOT NULL,
+			project TEXT,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+		INSERT INTO sessions (id, project, directory) VALUES ('s1', 'mnemo', '/tmp/mnemo');
+		INSERT INTO observations (session_id, type, title, content, project) VALUES ('s1', 'legacy', 'Legacy', 'Legacy content', 'mnemo');
+		INSERT INTO user_prompts (session_id, content, project) VALUES ('s1', 'Legacy prompt', 'mnemo');
+	`)
+	if err != nil {
+		_ = db.Close()
+		t.Fatalf("seed legacy db: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close legacy db: %v", err)
+	}
+
+	cfg := mustDefaultConfig(t)
+	cfg.DataDir = dataDir
+	s, err := New(cfg)
+	if err != nil {
+		t.Fatalf("new store after legacy schema: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	for _, check := range []struct {
+		table  string
+		column string
+	}{
+		{"sessions", "provenance_id"},
+		{"observations", "provenance_id"},
+		{"user_prompts", "provenance_id"},
+	} {
+		var found int
+		err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, check.table, check.column).Scan(&found)
+		if err != nil {
+			t.Fatalf("pragma %s.%s: %v", check.table, check.column, err)
+		}
+		if found != 1 {
+			t.Fatalf("expected %s.%s to exist", check.table, check.column)
+		}
+	}
+
+	if _, err := s.AddObservation(AddObservationParams{
+		SessionID: "s1",
+		Type:      "decision",
+		Title:     "Modern",
+		Content:   "Modern content after migration",
+		Project:   "mnemo",
+		Scope:     "project",
+	}); err != nil {
+		t.Fatalf("add observation without provenance after migration: %v", err)
 	}
 }
 
@@ -354,6 +602,66 @@ func TestDifferentTopicsDoNotReplaceEachOther(t *testing.T) {
 	}
 	if len(observations) != 2 {
 		t.Fatalf("expected 2 observations, got %d", len(observations))
+	}
+}
+
+func TestLegacySyncPayloadPreservesExistingProvenance(t *testing.T) {
+	s := newTestStore(t)
+	provenance := ProvenanceInput{
+		AgentID:      AgentCodex,
+		SourceKindID: SourceMCP,
+		ToolID:       ToolMemSave,
+		MCPClientID:  "codex",
+	}
+
+	if err := s.CreateSessionWithProvenance("s-sync-provenance", "mnemo", "/tmp/mnemo", provenance); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	obsID, err := s.AddObservation(AddObservationParams{
+		SessionID:  "s-sync-provenance",
+		Type:       "decision",
+		Title:      "Sync provenance",
+		Content:    "Original content",
+		Project:    "mnemo",
+		Scope:      "project",
+		Provenance: provenance,
+	})
+	if err != nil {
+		t.Fatalf("add observation: %v", err)
+	}
+	obs, err := s.GetObservation(obsID)
+	if err != nil {
+		t.Fatalf("get observation: %v", err)
+	}
+	if obs.Provenance == nil {
+		t.Fatal("expected initial provenance")
+	}
+
+	project := "mnemo"
+	err = s.withTx(func(tx *sql.Tx) error {
+		return s.applyObservationUpsertTx(tx, syncObservationPayload{
+			SyncID:    obs.SyncID,
+			SessionID: obs.SessionID,
+			Type:      obs.Type,
+			Title:     obs.Title,
+			Content:   "Updated by legacy sync payload",
+			Project:   &project,
+			Scope:     obs.Scope,
+		})
+	})
+	if err != nil {
+		t.Fatalf("apply legacy sync payload: %v", err)
+	}
+
+	updated, err := s.GetObservation(obsID)
+	if err != nil {
+		t.Fatalf("get updated observation: %v", err)
+	}
+	if updated.Provenance == nil {
+		t.Fatal("legacy sync payload cleared provenance")
+	}
+	if updated.Provenance.AgentID != AgentCodex || updated.Provenance.SourceKindID != SourceMCP || updated.Provenance.ToolID != ToolMemSave {
+		t.Fatalf("unexpected provenance after legacy sync payload: %+v", updated.Provenance)
 	}
 }
 
@@ -1405,6 +1713,79 @@ func TestApplyPulledMutationAcceptsStringifiedSessionPayload(t *testing.T) {
 	}
 	if session.Project != "mnemo" || session.Directory != "/remote" {
 		t.Fatalf("unexpected session after pulled apply: %+v", session)
+	}
+}
+
+func TestApplyPulledMutationWithoutProvenanceRecordsSyncPullSource(t *testing.T) {
+	s := newTestStore(t)
+
+	mutations := []SyncMutation{
+		{
+			Seq:       1,
+			TargetKey: DefaultSyncTargetKey,
+			Entity:    SyncEntitySession,
+			EntityKey: "remote-session",
+			Op:        SyncOpUpsert,
+			Payload:   `{"id":"remote-session","project":"mnemo","directory":"/remote"}`,
+		},
+		{
+			Seq:       2,
+			TargetKey: DefaultSyncTargetKey,
+			Entity:    SyncEntityObservation,
+			EntityKey: "obs-remote-1",
+			Op:        SyncOpUpsert,
+			Payload:   `{"sync_id":"obs-remote-1","session_id":"remote-session","type":"decision","title":"Remote","content":"Pulled from cloud","project":"mnemo","scope":"project"}`,
+		},
+		{
+			Seq:       3,
+			TargetKey: DefaultSyncTargetKey,
+			Entity:    SyncEntityPrompt,
+			EntityKey: "prompt-remote-1",
+			Op:        SyncOpUpsert,
+			Payload:   `{"sync_id":"prompt-remote-1","session_id":"remote-session","content":"Remote prompt","project":"mnemo"}`,
+		},
+	}
+	for _, mutation := range mutations {
+		if err := s.ApplyPulledMutation(DefaultSyncTargetKey, mutation); err != nil {
+			t.Fatalf("ApplyPulledMutation seq=%d: %v", mutation.Seq, err)
+		}
+	}
+
+	for _, query := range []struct {
+		name string
+		sql  string
+		arg  string
+	}{
+		{
+			name: "session",
+			sql: `SELECT p.agent_id, p.source_kind_id, p.tool_id
+			      FROM sessions s JOIN provenance_contexts p ON p.id = s.provenance_id
+			      WHERE s.id = ?`,
+			arg: "remote-session",
+		},
+		{
+			name: "observation",
+			sql: `SELECT p.agent_id, p.source_kind_id, p.tool_id
+			      FROM observations o JOIN provenance_contexts p ON p.id = o.provenance_id
+			      WHERE o.sync_id = ?`,
+			arg: "obs-remote-1",
+		},
+		{
+			name: "prompt",
+			sql: `SELECT p.agent_id, p.source_kind_id, p.tool_id
+			      FROM user_prompts up JOIN provenance_contexts p ON p.id = up.provenance_id
+			      WHERE up.sync_id = ?`,
+			arg: "prompt-remote-1",
+		},
+	} {
+		var agent, source, tool string
+		if err := s.db.QueryRow(query.sql, query.arg).Scan(&agent, &source, &tool); err != nil {
+			t.Fatalf("%s provenance query: %v", query.name, err)
+		}
+		if agent != AgentExternal || source != SourceSync || tool != ToolSyncPull {
+			t.Fatalf("%s provenance = (%s,%s,%s), want (%s,%s,%s)",
+				query.name, agent, source, tool, AgentExternal, SourceSync, ToolSyncPull)
+		}
 	}
 }
 
@@ -4393,22 +4774,25 @@ func TestBlockedTagsNotStored(t *testing.T) {
 func TestMergeTags(t *testing.T) {
 	s := newTestStore(t)
 	newTestSession(t, s, "sess-merge", "mnemo")
+	provenance := ProvenanceInput{AgentID: AgentCursor, SourceKindID: SourceMCP, ToolID: ToolMemSave}
 
 	id1, _ := s.AddObservation(AddObservationParams{
-		SessionID: "sess-merge",
-		Type:      "decision",
-		Title:     "obs with authentication tag",
-		Content:   "test",
-		Project:   "mnemo",
-		Tags:      []string{"backend", "auth"},
+		SessionID:  "sess-merge",
+		Type:       "decision",
+		Title:      "obs with authentication tag",
+		Content:    "test",
+		Project:    "mnemo",
+		Tags:       []string{"backend", "auth"},
+		Provenance: provenance,
 	})
 	id2, _ := s.AddObservation(AddObservationParams{
-		SessionID: "sess-merge",
-		Type:      "decision",
-		Title:     "obs with backend tag only",
-		Content:   "test",
-		Project:   "mnemo",
-		Tags:      []string{"backend"},
+		SessionID:  "sess-merge",
+		Type:       "decision",
+		Title:      "obs with backend tag only",
+		Content:    "test",
+		Project:    "mnemo",
+		Tags:       []string{"backend"},
+		Provenance: provenance,
 	})
 
 	obsCount, sessCount, err := s.MergeTags("backend", "infra")
@@ -4436,6 +4820,17 @@ func TestMergeTags(t *testing.T) {
 		if !tagSet["infra"] {
 			t.Errorf("obs %d missing new tag 'infra' after merge", obs.ID)
 		}
+	}
+
+	var payload string
+	if err := s.db.QueryRow(`
+		SELECT payload FROM sync_mutations
+		WHERE entity = ? AND entity_key = ?
+		ORDER BY seq DESC LIMIT 1`, SyncEntityObservation, obs1.SyncID).Scan(&payload); err != nil {
+		t.Fatalf("query latest merge sync payload: %v", err)
+	}
+	if !strings.Contains(payload, `"provenance"`) || !strings.Contains(payload, `"agent_id":"cursor"`) {
+		t.Fatalf("merge sync payload missing provenance: %s", payload)
 	}
 }
 
@@ -4908,7 +5303,10 @@ func TestSessionTagsExportImportRoundTrip(t *testing.T) {
 
 func TestSessionTagsSyncPayloadIncludesTags(t *testing.T) {
 	s := newTestStore(t)
-	newTestSession(t, s, "sess-sync-session-tags", "mnemo")
+	provenance := ProvenanceInput{AgentID: AgentCodex, SourceKindID: SourceMCP, ToolID: ToolMemSessionStart}
+	if err := s.CreateSessionWithProvenance("sess-sync-session-tags", "mnemo", "", provenance); err != nil {
+		t.Fatalf("CreateSessionWithProvenance: %v", err)
+	}
 
 	if err := s.SetSessionTags("sess-sync-session-tags", []string{"api", "refactor"}); err != nil {
 		t.Fatalf("SetSessionTags: %v", err)
@@ -4939,6 +5337,9 @@ func TestSessionTagsSyncPayloadIncludesTags(t *testing.T) {
 	}
 	if !tagSet["api"] || !tagSet["refactor"] {
 		t.Errorf("expected tags [api, refactor] in session payload, got: %v", *payload.Tags)
+	}
+	if payload.Provenance == nil || payload.Provenance.AgentID != AgentCodex {
+		t.Fatalf("expected session provenance in tag sync payload, got %+v", payload.Provenance)
 	}
 }
 
