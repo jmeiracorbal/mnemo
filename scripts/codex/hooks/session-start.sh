@@ -36,7 +36,7 @@ IS_RESUME=$(mnemo session exists "$SESSION_ID" 2>/dev/null)
 if [ "$IS_RESUME" = "true" ]; then
   STATUS="[mnemo] Session resumed (project: ${PROJECT})"
 else
-  mnemo session start "$SESSION_ID" --project "$PROJECT" --dir "$CWD" 2>/dev/null || true
+  mnemo session start "$SESSION_ID" --project "$PROJECT" --dir "$CWD" >/dev/null 2>&1 || true
   STATUS="[mnemo] New session started (project: ${PROJECT})"
 fi
 
