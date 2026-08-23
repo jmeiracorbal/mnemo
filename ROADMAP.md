@@ -69,6 +69,18 @@ mnemo memories ingest --agent=claudecode --path . --dry-run --json
 mnemo memories ingest --agent=all --path . --yes
 ```
 
+## Harness integration contract
+
+mnemo should not claim universal memory across arbitrary agent harnesses. It is a local memory substrate with first-class support for integrated agents, and broader adoption requires a clear, low-friction contract that custom harnesses can implement and verify.
+
+Goals:
+
+- define the minimum integration contract for custom harnesses: project marker discovery, MCP or CLI write/read paths, session lifecycle events, passive capture, and explicit `.mnemo` guardrails;
+- provide copy-paste integration examples for MCP-first, CLI-only, hook-based, and skill-based harnesses;
+- add conformance checks so harness authors can prove their integration respects project identity, does not write outside valid `.mnemo` projects, and records provenance when available;
+- document supported versus custom-integrated harnesses without marketing mnemo as automatic memory for every runtime;
+- consider a `mnemo harness check` command or fixture suite that validates environment variables, MCP server configuration, hook behavior, and write/read smoke tests.
+
 ## Agent trace and memory provenance
 
 Add optional project trace metadata related to agent sessions, command execution, and memory provenance.
