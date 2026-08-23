@@ -18,6 +18,6 @@ MNEMO_FILE="${PROJECT_ROOT}/.mnemo"
 [ -f "$MNEMO_FILE" ] && PROJECT=$(mnemo json id < "$MNEMO_FILE" 2>/dev/null)
 [ -z "$PROJECT" ] && exit 0
 
-mnemo capture "$OUTPUT" --session "$SESSION_ID" --project "$PROJECT" 2>/dev/null || true
+printf '%s' "$OUTPUT" | mnemo capture - --session "$SESSION_ID" --project "$PROJECT" >/dev/null 2>&1 || true
 
 exit 0

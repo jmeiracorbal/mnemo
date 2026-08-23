@@ -30,7 +30,7 @@ IS_KNOWN=$(mnemo session exists "$CONVERSATION_ID" 2>/dev/null)
 [ "$IS_KNOWN" = "true" ] && exit 0
 
 # New conversation — register session and emit general context
-mnemo session start "$CONVERSATION_ID" --project "$PROJECT" --dir "$WORKSPACE" 2>/dev/null || true
+mnemo session start "$CONVERSATION_ID" --project "$PROJECT" --dir "$WORKSPACE" >/dev/null 2>&1 || true
 printf "\n[mnemo] New session started (project: %s)\n" "$PROJECT"
 
 CONTEXT=$(mnemo context "$PROJECT" 2>/dev/null)
