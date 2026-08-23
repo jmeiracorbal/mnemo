@@ -28,6 +28,6 @@ mnemo save \
   --type file-change \
   --project "$PROJECT" \
   --topic "$TOPIC" \
-  2>/dev/null || true
+  >/dev/null 2>&1 || true
 
 exit 0

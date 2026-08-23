@@ -29,12 +29,12 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
   CONTENT=$(mnemo extract-transcript "$TRANSCRIPT_PATH" 2>/dev/null)
 
   if [ -n "$CONTENT" ]; then
-    printf '%s' "$CONTENT" | mnemo capture - --session "$CONVERSATION_ID" --project "$PROJECT" 2>/dev/null || true
+    printf '%s' "$CONTENT" | mnemo capture - --session "$CONVERSATION_ID" --project "$PROJECT" >/dev/null 2>&1 || true
   fi
 fi
 
-OBS_COUNT=$(mnemo session obs-count "$CONVERSATION_ID" 2>/dev/null)
-mnemo session end "$CONVERSATION_ID" 2>/dev/null || true
+OBS_COUNT=$(mnemo session project-obs-count "$CONVERSATION_ID" 2>/dev/null)
+mnemo session end "$CONVERSATION_ID" >/dev/null 2>&1 || true
 
 if [ "${OBS_COUNT:-0}" = "0" ]; then
   printf "\n[mnemo] warning: session ended with 0 memories saved.\n" >&2

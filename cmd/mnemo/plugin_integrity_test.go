@@ -132,6 +132,69 @@ func TestShippedHooksResolveProjectFromMarker(t *testing.T) {
 	}
 }
 
+func TestShippedHooksSuppressInternalMnemoWriteOutput(t *testing.T) {
+	roots := []string{
+		filepath.Join("..", "..", "plugin", "claude-code", "scripts"),
+		filepath.Join("..", "..", "scripts", "cursor", "hooks"),
+		filepath.Join("..", "..", "scripts", "windsurf", "hooks"),
+		filepath.Join("..", "..", "scripts", "codex", "hooks"),
+	}
+
+	writeCommands := []string{
+		"mnemo session start ",
+		"mnemo session end ",
+		"mnemo save ",
+		"mnemo capture ",
+		"| mnemo capture ",
+	}
+
+	checked := 0
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || filepath.Ext(path) != ".sh" {
+				return nil
+			}
+
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Errorf("read %s: %v", path, err)
+				return nil
+			}
+			lines := strings.Split(string(data), "\n")
+			for i, line := range lines {
+				for _, command := range writeCommands {
+					if !strings.Contains(line, command) {
+						continue
+					}
+					checked++
+					terminator := line
+					if !strings.Contains(terminator, "|| true") {
+						for _, nextLine := range lines[i+1:] {
+							terminator = nextLine
+							if strings.Contains(terminator, "|| true") {
+								break
+							}
+						}
+					}
+					if strings.Contains(terminator, "2>/dev/null || true") && !strings.Contains(terminator, ">/dev/null 2>&1") {
+						t.Errorf("%s:%d suppresses stderr only for %q; hook-internal mnemo writes must suppress stdout too", path, i+1, command)
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no hook-internal mnemo write commands were checked")
+	}
+}
+
 func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
 	files := []string{
 		filepath.Join("..", "..", "templates", "rules", "generic.md"),

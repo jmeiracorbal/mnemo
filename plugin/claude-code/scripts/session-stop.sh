@@ -13,9 +13,9 @@ MNEMO_FILE="${PROJECT_ROOT}/.mnemo"
 [ -f "$MNEMO_FILE" ] && PROJECT=$(mnemo json id < "$MNEMO_FILE" 2>/dev/null)
 [ -z "$PROJECT" ] && exit 0
 
-OBS_COUNT=$(mnemo session obs-count "$SESSION_ID" 2>/dev/null)
+OBS_COUNT=$(mnemo session project-obs-count "$SESSION_ID" 2>/dev/null)
 
-mnemo session end "$SESSION_ID" 2>/dev/null || true
+mnemo session end "$SESSION_ID" >/dev/null 2>&1 || true
 
 if [ "${OBS_COUNT:-0}" = "0" ]; then
   printf "\n[mnemo] warning: session ended with 0 memories saved.\n" >&2

@@ -19,7 +19,7 @@ MNEMO_FILE="${PROJECT_ROOT}/.mnemo"
 [ -z "$PROJECT" ] && exit 0
 
 if [ -n "$SESSION_ID" ] && [ -n "$PROJECT" ]; then
-  mnemo session start "$SESSION_ID" --project "$PROJECT" --dir "$CWD" 2>/dev/null || true
+  mnemo session start "$SESSION_ID" --project "$PROJECT" --dir "$CWD" >/dev/null 2>&1 || true
 fi
 
 CONTEXT=$(mnemo context "$PROJECT" 2>/dev/null)
