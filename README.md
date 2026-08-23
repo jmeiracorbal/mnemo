@@ -40,6 +40,9 @@ mnemo is a local memory layer for agentic development. It stores decisions, bugs
 
 Instead of spreading project knowledge across `MEMORY.md`, native editor memory, chat transcripts and human notes, mnemo gives every supported agent the same project-scoped source of truth.
 
+> [!IMPORTANT]
+> mnemo does not automatically support every harness; it provides a stable memory contract that any harness can implement and validate.
+
 <p align="center">
   <img src="assets/brand/mnemo-flow.svg" alt="mnemo architecture: agents connect through hooks, MCP tools and skills to a local SQLite memory store">
 </p>
