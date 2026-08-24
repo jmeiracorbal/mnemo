@@ -161,6 +161,7 @@ Consulta la guía completa en [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 | Guía | Contenido |
 |---|---|
+| [Índice de documentación](docs/README.md) | Mapa completo de documentación y notas de investigación. |
 | [Instalación](docs/INSTALLATION.md) | Instalador, plugin, activación de proyecto y verificación. |
 | [Integración con agentes](docs/AGENT_INTEGRATION.md) | Hooks, rutas globales, marca `.mnemo` y Agent Skills. |
 | [Referencia CLI](docs/CLI.md) | Comandos, ejemplos, herramientas MCP y modos de búsqueda. |
