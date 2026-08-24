@@ -159,6 +159,7 @@ No potential memory conflicts found.
 
 | 指南 | 内容 |
 |---|---|
+| [文档索引](docs/README.md) | 完整文档地图和研究笔记。 |
 | [安装](docs/INSTALLATION.md) | install script、plugin setup、项目启用和验证。 |
 | [代理集成](docs/AGENT_INTEGRATION.md) | Hook 行为、全局路径、`.mnemo` 标记和 Agent Skills。 |
 | [CLI 参考](docs/CLI.md) | 命令、示例、MCP 工具和搜索模式。 |

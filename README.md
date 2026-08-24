@@ -158,6 +158,7 @@ Read the complete setup guide in [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 | Guide | Contents |
 |---|---|
+| [Documentation index](docs/README.md) | Full documentation map and research notes. |
 | [Installation](docs/INSTALLATION.md) | Install script, plugin setup, project activation and verification. |
 | [Agent integration](docs/AGENT_INTEGRATION.md) | Hook behavior, global paths, `.mnemo` marker and Agent Skills. |
 | [CLI reference](docs/CLI.md) | Commands, examples, MCP tools and search modes. |
