@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <a href="README.es.md">Español</a>
+  <a href="README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 <p align="center">
@@ -39,10 +39,6 @@
 mnemo es una capa de memoria local para desarrollo con agentes. Guarda decisiones, bugs, convenciones, descubrimientos y resúmenes de sesión en SQLite, y los expone de vuelta a los agentes mediante herramientas MCP, hooks y Agent Skills portables.
 
 En lugar de repartir conocimiento entre `MEMORY.md`, memorias nativas del editor, transcripciones y notas humanas, mnemo ofrece a todos los agentes soportados una misma fuente de verdad por proyecto.
-
-<p align="center">
-  <img src="assets/brand/mnemo-flow.svg" alt="arquitectura de mnemo: agentes conectan mediante hooks, MCP y skills con una memoria SQLite local">
-</p>
 
 <a id="inicio-rapido"></a>
 
@@ -104,12 +100,12 @@ mnemo search "SQLite" --project miapp
 ## Agentes soportados
 
 <p align="center">
-  <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-soportado-6B46C1">
-  <img alt="Codex" src="https://img.shields.io/badge/Codex-soportado-00A67E">
-  <img alt="Cursor" src="https://img.shields.io/badge/Cursor-soportado-111111">
-  <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-soportado-2563EB">
-  <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-soportado-F97316">
-  <img alt="fx" src="https://img.shields.io/badge/fx-soportado-7C3AED">
+  <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-soportado-6B46C1?logo=claudecode&logoColor=white">
+  <img alt="Codex" src="https://img.shields.io/badge/Codex-soportado-00A67E?logo=openai&logoColor=white">
+  <img alt="Cursor" src="https://img.shields.io/badge/Cursor-soportado-111111?logo=cursor&logoColor=white">
+  <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-soportado-2563EB?logo=windsurf&logoColor=white">
+  <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-soportado-F97316?logo=opencode&logoColor=white">
+  <img alt="fx" src="https://img.shields.io/badge/fx-soportado-7C3AED?logo=vercel&logoColor=white">
 </p>
 
 | Agente | MCP | Hooks / runtime | Instrucciones globales | Skills | Estado |
@@ -132,10 +128,6 @@ project/
 ```
 
 ## Verlo en acción
-
-<p align="center">
-  <img src="assets/brand/mnemo-terminal.svg" alt="captura de terminal de mnemo mostrando init, doctor, context y memories review">
-</p>
 
 ```text
 $ mnemo doctor --agent=all --path=.
