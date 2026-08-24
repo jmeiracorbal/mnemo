@@ -33,7 +33,7 @@ Environment overrides:
 
 ```bash
 MNEMO_AGENT=cursor bash install.sh
-MNEMO_VERSION=v0.30.1 bash install.sh
+MNEMO_VERSION=v0.31.0 bash install.sh
 MNEMO_DRY_RUN=true bash install.sh
 MNEMO_INSTALL_DIR="$HOME/.local/bin" bash install.sh
 ```
