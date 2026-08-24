@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Give Claude Code, Codex, Cursor, Windsurf and OpenCode one shared local memory that survives sessions, compactions and agent switches.
+  Give Claude Code, Codex, Cursor, Windsurf, OpenCode and fx one shared local memory that survives sessions, compactions and agent switches.
 </p>
 
 <p align="center">
@@ -80,7 +80,7 @@ mnemo search "SQLite" --project myapp
 | Problem | mnemo gives you |
 |---|---|
 | Agents forget decisions between sessions | Durable project memory in `~/.mnemo/memory.db` |
-| Different agents keep different memories | One shared layer for Claude Code, Codex, Cursor, Windsurf and OpenCode |
+| Different agents keep different memories | One shared layer for Claude Code, Codex, Cursor, Windsurf, OpenCode and fx |
 | Markdown memory files drift or conflict | Structured observations, tags, topic keys and review states |
 | Global hooks can be risky | Project opt-in via a `.mnemo` marker; projects without it are ignored |
 | Setup breaks silently | `mnemo doctor` and `mnemo setup status` explain exactly what is configured |
@@ -109,6 +109,7 @@ mnemo search "SQLite" --project myapp
 | Cursor | ✅ | ✅ | ✅ | ✅ | Supported |
 | Windsurf | ✅ | ✅ | ✅ | ✅ | Supported |
 | OpenCode | ✅ | ✅ | ✅ | ✅ | Supported |
+| fx | ✅ | n/a | ✅ | ✅ via canonical path | Supported |
 
 Global setup is installed once. Project activation stays local and opt-in:
 
