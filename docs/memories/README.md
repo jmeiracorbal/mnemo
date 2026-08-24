@@ -24,6 +24,51 @@ Conversation transcripts, opaque editor state, cloud-only state, and model-provi
 | OpenCode | `AGENTS.md` instruction discovery and session instruction deltas | `~/.config/opencode/AGENTS.md`, repo/nested `AGENTS.md` | High for markdown instructions; low for session internals |
 | fx | `AGENTS.md` project instructions plus `~/.fx/memories.json` | `~/.fx/AGENTS.md`, repo/nested `AGENTS.md`, `~/.fx/memories.json` | High for JSON string memories and AGENTS.md |
 
+## Memory equivalence diagram
+
+```mermaid
+flowchart LR
+    subgraph AgentSurfaces[Agent-native memory surfaces]
+        Claude[Claude Code<br/>CLAUDE.md + rules + auto-memory index]
+        Codex[Codex<br/>AGENTS.md hierarchy]
+        Cursor[Cursor<br/>.cursor/rules/*.mdc + AGENTS.md]
+        Windsurf[Windsurf<br/>Cascade Memories + Rules]
+        OpenCode[OpenCode<br/>AGENTS.md + session instructions]
+        FX[fx<br/>AGENTS.md + memories.json]
+    end
+
+    subgraph NormalizedMnemo[mnemo normalized memory contract]
+        Instructions[Instruction-like context<br/>agent rules, guidance, project docs]
+        Observations[Observation-like memory<br/>facts, decisions, preferences, history]
+        Provenance[Structured provenance<br/>agent, source path, scope, import time]
+    end
+
+    Claude --> Instructions
+    Claude --> Observations
+    Claude --> Provenance
+    Codex --> Instructions
+    Cursor --> Instructions
+    Cursor --> Provenance
+    Windsurf --> Instructions
+    Windsurf --> Observations
+    Windsurf --> Provenance
+    OpenCode --> Instructions
+    FX --> Instructions
+    FX --> Observations
+    FX --> Provenance
+```
+
+### Equivalence model
+
+| mnemo target concept | Claude Code | Codex | Cursor | Windsurf | OpenCode | fx |
+|---|---|---|---|---|---|---|
+| Instruction-like context | `CLAUDE.md`, `.claude/CLAUDE.md`, `.claude/rules/**/*.md` | `AGENTS.md` hierarchy | `.cursor/rules/**/*.mdc`, `AGENTS.md` | `.windsurf/rules/**/*.md`, `AGENTS.md` | `AGENTS.md` hierarchy | `AGENTS.md` hierarchy |
+| Observation-like memory | Auto-memory `MEMORY.md` index plus referenced topic files | Not documented as a native store | No documented local semantic store | Cascade Memories | Not documented as a native store | `~/.fx/memories.json` strings |
+| Scope signal | User/project/local memory locations | File hierarchy and fallback names | Rule type/path metadata | Workspace/user memory and rule locations | File hierarchy | Profile-level memories plus project instructions |
+| Provenance to preserve | Source file, heading/topic path, auto-memory reference target | Source file and nearest project path | Rule file, frontmatter, referenced `@file` paths | Memory/rule path and activation metadata | Source file and nearest project path | JSON array entry index and profile path |
+
+This equivalence is intentionally conservative: mnemo should preserve where each memory came from and whether it behaved like an instruction or an observation before turning it into canonical mnemo data.
+
 ## Index and reference patterns
 
 | Agent | Has a `MEMORY.md`-style index? | Importer note |
