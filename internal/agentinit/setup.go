@@ -90,20 +90,11 @@ func Uninstall(home, agent string) ([]string, error) {
 
 // ConfigSnippets returns the config fragments owned by agent.
 func ConfigSnippets(home, mnemoBin, agent string) ([]ConfigSnippet, error) {
-	switch agent {
-	case "claudecode":
-		return claudeCodeConfigSnippets(home, mnemoBin), nil
-	case "cursor":
-		return cursorConfigSnippets(home, mnemoBin), nil
-	case "windsurf":
-		return windsurfConfigSnippets(home, mnemoBin), nil
-	case "codex":
-		return codexConfigSnippets(home, mnemoBin), nil
-	case "opencode":
-		return openCodeConfigSnippets(home, mnemoBin), nil
-	default:
+	spec, ok := Spec(agent)
+	if !ok || spec.MCP.Snippets == nil {
 		return nil, fmt.Errorf("unsupported agent %q for setup print-config", agent)
 	}
+	return spec.MCP.Snippets(home, mnemoBin), nil
 }
 
 func applyConfig(snippet ConfigSnippet) error {
@@ -132,37 +123,25 @@ func applyConfig(snippet ConfigSnippet) error {
 }
 
 func uninstallConfig(home, agent string) ([]string, error) {
-	switch agent {
-	case "claudecode":
-		return claudeCodeUninstallConfig(home)
-	case "cursor":
-		return cursorUninstallConfig(home)
-	case "windsurf":
-		return windsurfUninstallConfig(home)
-	case "codex":
-		return codexUninstallConfig(home)
-	case "opencode":
-		return openCodeUninstallConfig(home)
-	default:
+	spec, ok := Spec(agent)
+	if !ok || spec.MCP.Uninstall == nil {
 		return nil, fmt.Errorf("unsupported agent %q for setup uninstall", agent)
 	}
+	return spec.MCP.Uninstall(home)
 }
 
 func runtimeAssets(agent string) ([]assetTarget, error) {
-	switch agent {
-	case "claudecode":
-		return claudeCodeRuntimeAssets(), nil
-	case "cursor":
-		return cursorRuntimeAssets(), nil
-	case "windsurf":
-		return windsurfRuntimeAssets(), nil
-	case "codex":
-		return codexRuntimeAssets(), nil
-	case "opencode":
-		return openCodeRuntimeAssets(), nil
-	default:
+	spec, ok := Spec(agent)
+	if !ok {
 		return nil, fmt.Errorf("unsupported agent %q for setup runtime files", agent)
 	}
+	var targets []assetTarget
+	for _, hook := range spec.Hooks {
+		if hook.RuntimeAssets != nil {
+			targets = append(targets, hook.RuntimeAssets()...)
+		}
+	}
+	return targets, nil
 }
 
 func writeRuntime(home, agent string) ([]string, error) {
