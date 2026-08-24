@@ -38,6 +38,18 @@ func TestInstallGlobalSkillCopiesCanonicalFiles(t *testing.T) {
 	if !GlobalSkillInstalled(home) {
 		t.Fatal("global skill not detected after install")
 	}
+	for _, link := range []string{
+		filepath.Join(home, ".claude", "skills", globalSkillName),
+		filepath.Join(home, ".codeium", "windsurf", "skills", globalSkillName),
+	} {
+		info, err := os.Lstat(link)
+		if err != nil {
+			t.Fatalf("stat skill link %s: %v", link, err)
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("%s is not a symlink", link)
+		}
+	}
 }
 
 func TestUpsertCodexCompactPromptFile(t *testing.T) {

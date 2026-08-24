@@ -16,6 +16,7 @@ func TestInstallGlobalInstructionsWritesConditionalAgentFiles(t *testing.T) {
 		"windsurf":   filepath.Join(home, ".codeium", "windsurf", "memories", "global_rules.md"),
 		"codex":      filepath.Join(home, ".codex", "AGENTS.md"),
 		"opencode":   filepath.Join(home, ".config", "opencode", "AGENTS.md"),
+		"fx":         filepath.Join(home, ".fx", "AGENTS.md"),
 	}
 
 	for agent, wantPath := range cases {
@@ -128,6 +129,22 @@ func TestRemoveGlobalInstructionsRemovesCursorRuleFile(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("cursor rule file still exists or stat failed: %v", err)
+	}
+}
+
+func TestFxGlobalInstructionsDisableNativeMemory(t *testing.T) {
+	home := t.TempDir()
+	path, err := InstallGlobalInstructions(home, "fx")
+	if err != nil {
+		t.Fatalf("install fx global instructions: %v", err)
+	}
+
+	content := string(mustReadFile(t, path))
+	if !strings.Contains(content, "FX NATIVE MEMORY") ||
+		!strings.Contains(content, "`memory` tool") ||
+		!strings.Contains(content, "~/.fx/memories.json") ||
+		!strings.Contains(content, "Do not call the native `memory` tool") {
+		t.Fatalf("fx instructions do not disable native memory:\n%s", content)
 	}
 }
 

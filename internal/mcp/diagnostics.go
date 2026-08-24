@@ -45,7 +45,7 @@ func registerDiagnosticTools(srv *server.MCPServer, allowlist map[string]bool) {
 					mcp.Description("Project path to diagnose (default: current working directory)"),
 				),
 				mcp.WithString("agent",
-					mcp.Description("Agent integration to check: claudecode, cursor, windsurf, codex, opencode, or all (default: all)"),
+					mcp.Description("Agent integration to check: claudecode, cursor, windsurf, codex, opencode, fx, or all (default: all)"),
 				),
 			),
 			handleDoctor(),

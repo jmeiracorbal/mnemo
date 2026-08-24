@@ -9,7 +9,7 @@ Global hooks are intentionally inert outside projects with a valid `.mnemo` mark
 
 ## Prerequisite: binary in PATH
 
-The `mnemo` binary must be in your `PATH` before any agent integration will work. This applies to Claude Code, Cursor, Windsurf, Codex and OpenCode regardless of how the integration is installed.
+The `mnemo` binary must be in your `PATH` before any agent integration will work. This applies to Claude Code, Cursor, Windsurf, Codex, OpenCode and fx regardless of how the integration is installed.
 
 The hooks that fire on session start, session end and passive capture call `mnemo` directly. The MCP server is also the `mnemo` binary. Without it in PATH, hooks and MCP cannot start.
 
@@ -26,6 +26,7 @@ Explicit targets are supported:
 ```bash
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=codex
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=opencode
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=fx
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=all
 ```
 
@@ -83,7 +84,7 @@ mnemo --version
 From the project root:
 
 ```bash
-mnemo init --agent=claudecode   # or cursor, windsurf, codex, opencode, all
+mnemo init --agent=claudecode   # or cursor, windsurf, codex, opencode, fx, all
 # optional: --no-project-rules for .mnemo marker only
 ```
 
@@ -91,7 +92,7 @@ This creates a `.mnemo` marker and records the selected agent. Agent hooks, MCP 
 
 ## Optional skills
 
-`install.sh` and `mnemo setup refresh` embed the `mnemo-memory` skill at `~/.agents/skills/mnemo-memory/` and link Claude Code and Windsurf to it. You normally do not need a separate skill install step.
+`install.sh` and `mnemo setup refresh` embed the `mnemo-memory` skill at `~/.agents/skills/mnemo-memory/` and link Claude Code and Windsurf to it. fx, Codex, Cursor and OpenCode use the canonical `~/.agents/skills/` path directly. You normally do not need a separate skill install step.
 
 If you prefer the skills CLI or need to refresh manually:
 

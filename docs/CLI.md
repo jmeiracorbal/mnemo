@@ -47,6 +47,7 @@ Agents for `mnemo init`, `mnemo install-instructions` and setup commands:
 --agent=windsurf     Windsurf global rule / .mnemo activation
 --agent=codex        Codex global AGENTS.md instructions / .mnemo activation
 --agent=opencode     OpenCode global AGENTS.md instructions / .mnemo activation
+--agent=fx           fx global AGENTS.md instructions / .mnemo activation
 --agent=all          All agents
 ```
 

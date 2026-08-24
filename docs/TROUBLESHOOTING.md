@@ -45,6 +45,7 @@ grep "mnemo:start" ~/.codex/AGENTS.md ~/.claude/CLAUDE.md 2>/dev/null
 head -3 ~/.cursor/rules/mnemo.mdc   # should have: alwaysApply: true
 grep "mnemo:start" ~/.codeium/windsurf/memories/global_rules.md 2>/dev/null
 grep "mnemo:start" ~/.config/opencode/AGENTS.md 2>/dev/null
+grep "mnemo:start" ~/.fx/AGENTS.md 2>/dev/null
 ```
 
 Global hooks/config:
@@ -52,6 +53,7 @@ Global hooks/config:
 ```bash
 grep "mnemo" ~/.cursor/hooks.json ~/.codeium/windsurf/hooks.json ~/.codex/hooks.json 2>/dev/null
 ls ~/.config/opencode/plugins/mnemo.ts ~/.config/opencode/plugins/mnemo-protocol.md
+grep "mnemo" ~/.fx/mcp.json 2>/dev/null
 ```
 
 Canonical Agent Skill and symlinks:
@@ -62,7 +64,7 @@ ls -l ~/.claude/skills/mnemo-memory \
   ~/.codeium/windsurf/skills/mnemo-memory
 ```
 
-Only symlinks for selected agent-specific consumers are expected to exist. Codex and Cursor use the canonical `.agents/skills` path directly.
+Only symlinks for selected agent-specific consumers are expected to exist. Codex, Cursor, OpenCode and fx use the canonical `.agents/skills` path directly.
 
 ## Claude Code plugin validation
 

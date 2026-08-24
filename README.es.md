@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Dale a Claude Code, Codex, Cursor, Windsurf y OpenCode una memoria local compartida que sobrevive a sesiones, compactaciones y cambios de agente.
+  Dale a Claude Code, Codex, Cursor, Windsurf, OpenCode y fx una memoria local compartida que sobrevive a sesiones, compactaciones y cambios de agente.
 </p>
 
 <p align="center">
@@ -81,7 +81,7 @@ mnemo search "SQLite" --project miapp
 | Problema | mnemo aporta |
 |---|---|
 | Los agentes olvidan decisiones entre sesiones | Memoria persistente de proyecto en `~/.mnemo/memory.db` |
-| Cada agente mantiene una memoria distinta | Una capa compartida para Claude Code, Codex, Cursor, Windsurf y OpenCode |
+| Cada agente mantiene una memoria distinta | Una capa compartida para Claude Code, Codex, Cursor, Windsurf, OpenCode y fx |
 | Los archivos markdown de memoria se desordenan | Observaciones estructuradas, tags, topic keys y estados de revisión |
 | Los hooks globales pueden ser peligrosos | Activación opt-in por proyecto mediante `.mnemo`; el resto se ignora |
 | El setup puede fallar en silencio | `mnemo doctor` y `mnemo setup status` explican qué está configurado |
@@ -110,6 +110,7 @@ mnemo search "SQLite" --project miapp
 | Cursor | ✅ | ✅ | ✅ | ✅ | Soportado |
 | Windsurf | ✅ | ✅ | ✅ | ✅ | Soportado |
 | OpenCode | ✅ | ✅ | ✅ | ✅ | Soportado |
+| fx | ✅ | n/a | ✅ | ✅ vía ruta canónica | Soportado |
 
 El setup global se instala una vez. La activación del proyecto sigue siendo local y explícita:
 
