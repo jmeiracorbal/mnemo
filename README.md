@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <a href="README.es.md">Español</a>
+  <a href="README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 <p align="center">
@@ -42,10 +42,6 @@ Instead of spreading project knowledge across `MEMORY.md`, native editor memory,
 
 > [!IMPORTANT]
 > mnemo does not automatically support every harness; it provides a stable memory contract that any harness can implement and validate.
-
-<p align="center">
-  <img src="assets/brand/mnemo-flow.svg" alt="mnemo architecture: agents connect through hooks, MCP tools and skills to a local SQLite memory store">
-</p>
 
 ## Quick Start
 
@@ -103,12 +99,12 @@ mnemo search "SQLite" --project myapp
 ## Supported Agents
 
 <p align="center">
-  <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-supported-6B46C1">
-  <img alt="Codex" src="https://img.shields.io/badge/Codex-supported-00A67E">
-  <img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-111111">
-  <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-supported-2563EB">
-  <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-supported-F97316">
-  <img alt="fx" src="https://img.shields.io/badge/fx-supported-7C3AED">
+  <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-supported-6B46C1?logo=claudecode&logoColor=white">
+  <img alt="Codex" src="https://img.shields.io/badge/Codex-supported-00A67E?logo=openai&logoColor=white">
+  <img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-111111?logo=cursor&logoColor=white">
+  <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-supported-2563EB?logo=windsurf&logoColor=white">
+  <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-supported-F97316?logo=opencode&logoColor=white">
+  <img alt="fx" src="https://img.shields.io/badge/fx-supported-7C3AED?logo=vercel&logoColor=white">
 </p>
 
 | Agent | MCP | Hooks / runtime | Global instructions | Skill access | Status |
@@ -131,10 +127,6 @@ project/
 ```
 
 ## See it in action
-
-<p align="center">
-  <img src="assets/brand/mnemo-terminal.svg" alt="mnemo terminal screenshot showing init, doctor, context and memories review">
-</p>
 
 ```text
 $ mnemo doctor --agent=all --path=.
