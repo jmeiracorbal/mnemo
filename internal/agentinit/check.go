@@ -21,102 +21,63 @@ type Check struct {
 
 // Label returns the display name owned by agent.
 func Label(agent string) string {
-	switch agent {
-	case "claudecode":
-		return claudeCodeLabel()
-	case "cursor":
-		return cursorLabel()
-	case "windsurf":
-		return windsurfLabel()
-	case "codex":
-		return codexLabel()
-	case "opencode":
-		return openCodeLabel()
-	default:
-		return strings.ToUpper(agent[:1]) + agent[1:]
+	if spec, ok := Spec(agent); ok {
+		return spec.Label
 	}
+	if agent == "" {
+		return ""
+	}
+	return strings.ToUpper(agent[:1]) + agent[1:]
 }
 
 // Detected reports whether agent's user-scope directory exists under home.
 func Detected(home, agent string) bool {
-	for _, path := range detectionPaths(home, agent) {
-		if pathExists(path) {
-			return true
-		}
+	spec, ok := Spec(agent)
+	if !ok || spec.Detect == nil {
+		return false
 	}
-	return false
-}
-
-func detectionPaths(home, agent string) []string {
-	switch agent {
-	case "claudecode":
-		return claudeCodeDetectionPaths(home)
-	case "cursor":
-		return cursorDetectionPaths(home)
-	case "windsurf":
-		return windsurfDetectionPaths(home)
-	case "codex":
-		return codexDetectionPaths(home)
-	case "opencode":
-		return openCodeDetectionPaths(home)
-	default:
-		return nil
-	}
+	return spec.Detect(home)
 }
 
 // CheckInstructions reports whether agent's global instructions look installed.
 func CheckInstructions(home, agent string) Check {
-	switch agent {
-	case "claudecode":
-		return claudeCodeCheckInstructions(home)
-	case "cursor":
-		return cursorCheckInstructions(home)
-	case "windsurf":
-		return windsurfCheckInstructions(home)
-	case "codex":
-		return codexCheckInstructions(home)
-	case "opencode":
-		return openCodeCheckInstructions(home)
-	default:
+	spec, ok := Spec(agent)
+	if !ok {
 		return Check{ID: "global_instructions." + agent, Status: "error", Severity: "error", Message: fmt.Sprintf("unknown agent %q", agent)}
 	}
+	instruction, ok := globalInstructionSpec(spec)
+	if !ok || instruction.Check == nil {
+		return Check{ID: "global_instructions." + agent, Status: "error", Severity: "error", Message: fmt.Sprintf("agent %q has no global instruction check", agent)}
+	}
+	return instruction.Check(home)
 }
 
 // CheckMCP reports whether agent's MCP config contains the mnemo server.
 func CheckMCP(home, agent string) Check {
-	switch agent {
-	case "claudecode":
-		return claudeCodeCheckMCP(home)
-	case "cursor":
-		return cursorCheckMCP(home)
-	case "windsurf":
-		return windsurfCheckMCP(home)
-	case "codex":
-		return codexCheckMCP(home)
-	case "opencode":
-		return openCodeCheckMCP(home)
-	default:
+	spec, ok := Spec(agent)
+	if !ok || spec.MCP.Check == nil {
 		return checkError(agent, "mcp_config."+agent, "unknown agent", "")
 	}
+	return spec.MCP.Check(home)
 }
 
 // CheckRuntime reports whether agent's runtime files (hooks/plugin) are present.
 // A zero Check means the agent has no runtime surface to report.
 func CheckRuntime(home, agent string) Check {
-	switch agent {
-	case "claudecode":
-		return claudeCodeCheckRuntime(home)
-	case "cursor":
-		return cursorCheckRuntime(home)
-	case "windsurf":
-		return windsurfCheckRuntime(home)
-	case "codex":
-		return codexCheckRuntime(home)
-	case "opencode":
-		return openCodeCheckRuntime(home)
-	default:
+	spec, ok := Spec(agent)
+	if !ok {
 		return Check{}
 	}
+	for _, hook := range spec.Hooks {
+		if hook.Check == nil {
+			continue
+		}
+		check := hook.Check(home)
+		if check.ID != "" {
+			return check
+		}
+	}
+	return Check{}
 }
 
 func checkInstructionFile(agent, path string, requireMarkers bool) Check {
