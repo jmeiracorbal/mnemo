@@ -23,6 +23,8 @@ Verify naming consistency between `plugin/claude-code/hooks/hooks.json`, shipped
 
 Known prior failure: `post-compaction.sh` referenced in hook config, real script was `post-compact.sh`. This class of error is critical.
 
+Hook-internal mnemo write/session commands must suppress both stdout and stderr with `>/dev/null 2>&1` to avoid leaking CLI output back into agent conversations. Do not use stderr-only redirection for `mnemo save`, `mnemo capture`, `mnemo session start`, or `mnemo session end`.
+
 ### 3. Never change version references partially
 
 The binary version is injected at build time via ldflags — no code change needed. The MCP server must advertise that same binary version; do not hardcode a separate MCP version string. Plugin metadata files contain the version string explicitly and must be updated on every release.
