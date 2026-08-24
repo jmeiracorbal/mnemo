@@ -103,6 +103,15 @@ mnemo search "SQLite" --project miapp
 
 ## Agentes soportados
 
+<p align="center">
+  <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-soportado-6B46C1">
+  <img alt="Codex" src="https://img.shields.io/badge/Codex-soportado-00A67E">
+  <img alt="Cursor" src="https://img.shields.io/badge/Cursor-soportado-111111">
+  <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-soportado-2563EB">
+  <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-soportado-F97316">
+  <img alt="fx" src="https://img.shields.io/badge/fx-soportado-7C3AED">
+</p>
+
 | Agente | MCP | Hooks / runtime | Instrucciones globales | Skills | Estado |
 |---|---:|---:|---:|---:|---|
 | Claude Code | ✅ | Plugin o n/a vía `install.sh` | ✅ | ✅ | Soportado |

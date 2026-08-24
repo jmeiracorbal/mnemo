@@ -102,6 +102,15 @@ mnemo search "SQLite" --project myapp
 
 ## Supported Agents
 
+<p align="center">
+  <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-supported-6B46C1">
+  <img alt="Codex" src="https://img.shields.io/badge/Codex-supported-00A67E">
+  <img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-111111">
+  <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-supported-2563EB">
+  <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-supported-F97316">
+  <img alt="fx" src="https://img.shields.io/badge/fx-supported-7C3AED">
+</p>
+
 | Agent | MCP | Hooks / runtime | Global instructions | Skill access | Status |
 |---|---:|---:|---:|---:|---|
 | Claude Code | ✅ | Plugin or n/a via `install.sh` | ✅ | ✅ | Supported |
