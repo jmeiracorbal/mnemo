@@ -32,8 +32,8 @@ func TestConfigSnippetsForAll(t *testing.T) {
 		}
 		snippets = append(snippets, agentSnippets...)
 	}
-	if len(snippets) != 8 {
-		t.Fatalf("snippets = %d, want 8", len(snippets))
+	if len(snippets) != 9 {
+		t.Fatalf("snippets = %d, want 9", len(snippets))
 	}
 }
 
@@ -82,6 +82,49 @@ func TestOpenCodeConfigUsesCurrentMCPServersShapeAndRemovesLegacyEntry(t *testin
 	}
 	if !strings.Contains(content, `"other"`) {
 		t.Fatalf("unrelated OpenCode MCP config was not preserved:\n%s", content)
+	}
+}
+
+func TestFxConfigUsesNativeMCPShape(t *testing.T) {
+	home := t.TempDir()
+	configPath := filepath.Join(home, ".fx", "mcp.json")
+	writeTestFile(t, configPath, `{
+  "mcp": {
+    "other": {"command": ["/bin/other"]}
+  }
+}`)
+
+	if _, err := Refresh(home, "/bin/mnemo", "fx"); err != nil {
+		t.Fatalf("refresh fx: %v", err)
+	}
+
+	content := readTestFile(t, configPath)
+	if !strings.Contains(content, `"mnemo"`) || !strings.Contains(content, `"command"`) || !strings.Contains(content, `"MNEMO_AGENT": "fx"`) {
+		t.Fatalf("fx MCP config missing mnemo server or provenance env:\n%s", content)
+	}
+	if !strings.Contains(content, `"other"`) {
+		t.Fatalf("unrelated fx MCP config was not preserved:\n%s", content)
+	}
+}
+
+func TestFxUninstallRemovesMCPConfig(t *testing.T) {
+	home := t.TempDir()
+	if _, err := Refresh(home, "/bin/mnemo", "fx"); err != nil {
+		t.Fatalf("refresh fx: %v", err)
+	}
+
+	removed, err := Uninstall(home, "fx")
+	if err != nil {
+		t.Fatalf("uninstall fx: %v", err)
+	}
+	if len(removed) != 2 {
+		t.Fatalf("removed paths = %v, want instructions and MCP config", removed)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".fx", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("fx AGENTS.md still exists or stat failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".fx", "mcp.json")); !os.IsNotExist(err) {
+		t.Fatalf("fx mcp.json still exists or stat failed: %v", err)
 	}
 }
 

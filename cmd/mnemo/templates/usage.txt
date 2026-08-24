@@ -40,6 +40,7 @@ Agents for init / install-instructions:
   --agent=windsurf     Windsurf global rule / .mnemo activation
   --agent=codex        Codex global AGENTS.md instructions / .mnemo activation
   --agent=opencode     OpenCode global AGENTS.md instructions / .mnemo activation
+  --agent=fx           fx global AGENTS.md instructions / .mnemo activation
   --agent=all          All agents
   --path=DIR           Target project directory for init/doctor (default: current directory)
 
@@ -55,7 +56,7 @@ Setup status options:
   --home=DIR           Override home directory for global agent checks
 
 Setup print-config options:
-  AGENT                claudecode | cursor | windsurf | codex | opencode | all
+  AGENT                claudecode | cursor | windsurf | codex | opencode | fx | all
   --home=DIR           Use DIR when rendering user-level config paths
   --mnemo-bin=PATH     Use PATH as the mnemo binary in snippets
 

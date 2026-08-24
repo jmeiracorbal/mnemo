@@ -1,16 +1,16 @@
 # Agent integration
 
-mnemo supports Claude Code, Cursor, Windsurf, Codex and OpenCode through global setup surfaces plus project-local activation.
+mnemo supports Claude Code, Cursor, Windsurf, Codex, OpenCode and fx through global setup surfaces plus project-local activation.
 
 ## Global surfaces
 
-| | Claude Code | Cursor | Windsurf | Codex | OpenCode |
-|---|---|---|---|---|---|
-| **Hook scripts** | via plugin or n/a via `install.sh` | `~/.cursor/hooks/` | `~/.codeium/windsurf/hooks/` | `~/.codex/hooks/` | `~/.config/opencode/plugins/` |
-| **MCP** | `~/.claude/.mcp.json` | `~/.cursor/mcp.json` | `~/.codeium/windsurf/mcp_config.json` | `~/.codex/config.toml` | `~/.config/opencode/opencode.json` |
-| **Hook config** | plugin hooks check `.mnemo` | `~/.cursor/hooks.json` | `~/.codeium/windsurf/hooks.json` | `~/.codex/hooks.json` checks `.mnemo` | global plugin checks `.mnemo` |
-| **Global protocol** | `~/.claude/CLAUDE.md` | `~/.cursor/rules/mnemo.mdc` | `~/.codeium/windsurf/memories/global_rules.md` | `~/.codex/AGENTS.md` | `~/.config/opencode/AGENTS.md` |
-| **Skill access** | symlinks under `~/.claude/skills/` | canonical `~/.agents/skills/` | symlinks under `~/.codeium/windsurf/skills/` | canonical `~/.agents/skills/` | canonical `~/.agents/skills/` |
+| | Claude Code | Cursor | Windsurf | Codex | OpenCode | fx |
+|---|---|---|---|---|---|---|
+| **Hook scripts** | via plugin or n/a via `install.sh` | `~/.cursor/hooks/` | `~/.codeium/windsurf/hooks/` | `~/.codex/hooks/` | `~/.config/opencode/plugins/` | n/a |
+| **MCP** | `~/.claude/.mcp.json` | `~/.cursor/mcp.json` | `~/.codeium/windsurf/mcp_config.json` | `~/.codex/config.toml` | `~/.config/opencode/opencode.json` | `~/.fx/mcp.json` |
+| **Hook config** | plugin hooks check `.mnemo` | `~/.cursor/hooks.json` | `~/.codeium/windsurf/hooks.json` | `~/.codex/hooks.json` checks `.mnemo` | global plugin checks `.mnemo` | n/a |
+| **Global protocol** | `~/.claude/CLAUDE.md` | `~/.cursor/rules/mnemo.mdc` | `~/.codeium/windsurf/memories/global_rules.md` | `~/.codex/AGENTS.md` | `~/.config/opencode/AGENTS.md` | `~/.fx/AGENTS.md` |
+| **Skill access** | symlinks under `~/.claude/skills/` | canonical `~/.agents/skills/` | symlinks under `~/.codeium/windsurf/skills/` | canonical `~/.agents/skills/` | canonical `~/.agents/skills/` | canonical `~/.agents/skills/` |
 
 All supported agents use global hook/configuration surfaces where available. Their global instructions are conditional: if `.mnemo` is missing or invalid, agents skip mnemo entirely and do not create fallback memory files.
 
@@ -86,5 +86,11 @@ The `.mnemo` file at the project root activates mnemo for a project:
 | `session.created` | New session created | Registers session with mnemo |
 | `experimental.chat.system.transform` | First prompt of a conversation | Injects memory context into the system prompt |
 | `experimental.session.compacting` | Context compaction | Refreshes context from mnemo, re-arms context injection |
+
+### fx
+
+fx support uses MCP, global `AGENTS.md` instructions and the canonical `mnemo-memory` skill under `~/.agents/skills/`. It does not install hooks because fx does not expose a supported hook surface for mnemo to rely on.
+
+fx also has a native `memory` tool backed by `~/.fx/memories.json`. The mnemo-managed `~/.fx/AGENTS.md` block explicitly disables that native memory surface for repository/project memory whenever a valid `.mnemo` marker exists; agents must use mnemo MCP tools instead.
 
 On session start, every hook resolves the Git root and reads the project identifier from `.mnemo`. This keeps the same identity regardless of which subdirectory the editor opens.
