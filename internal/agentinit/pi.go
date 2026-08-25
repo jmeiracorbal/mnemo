@@ -16,6 +16,10 @@ func piInstructionPath(home string) string {
 	return filepath.Join(home, ".pi", "agent", "APPEND_SYSTEM.md")
 }
 
+func piSkillLinkPath(home string) string {
+	return filepath.Join(home, ".pi", "agent", "skills", globalSkillName)
+}
+
 func piInstallInstructions(home string) (string, error) {
 	path := piInstructionPath(home)
 	if err := AppendSection(path, templates.Global+"\n\n"+templates.Pi); err != nil {
