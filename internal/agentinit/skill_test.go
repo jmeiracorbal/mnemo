@@ -82,4 +82,22 @@ func TestUpsertCodexCompactPromptFile(t *testing.T) {
 	if strings.Count(string(data), "experimental_compact_prompt_file") != 1 {
 		t.Fatalf("expected one compact prompt key, got: %s", data)
 	}
+
+	if err := os.WriteFile(configPath, []byte("[mcp_servers.mnemo.env]\nMNEMO_AGENT = \"codex\"\nexperimental_compact_prompt_file = \"/old/scoped/path\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := upsertCodexCompactPromptFile(configPath, promptPath); err != nil {
+		t.Fatalf("move scoped upsert: %v", err)
+	}
+	data, err = os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	if strings.Count(content, "experimental_compact_prompt_file") != 1 {
+		t.Fatalf("expected one compact prompt key after scoped move, got: %s", content)
+	}
+	if strings.Index(content, "experimental_compact_prompt_file") > strings.Index(content, "[mcp_servers.mnemo.env]") {
+		t.Fatalf("compact prompt key must be top-level before TOML tables, got: %s", content)
+	}
 }

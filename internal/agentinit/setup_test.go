@@ -1,6 +1,7 @@
 package agentinit
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -174,7 +175,243 @@ func TestRefreshWritesCodexFiles(t *testing.T) {
 	if !strings.Contains(config, "experimental_compact_prompt_file") {
 		t.Fatalf("codex config missing compact prompt file:\n%s", config)
 	}
+	compactIdx := strings.Index(config, "experimental_compact_prompt_file")
+	mcpIdx := strings.Index(config, "[mcp_servers.mnemo]")
+	if compactIdx < 0 || mcpIdx < 0 || compactIdx > mcpIdx {
+		t.Fatalf("codex compact prompt must be top-level before MCP tables:\n%s", config)
+	}
 	assertExecutable(t, filepath.Join(home, ".codex", "hooks", "session-start.sh"))
+}
+
+func TestRefreshMigratesCodexLegacyHookFeatureFlag(t *testing.T) {
+	home := t.TempDir()
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	writeTestFile(t, configPath, `[features]
+codex_hooks = true
+other = false
+
+[mcp_servers.other]
+command = "other"
+`)
+
+	if _, err := Refresh(home, "/bin/mnemo", "codex"); err != nil {
+		t.Fatalf("refresh codex: %v", err)
+	}
+
+	content := readTestFile(t, configPath)
+	if strings.Contains(content, "codex_hooks") {
+		t.Fatalf("legacy codex_hooks flag was not removed:\n%s", content)
+	}
+	if !strings.Contains(content, "[features]") || !strings.Contains(content, "hooks = true") || !strings.Contains(content, "other = false") {
+		t.Fatalf("features table was not migrated correctly:\n%s", content)
+	}
+	if !strings.Contains(content, "[mcp_servers.other]") {
+		t.Fatalf("unrelated Codex config was not preserved:\n%s", content)
+	}
+}
+
+func TestRefreshPreservesExistingCodexHooksFeatureFlag(t *testing.T) {
+	home := t.TempDir()
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	writeTestFile(t, configPath, `[features]
+hooks = false
+codex_hooks = true
+`)
+
+	if _, err := Refresh(home, "/bin/mnemo", "codex"); err != nil {
+		t.Fatalf("refresh codex: %v", err)
+	}
+
+	content := readTestFile(t, configPath)
+	if strings.Contains(content, "codex_hooks") {
+		t.Fatalf("legacy codex_hooks flag was not removed:\n%s", content)
+	}
+	if !strings.Contains(content, "hooks = false") {
+		t.Fatalf("existing hooks flag was not preserved:\n%s", content)
+	}
+	if strings.Contains(content, "hooks = true") {
+		t.Fatalf("legacy codex_hooks value overwrote existing hooks flag:\n%s", content)
+	}
+}
+
+func TestCodexCheckRuntimeWarnsWhenMnemoHooksNeedReview(t *testing.T) {
+	home := t.TempDir()
+	if _, err := Refresh(home, "/bin/mnemo", "codex"); err != nil {
+		t.Fatalf("refresh codex: %v", err)
+	}
+
+	check := codexCheckRuntime(home)
+	if check.Status != "warning" || !strings.Contains(check.Message, "need review") {
+		t.Fatalf("runtime check = %+v, want hook review warning", check)
+	}
+	if !strings.Contains(check.Details["missing_trust"], "SessionStart") || !strings.Contains(check.Details["missing_trust"], "Stop") {
+		t.Fatalf("missing_trust details = %q, want SessionStart and Stop", check.Details["missing_trust"])
+	}
+}
+
+func TestCodexCheckRuntimeAcceptsTrustedMnemoHooks(t *testing.T) {
+	home := t.TempDir()
+	if _, err := Refresh(home, "/bin/mnemo", "codex"); err != nil {
+		t.Fatalf("refresh codex: %v", err)
+	}
+	appendCodexMnemoHookTrust(t, home)
+
+	check := codexCheckRuntime(home)
+	if check.Status != "ok" {
+		t.Fatalf("runtime check = %+v, want ok", check)
+	}
+}
+
+func TestCodexCheckRuntimeIgnoresCommentedTrustSections(t *testing.T) {
+	home := t.TempDir()
+	if _, err := Refresh(home, "/bin/mnemo", "codex"); err != nil {
+		t.Fatalf("refresh codex: %v", err)
+	}
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	hooksPath := filepath.Join(home, ".codex", "hooks.json")
+	content := readTestFile(t, configPath)
+	content += fmt.Sprintf(`
+# %s
+trusted_hash = "sha256:test-session-start"
+
+# %s
+trusted_hash = "sha256:test-stop"
+`, codexHookTrustSection(codexHookTrustIdentity(hooksPath, "SessionStart", 0, 0)), codexHookTrustSection(codexHookTrustIdentity(hooksPath, "Stop", 0, 0)))
+	writeTestFile(t, configPath, content)
+
+	check := codexCheckRuntime(home)
+	if check.Status != "warning" || !strings.Contains(check.Message, "need review") {
+		t.Fatalf("runtime check = %+v, want hook review warning", check)
+	}
+}
+
+func TestCheckMCPWarnsWhenJSONAgentToolInvocationMissing(t *testing.T) {
+	for _, tc := range []struct {
+		agent      string
+		configPath string
+		content    string
+	}{
+		{
+			agent:      "claudecode",
+			configPath: ".claude.json",
+			content:    `{"mcpServers":{"mnemo":{"command":"mnemo","args":["not-mcp"],"env":{"MNEMO_AGENT":"claudecode"}}}}`,
+		},
+		{
+			agent:      "cursor",
+			configPath: filepath.Join(".cursor", "mcp.json"),
+			content:    `{"mcpServers":{"mnemo":{"command":"mnemo","args":["not-mcp"],"env":{"MNEMO_AGENT":"cursor"}}}}`,
+		},
+		{
+			agent:      "windsurf",
+			configPath: filepath.Join(".codeium", "windsurf", "mcp_config.json"),
+			content:    `{"mcpServers":{"mnemo":{"command":"mnemo","args":["not-mcp"],"env":{"MNEMO_AGENT":"windsurf"}}}}`,
+		},
+		{
+			agent:      "opencode",
+			configPath: filepath.Join(".config", "opencode", "opencode.json"),
+			content:    `{"mcp":{"servers":{"mnemo":{"command":["mnemo","not-mcp"],"environment":{"MNEMO_AGENT":"opencode"}}}}}`,
+		},
+		{
+			agent:      "fx",
+			configPath: filepath.Join(".fx", "mcp.json"),
+			content:    `{"mcp":{"mnemo":{"command":["mnemo","not-mcp"],"environment":{"MNEMO_AGENT":"fx"}}}}`,
+		},
+		{
+			agent:      "pi",
+			configPath: filepath.Join(".pi", "agent", "mcp.json"),
+			content:    `{"mcpServers":{"mnemo":{"command":"mnemo","args":["not-mcp"],"env":{"MNEMO_AGENT":"pi"}}}}`,
+		},
+	} {
+		t.Run(tc.agent, func(t *testing.T) {
+			home := t.TempDir()
+			writeTestFile(t, filepath.Join(home, tc.configPath), tc.content)
+
+			check := CheckMCP(home, tc.agent)
+			if check.Status != "warning" || !strings.Contains(check.Message, "agent tool invocation") {
+				t.Fatalf("MCP check = %+v, want missing invocation warning", check)
+			}
+		})
+	}
+}
+
+func TestCodexCheckMCPWarnsWhenAgentToolInvocationMissing(t *testing.T) {
+	home := t.TempDir()
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	writeTestFile(t, configPath, `[mcp_servers.mnemo]
+command = "/bin/mnemo"
+args = ["not-mcp"]
+
+[mcp_servers.mnemo.env]
+MNEMO_AGENT = "codex"
+`)
+
+	check := CheckMCP(home, "codex")
+	if check.Status != "warning" || !strings.Contains(check.Message, "agent tool invocation") {
+		t.Fatalf("MCP check = %+v, want missing invocation warning", check)
+	}
+}
+
+func TestCursorAndWindsurfCheckRuntimeValidateHookCommands(t *testing.T) {
+	for _, tc := range []struct {
+		agent     string
+		hooksPath string
+	}{
+		{
+			agent:     "cursor",
+			hooksPath: filepath.Join(".cursor", "hooks.json"),
+		},
+		{
+			agent:     "windsurf",
+			hooksPath: filepath.Join(".codeium", "windsurf", "hooks.json"),
+		},
+	} {
+		t.Run(tc.agent, func(t *testing.T) {
+			home := t.TempDir()
+			if _, err := Refresh(home, "/bin/mnemo", tc.agent); err != nil {
+				t.Fatalf("refresh %s: %v", tc.agent, err)
+			}
+			writeTestFile(t, filepath.Join(home, tc.hooksPath), `{"hooks":{}}`)
+
+			check := CheckRuntime(home, tc.agent)
+			if check.Status != "warning" || !strings.Contains(check.Message, "missing mnemo hook commands") {
+				t.Fatalf("runtime check = %+v, want missing hook command warning", check)
+			}
+			if check.Details["missing_hooks"] == "" {
+				t.Fatalf("runtime check missing hook details: %+v", check)
+			}
+		})
+	}
+}
+
+func TestCursorAndWindsurfCheckRuntimeRequireSessionProtocol(t *testing.T) {
+	for _, tc := range []struct {
+		agent        string
+		protocolPath string
+	}{
+		{
+			agent:        "cursor",
+			protocolPath: filepath.Join(".cursor", "hooks", "session-start-protocol.md"),
+		},
+		{
+			agent:        "windsurf",
+			protocolPath: filepath.Join(".codeium", "windsurf", "hooks", "session-start-protocol.md"),
+		},
+	} {
+		t.Run(tc.agent, func(t *testing.T) {
+			home := t.TempDir()
+			if _, err := Refresh(home, "/bin/mnemo", tc.agent); err != nil {
+				t.Fatalf("refresh %s: %v", tc.agent, err)
+			}
+			if err := os.Remove(filepath.Join(home, tc.protocolPath)); err != nil {
+				t.Fatalf("remove protocol fixture: %v", err)
+			}
+
+			check := CheckRuntime(home, tc.agent)
+			if check.Status != "warning" || !strings.Contains(check.Details["missing"], "session-start-protocol.md") {
+				t.Fatalf("runtime check = %+v, want missing protocol warning", check)
+			}
+		})
+	}
 }
 
 func TestRemoveCodexMCPConfigRemovesNestedTables(t *testing.T) {
@@ -274,5 +511,30 @@ func assertExecutable(t *testing.T, path string) {
 	}
 	if info.Mode()&0111 == 0 {
 		t.Fatalf("%s is not executable: %v", path, info.Mode())
+	}
+}
+
+func appendCodexMnemoHookTrust(t *testing.T, home string) {
+	t.Helper()
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	hooksPath := filepath.Join(home, ".codex", "hooks.json")
+	trust := fmt.Sprintf(`
+%s
+trusted_hash = "sha256:test-session-start"
+
+%s
+trusted_hash = "sha256:test-stop"
+`, codexHookTrustSection(codexHookTrustIdentity(hooksPath, "SessionStart", 0, 0)), codexHookTrustSection(codexHookTrustIdentity(hooksPath, "Stop", 0, 0)))
+	f, err := os.OpenFile(configPath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("open config for append: %v", err)
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Errorf("close config: %v", err)
+		}
+	}()
+	if _, err := f.WriteString(trust); err != nil {
+		t.Fatalf("append hook trust: %v", err)
 	}
 }

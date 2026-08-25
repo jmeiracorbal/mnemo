@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -150,7 +151,98 @@ func checkJSONMCPWithEnv(path, id, agent, envKey string, keys ...string) Check {
 	if !jsonPathEquals(server, agent, envKey, "MNEMO_AGENT") {
 		return checkWarning(agent, id, "MCP config is missing mnemo provenance environment", path)
 	}
+	if !jsonMCPInvokesAgentTools(server) {
+		return checkWarning(agent, id, "MCP config is missing mnemo agent tool invocation", path)
+	}
 	return checkOK(agent, id, "MCP config contains mnemo server", path)
+}
+
+func jsonMCPInvokesAgentTools(server any) bool {
+	m, ok := server.(map[string]any)
+	if !ok {
+		return false
+	}
+	command, ok := m["command"]
+	if !ok {
+		return false
+	}
+	switch value := command.(type) {
+	case string:
+		if strings.TrimSpace(value) == "" {
+			return false
+		}
+		return jsonStringSliceContains(m["args"], "mcp") && jsonStringSliceContains(m["args"], "--tools=agent")
+	case []any:
+		return jsonStringSliceContains(value, "mcp") && jsonStringSliceContains(value, "--tools=agent")
+	default:
+		return false
+	}
+}
+
+func jsonStringSliceContains(value any, want string) bool {
+	items, ok := value.([]any)
+	if !ok {
+		return false
+	}
+	for _, item := range items {
+		if got, ok := item.(string); ok && got == want {
+			return true
+		}
+	}
+	return false
+}
+
+func checkJSONHookCommands(path, id, agent, okMessage string, eventCommands map[string][]string) Check {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return checkWarning(agent, id, "hooks config not found", path)
+	}
+	if err != nil {
+		return checkError(agent, id, "read hooks config: "+err.Error(), path)
+	}
+	var root map[string]any
+	if err := json.Unmarshal(data, &root); err != nil {
+		return checkError(agent, id, "parse hooks config JSON: "+err.Error(), path)
+	}
+	hooks, ok := root["hooks"].(map[string]any)
+	if !ok {
+		return checkWarning(agent, id, "hooks config does not contain hooks", path)
+	}
+
+	var missing []string
+	for event, commands := range eventCommands {
+		items, ok := hooks[event].([]any)
+		if !ok {
+			missing = append(missing, event)
+			continue
+		}
+		for _, command := range commands {
+			found := false
+			for _, item := range items {
+				if containsCommand(item, command) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				missing = append(missing, event)
+				break
+			}
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return Check{
+			ID:       id,
+			Status:   "warning",
+			Severity: "warning",
+			Message:  "hooks config is missing mnemo hook commands",
+			Agent:    agent,
+			Path:     path,
+			Details:  map[string]string{"missing_hooks": strings.Join(missing, ",")},
+		}
+	}
+	return checkOK(agent, id, okMessage, path)
 }
 
 func jsonPathValue(v any, keys ...string) (any, bool) {

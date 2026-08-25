@@ -25,6 +25,16 @@ type skillSymlink struct {
 // InstallGlobalSkill copies the embedded mnemo-memory skill to the canonical
 // global path and links agent-specific skill directories to it.
 func InstallGlobalSkill(home string) ([]string, error) {
+	return installGlobalSkill(home, SupportedAgents)
+}
+
+// InstallGlobalSkillForAgents copies the embedded mnemo-memory skill to the
+// canonical global path and links only the requested agents' skill directories.
+func InstallGlobalSkillForAgents(home string, agents []string) ([]string, error) {
+	return installGlobalSkill(home, agents)
+}
+
+func installGlobalSkill(home string, agents []string) ([]string, error) {
 	destRoot := filepath.Join(home, ".agents", "skills", globalSkillName)
 	var updated []string
 
@@ -43,7 +53,7 @@ func InstallGlobalSkill(home string) ([]string, error) {
 		updated = append(updated, path)
 	}
 
-	for _, spec := range globalSkillSymlinks(home, destRoot) {
+	for _, spec := range globalSkillSymlinks(home, destRoot, agents) {
 		if err := ensureDirSymlink(spec.link, spec.target); err != nil {
 			return nil, err
 		}
@@ -53,9 +63,13 @@ func InstallGlobalSkill(home string) ([]string, error) {
 	return updated, nil
 }
 
-func globalSkillSymlinks(home, destRoot string) []skillSymlink {
+func globalSkillSymlinks(home, destRoot string, agents []string) []skillSymlink {
 	var symlinks []skillSymlink
-	for _, spec := range agentSpecs {
+	for _, agent := range agents {
+		spec, ok := Spec(agent)
+		if !ok {
+			continue
+		}
 		if spec.Skill.GlobalLinkPath == nil {
 			continue
 		}

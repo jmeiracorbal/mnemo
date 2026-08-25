@@ -83,7 +83,7 @@ func printSetupUsage() {
 func runSetupStatus() {
 	opts, err := parseSetupStatusArgs(os.Args[3:], os.UserHomeDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo setup status: home: %v\n", err)
+		fmt.Fprintf(os.Stderr, "mnemo setup status: %v\n", err)
 		os.Exit(1)
 	}
 	report := buildSetupStatusReport(opts)
@@ -114,6 +114,8 @@ func parseSetupStatusArgs(args []string, userHomeDir func() (string, error)) (se
 			opts.Agent = strings.TrimSpace(arg[len("--agent="):])
 		case strings.HasPrefix(arg, "--home="):
 			opts.Home = arg[len("--home="):]
+		default:
+			return opts, fmt.Errorf("unknown argument %q", arg)
 		}
 	}
 	if opts.Agent == "" {
