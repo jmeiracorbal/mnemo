@@ -79,6 +79,19 @@ Any second identity scheme fragments stored memory. Changing this is a storage c
 
 Tests must cover: hook config references to existing scripts, shipped metadata consistency, filename matches between hook JSON and actual scripts. If a real shipped file can be wrong while tests pass, coverage is insufficient.
 
+### 9. New agent integrations must declare and validate skill discovery
+
+When adding or changing an agent integration, audit that agent's current skill discovery documentation before deciding how mnemo should expose skills.
+
+The preferred model is:
+
+1. Keep the canonical mnemo skill at `~/.agents/skills/mnemo-memory/`.
+2. If the agent directly discovers `~/.agents/skills`, do not create a redundant agent-specific copy or symlink.
+3. If the agent requires its own global skill directory, declare the symlink path in that agent's `AgentSpec` through `AgentSkillSpec.GlobalLinkPath`.
+4. Validate the resulting layout in a clean temporary `HOME`: canonical skill files exist, expected symlinks point to the canonical folder, and agents that use the canonical path do not receive redundant symlinks.
+
+Do not add skill paths to a hardcoded global list outside the agent spec. The skill surface is part of the concrete agent contract.
+
 ## Pre-commit checklist
 
 Before committing any change that touches hooks, plugin metadata, setup/install flows, versioning, or memory behavior:
@@ -90,6 +103,7 @@ Before committing any change that touches hooks, plugin metadata, setup/install 
 - [ ] Hook filenames in `hooks.json` match actual embedded scripts
 - [ ] Version strings updated in all required metadata files
 - [ ] Shipped hooks resolve PROJECT from `.mnemo` id
+- [ ] New/changed agent integrations validate whether skills are loaded from `~/.agents/skills` directly or via an `AgentSpec` symlink
 - [ ] No previously working path was broken
 
 State what was verified in the commit message. Do not claim completion without verification evidence.

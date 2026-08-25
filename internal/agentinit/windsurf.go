@@ -16,6 +16,10 @@ func windsurfInstructionPath(home string) string {
 	return filepath.Join(home, ".codeium", "windsurf", "memories", "global_rules.md")
 }
 
+func windsurfSkillLinkPath(home string) string {
+	return filepath.Join(home, ".codeium", "windsurf", "skills", globalSkillName)
+}
+
 func windsurfInstallInstructions(home string) (string, error) {
 	path := windsurfInstructionPath(home)
 	if err := AppendSection(path, templates.Global); err != nil {

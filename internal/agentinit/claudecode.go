@@ -26,6 +26,10 @@ func claudeCodeInstructionPath(home string) string {
 	return filepath.Join(home, ".claude", "CLAUDE.md")
 }
 
+func claudeCodeSkillLinkPath(home string) string {
+	return filepath.Join(home, ".claude", "skills", globalSkillName)
+}
+
 func claudeCodeInstallInstructions(home string) (string, error) {
 	path := claudeCodeInstructionPath(home)
 	if err := AppendSection(path, templates.Global); err != nil {

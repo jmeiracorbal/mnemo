@@ -13,6 +13,7 @@ type AgentSpec struct {
 	MCP          MCPConfigSpec
 	Instructions []InstructionSpec
 	Hooks        []HookSpec
+	Skill        AgentSkillSpec
 	Supports     AgentSpecCapabilities
 }
 
@@ -58,6 +59,11 @@ type HookSpec struct {
 	Check         func(home string) Check
 }
 
+// AgentSkillSpec describes how an agent discovers the canonical global skill.
+type AgentSkillSpec struct {
+	GlobalLinkPath func(home string) string
+}
+
 var agentSpecs = []AgentSpec{
 	{
 		ID:     AgentClaudeCode,
@@ -83,6 +89,7 @@ var agentSpecs = []AgentSpec{
 			RuntimeAssets: claudeCodeRuntimeAssets,
 			Check:         claudeCodeCheckRuntime,
 		}},
+		Skill:    AgentSkillSpec{GlobalLinkPath: claudeCodeSkillLinkPath},
 		Supports: AgentSpecCapabilities{MCP: true, Instructions: true, Skills: true, Hooks: true},
 	},
 	{
@@ -135,6 +142,7 @@ var agentSpecs = []AgentSpec{
 			RuntimeAssets: windsurfRuntimeAssets,
 			Check:         windsurfCheckRuntime,
 		}},
+		Skill:    AgentSkillSpec{GlobalLinkPath: windsurfSkillLinkPath},
 		Supports: AgentSpecCapabilities{MCP: true, Instructions: true, Skills: true, Hooks: true, SessionLifecycle: true},
 	},
 	{
@@ -223,6 +231,7 @@ var agentSpecs = []AgentSpec{
 			Path:    piProjectInstructionPath,
 			Install: piInstallProjectInstructions,
 		}},
+		Skill:    AgentSkillSpec{GlobalLinkPath: piSkillLinkPath},
 		Supports: AgentSpecCapabilities{MCP: true, MCPConditional: true, Instructions: true, Skills: true},
 	},
 }

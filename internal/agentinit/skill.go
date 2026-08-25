@@ -54,20 +54,17 @@ func InstallGlobalSkill(home string) ([]string, error) {
 }
 
 func globalSkillSymlinks(home, destRoot string) []skillSymlink {
-	return []skillSymlink{
-		{
-			link:   filepath.Join(home, ".claude", "skills", globalSkillName),
+	var symlinks []skillSymlink
+	for _, spec := range agentSpecs {
+		if spec.Skill.GlobalLinkPath == nil {
+			continue
+		}
+		symlinks = append(symlinks, skillSymlink{
+			link:   spec.Skill.GlobalLinkPath(home),
 			target: destRoot,
-		},
-		{
-			link:   filepath.Join(home, ".codeium", "windsurf", "skills", globalSkillName),
-			target: destRoot,
-		},
-		{
-			link:   filepath.Join(home, ".pi", "agent", "skills", globalSkillName),
-			target: destRoot,
-		},
+		})
 	}
+	return symlinks
 }
 
 func ensureDirSymlink(link, target string) error {
