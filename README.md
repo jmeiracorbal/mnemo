@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Give Claude Code, Codex, Cursor, Windsurf, OpenCode and fx one shared local memory that survives sessions, compactions and agent switches.
+  Give Claude Code, Codex, Cursor, Windsurf, OpenCode, fx and Pi one shared local memory that survives sessions, compactions and agent switches.
 </p>
 
 <p align="center">
@@ -76,7 +76,7 @@ mnemo search "SQLite" --project myapp
 | Problem | mnemo gives you |
 |---|---|
 | Agents forget decisions between sessions | Durable project memory in `~/.mnemo/memory.db` |
-| Different agents keep different memories | One shared layer for Claude Code, Codex, Cursor, Windsurf, OpenCode and fx |
+| Different agents keep different memories | One shared layer for Claude Code, Codex, Cursor, Windsurf, OpenCode, fx and Pi |
 | Markdown memory files drift or conflict | Structured observations, tags, topic keys and review states |
 | Global hooks can be risky | Project opt-in via a `.mnemo` marker; projects without it are ignored |
 | Setup breaks silently | `mnemo doctor` and `mnemo setup status` explain exactly what is configured |
@@ -105,6 +105,7 @@ mnemo search "SQLite" --project myapp
   <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-supported-2563EB?logo=windsurf&logoColor=white">
   <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-supported-F97316?logo=opencode&logoColor=white">
   <img alt="fx" src="https://img.shields.io/badge/fx-supported-7C3AED?logo=vercel&logoColor=white">
+  <img alt="Pi" src="https://img.shields.io/badge/Pi-supported-0EA5E9">
 </p>
 
 | Agent | MCP | Hooks / runtime | Global instructions | Skill access | Status |
@@ -115,6 +116,7 @@ mnemo search "SQLite" --project myapp
 | Windsurf | ✅ | ✅ | ✅ | ✅ | Supported |
 | OpenCode | ✅ | ✅ | ✅ | ✅ | Supported |
 | fx | ✅ | n/a | ✅ | ✅ via canonical path | Supported |
+| Pi | ✅ via MCP extension | n/a | ✅ | ✅ via `~/.pi/agent/skills/` | Supported |
 
 Global setup is installed once. Project activation stays local and opt-in:
 
@@ -123,7 +125,8 @@ project/
 ├── .mnemo      # project ID + activated agents, ignored by git
 ├── AGENTS.md   # shared project memory authority
 ├── CLAUDE.md   # Claude-specific rules when selected
-└── .cursor/    # Cursor rules when selected
+├── .cursor/    # Cursor rules when selected
+└── .pi/        # Pi prompt extensions when selected
 ```
 
 ## See it in action

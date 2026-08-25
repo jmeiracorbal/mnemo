@@ -20,5 +20,8 @@ var Global string
 //go:embed rules/fx.md
 var Fx string
 
+//go:embed rules/pi.md
+var Pi string
+
 //go:embed rules/cursor-global.mdc
 var CursorGlobal string

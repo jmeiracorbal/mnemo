@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  为 Claude Code、Codex、Cursor、Windsurf、OpenCode 和 fx 提供一套共享的本地记忆，跨会话、压缩和代理切换仍然保留。
+  为 Claude Code、Codex、Cursor、Windsurf、OpenCode、fx 和 Pi 提供一套共享的本地记忆，跨会话、压缩和代理切换仍然保留。
 </p>
 
 <p align="center">
@@ -77,7 +77,7 @@ mnemo search "SQLite" --project myapp
 | 问题 | mnemo 提供 |
 |---|---|
 | 代理在不同会话之间忘记决策 | 保存在 `~/.mnemo/memory.db` 中的持久化项目记忆 |
-| 不同代理维护不同的记忆 | Claude Code、Codex、Cursor、Windsurf、OpenCode 和 fx 共享同一层记忆 |
+| 不同代理维护不同的记忆 | Claude Code、Codex、Cursor、Windsurf、OpenCode、fx 和 Pi 共享同一层记忆 |
 | Markdown 记忆文件容易漂移或冲突 | 结构化 observations、tags、topic keys 和 review 状态 |
 | 全局 hooks 可能有风险 | 通过 `.mnemo` 标记按项目显式启用；没有标记的项目会被忽略 |
 | 安装问题可能静默失败 | `mnemo doctor` 和 `mnemo setup status` 会说明当前配置状态 |
@@ -106,6 +106,7 @@ mnemo search "SQLite" --project myapp
   <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-supported-2563EB?logo=windsurf&logoColor=white">
   <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-supported-F97316?logo=opencode&logoColor=white">
   <img alt="fx" src="https://img.shields.io/badge/fx-supported-7C3AED?logo=vercel&logoColor=white">
+  <img alt="Pi" src="https://img.shields.io/badge/Pi-supported-0EA5E9">
 </p>
 
 | 代理 | MCP | Hooks / runtime | 全局指令 | Skill 访问 | 状态 |
@@ -116,6 +117,7 @@ mnemo search "SQLite" --project myapp
 | Windsurf | ✅ | ✅ | ✅ | ✅ | 支持 |
 | OpenCode | ✅ | ✅ | ✅ | ✅ | 支持 |
 | fx | ✅ | n/a | ✅ | 通过标准路径 ✅ | 支持 |
+| Pi | 通过 MCP 扩展 ✅ | n/a | ✅ | 通过 `~/.pi/agent/skills/` ✅ | 支持 |
 
 全局配置只需安装一次。项目启用仍然是本地、显式的 opt-in：
 
@@ -124,7 +126,8 @@ project/
 ├── .mnemo      # 项目 ID + 已启用代理，忽略提交到 git
 ├── AGENTS.md   # 共享项目记忆权威
 ├── CLAUDE.md   # 选择 Claude 时使用的专用规则
-└── .cursor/    # 选择 Cursor 时使用的规则
+├── .cursor/    # 选择 Cursor 时使用的规则
+└── .pi/        # 选择 Pi 时使用的 prompt 扩展
 ```
 
 ## 实际效果

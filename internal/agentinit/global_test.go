@@ -17,6 +17,7 @@ func TestInstallGlobalInstructionsWritesConditionalAgentFiles(t *testing.T) {
 		"codex":      filepath.Join(home, ".codex", "AGENTS.md"),
 		"opencode":   filepath.Join(home, ".config", "opencode", "AGENTS.md"),
 		"fx":         filepath.Join(home, ".fx", "AGENTS.md"),
+		"pi":         filepath.Join(home, ".pi", "agent", "APPEND_SYSTEM.md"),
 	}
 
 	for agent, wantPath := range cases {
@@ -145,6 +146,24 @@ func TestFxGlobalInstructionsDisableNativeMemory(t *testing.T) {
 		!strings.Contains(content, "~/.fx/memories.json") ||
 		!strings.Contains(content, "Do not call the native `memory` tool") {
 		t.Fatalf("fx instructions do not disable native memory:\n%s", content)
+	}
+}
+
+func TestPiGlobalInstructionsUseAppendSystemPrompt(t *testing.T) {
+	home := t.TempDir()
+	path, err := InstallGlobalInstructions(home, "pi")
+	if err != nil {
+		t.Fatalf("install pi global instructions: %v", err)
+	}
+	if path != filepath.Join(home, ".pi", "agent", "APPEND_SYSTEM.md") {
+		t.Fatalf("path = %q, want Pi APPEND_SYSTEM.md", path)
+	}
+
+	content := string(mustReadFile(t, path))
+	if !strings.Contains(content, "PI MEMORY GUIDANCE") ||
+		!strings.Contains(content, "Pi context files") ||
+		!strings.Contains(content, "Do not write repository/project memory") {
+		t.Fatalf("pi instructions do not guide Pi memory behavior:\n%s", content)
 	}
 }
 

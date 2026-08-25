@@ -20,6 +20,7 @@ const (
 	AgentWindsurf   = "windsurf"
 	AgentOpenCode   = "opencode"
 	AgentFx         = "fx"
+	AgentPi         = "pi"
 
 	SourceUnknown        = "unknown"
 	SourceCLI            = "cli"
@@ -96,7 +97,8 @@ func (s *Store) seedProvenanceCatalog() error {
 			('cursor', 'Cursor', 'agent'),
 			('windsurf', 'Windsurf', 'agent'),
 			('opencode', 'OpenCode', 'agent'),
-			('fx', 'fx', 'agent')`,
+			('fx', 'fx', 'agent'),
+			('pi', 'Pi', 'agent')`,
 		`INSERT OR IGNORE INTO source_kinds (id, display_name) VALUES
 			('unknown', 'Unknown'),
 			('cli', 'CLI'),
@@ -411,6 +413,7 @@ func displayName(id string) string {
 		"windsurf":        "Windsurf",
 		"opencode":        "OpenCode",
 		"fx":              "fx",
+		"pi":              "Pi",
 		"mcp":             "MCP",
 		"hook":            "Hook",
 		"passive_capture": "Passive Capture",
