@@ -63,6 +63,10 @@ func globalSkillSymlinks(home, destRoot string) []skillSymlink {
 			link:   filepath.Join(home, ".codeium", "windsurf", "skills", globalSkillName),
 			target: destRoot,
 		},
+		{
+			link:   filepath.Join(home, ".pi", "agent", "skills", globalSkillName),
+			target: destRoot,
+		},
 	}
 }
 

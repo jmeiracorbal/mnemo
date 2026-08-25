@@ -53,7 +53,7 @@ Global hooks/config:
 ```bash
 grep "mnemo" ~/.cursor/hooks.json ~/.codeium/windsurf/hooks.json ~/.codex/hooks.json 2>/dev/null
 ls ~/.config/opencode/plugins/mnemo.ts ~/.config/opencode/plugins/mnemo-protocol.md
-grep "mnemo" ~/.fx/mcp.json 2>/dev/null
+grep "mnemo" ~/.fx/mcp.json ~/.pi/agent/APPEND_SYSTEM.md ~/.pi/agent/mcp.json 2>/dev/null
 ```
 
 Canonical Agent Skill and symlinks:
@@ -61,10 +61,11 @@ Canonical Agent Skill and symlinks:
 ```bash
 test -f ~/.agents/skills/mnemo-memory/SKILL.md
 ls -l ~/.claude/skills/mnemo-memory \
-  ~/.codeium/windsurf/skills/mnemo-memory
+  ~/.codeium/windsurf/skills/mnemo-memory \
+  ~/.pi/agent/skills/mnemo-memory
 ```
 
-Only symlinks for selected agent-specific consumers are expected to exist. Codex, Cursor, OpenCode and fx use the canonical `.agents/skills` path directly.
+Only symlinks for selected agent-specific consumers are expected to exist. Codex, Cursor, OpenCode and fx use the canonical `.agents/skills` path directly. Pi uses a symlink under `~/.pi/agent/skills`.
 
 ## Claude Code plugin validation
 

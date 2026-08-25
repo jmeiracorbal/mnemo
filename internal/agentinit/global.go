@@ -15,6 +15,7 @@ const (
 	AgentCodex      = "codex"
 	AgentOpenCode   = "opencode"
 	AgentFx         = "fx"
+	AgentPi         = "pi"
 )
 
 // ExpandAgents resolves a single agent flag value to one or more concrete agent

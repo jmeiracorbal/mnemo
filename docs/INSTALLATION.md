@@ -9,7 +9,7 @@ Global hooks are intentionally inert outside projects with a valid `.mnemo` mark
 
 ## Prerequisite: binary in PATH
 
-The `mnemo` binary must be in your `PATH` before any agent integration will work. This applies to Claude Code, Cursor, Windsurf, Codex, OpenCode and fx regardless of how the integration is installed.
+The `mnemo` binary must be in your `PATH` before any agent integration will work. This applies to Claude Code, Cursor, Windsurf, Codex, OpenCode, fx and Pi regardless of how the integration is installed.
 
 The hooks that fire on session start, session end and passive capture call `mnemo` directly. The MCP server is also the `mnemo` binary. Without it in PATH, hooks and MCP cannot start.
 
@@ -27,6 +27,7 @@ Explicit targets are supported:
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=codex
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=opencode
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=fx
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=pi
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash -s -- --agent=all
 ```
 
@@ -69,6 +70,12 @@ claude plugin install mnemo@mnemo
 
 `install.sh` configures Claude Code through MCP and global instructions. Claude plugin hooks are optional in that path, so a fresh install without a plugin registry is valid.
 
+## Pi notes
+
+Pi support installs global guidance into `~/.pi/agent/APPEND_SYSTEM.md` so mnemo extends Pi's default prompt instead of replacing it with `.pi/SYSTEM.md`. It also writes a standard `mcpServers` entry to `~/.pi/agent/mcp.json` for Pi environments that have an MCP extension such as `pi-mcp-adapter`, `pi-mcp-extension`, or `pi-mcp` installed.
+
+Pi does not expose a stable declarative hook surface for mnemo, so setup does not install hooks for Pi.
+
 ## Build from source
 
 ```bash
@@ -84,7 +91,7 @@ mnemo --version
 From the project root:
 
 ```bash
-mnemo init --agent=claudecode   # or cursor, windsurf, codex, opencode, fx, all
+mnemo init --agent=claudecode   # or cursor, windsurf, codex, opencode, fx, pi, all
 # optional: --no-project-rules for .mnemo marker only
 ```
 
@@ -92,7 +99,7 @@ This creates a `.mnemo` marker and records the selected agent. Agent hooks, MCP 
 
 ## Optional skills
 
-`install.sh` and `mnemo setup refresh` embed the `mnemo-memory` skill at `~/.agents/skills/mnemo-memory/` and link Claude Code and Windsurf to it. fx, Codex, Cursor and OpenCode use the canonical `~/.agents/skills/` path directly. You normally do not need a separate skill install step.
+`install.sh` and `mnemo setup refresh` embed the `mnemo-memory` skill at `~/.agents/skills/mnemo-memory/` and link Claude Code and Windsurf to it. fx, Codex, Cursor and OpenCode use the canonical `~/.agents/skills/` path directly. Pi receives a symlink under `~/.pi/agent/skills/`. You normally do not need a separate skill install step.
 
 If you prefer the skills CLI or need to refresh manually:
 

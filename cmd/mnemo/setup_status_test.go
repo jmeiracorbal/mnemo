@@ -98,6 +98,23 @@ func TestBuildSetupStatusReportReportsConfiguredFx(t *testing.T) {
 	}
 }
 
+func TestBuildSetupStatusReportReportsConfiguredPi(t *testing.T) {
+	home := t.TempDir()
+
+	if _, err := agentinit.Refresh(home, "/bin/mnemo", "pi"); err != nil {
+		t.Fatalf("refresh pi: %v", err)
+	}
+
+	report := buildSetupStatusReport(setupStatusOptions{Agent: "pi", Home: home})
+	if report.Status != "ok" {
+		t.Fatalf("status = %q, want ok", report.Status)
+	}
+	row := report.Rows[0]
+	if row.Agent != "Pi" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "n/a" || row.Instructions != "yes" {
+		t.Fatalf("unexpected row: %+v", row)
+	}
+}
+
 func TestBuildSetupStatusReportChecksClaudeCodePluginHooks(t *testing.T) {
 	for name, registry := range map[string]string{
 		"array":  `{"plugins":{"mnemo@mnemo":[{"installPath":"%s"}]}}`,

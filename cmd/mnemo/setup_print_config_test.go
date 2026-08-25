@@ -88,7 +88,7 @@ func TestBuildSetupConfigSnippetsForAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build snippets: %v", err)
 	}
-	if len(snippets) != 9 {
-		t.Fatalf("snippets = %d, want 9", len(snippets))
+	if len(snippets) != 10 {
+		t.Fatalf("snippets = %d, want 10", len(snippets))
 	}
 }
