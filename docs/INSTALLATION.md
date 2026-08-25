@@ -99,7 +99,7 @@ This creates a `.mnemo` marker and records the selected agent. Agent hooks, MCP 
 
 ## Optional skills
 
-`install.sh` and `mnemo setup refresh` embed the `mnemo-memory` skill at `~/.agents/skills/mnemo-memory/` and link Claude Code and Windsurf to it. fx, Codex, Cursor and OpenCode use the canonical `~/.agents/skills/` path directly. Pi receives a symlink under `~/.pi/agent/skills/`. You normally do not need a separate skill install step.
+`install.sh` and `mnemo setup refresh` embed the `mnemo-memory` skill at `~/.agents/skills/mnemo-memory/`. Claude Code, Windsurf and Pi receive agent-specific symlinks to that canonical folder. Codex, Cursor, OpenCode and fx use the canonical `~/.agents/skills/` path directly according to their current skill discovery docs. You normally do not need a separate skill install step.
 
 If you prefer the skills CLI or need to refresh manually:
 

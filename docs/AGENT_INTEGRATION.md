@@ -14,6 +14,15 @@ mnemo supports Claude Code, Cursor, Windsurf, Codex, OpenCode, fx and Pi through
 
 All supported agents use global hook/configuration surfaces where available. Their global instructions are conditional: if `.mnemo` is missing or invalid, agents skip mnemo entirely and do not create fallback memory files.
 
+## Skill installation model
+
+mnemo keeps one canonical global skill copy at `~/.agents/skills/mnemo-memory/`. Agent-specific skill directories never receive independent copies from mnemo; when an agent needs its own skill directory, the agent's `AgentSpec` declares a symlink to that canonical folder.
+
+Current behavior:
+
+- Claude Code, Windsurf and Pi receive symlinks from their agent-specific global skill directories to `~/.agents/skills/mnemo-memory/`.
+- Codex, Cursor, OpenCode and fx load `~/.agents/skills/` directly according to their current skill discovery docs, so mnemo does not add redundant agent-specific symlinks for them.
+
 MCP setup records lightweight provenance for supported configurations by setting `MNEMO_AGENT`, `MNEMO_MCP_CLIENT` and `MNEMO_MCP_TRANSPORT` in the generated MCP server entry. mnemo stores that metadata in normalized SQLite tables separate from the project identity in `.mnemo`.
 
 ## What `mnemo init` creates

@@ -1,6 +1,9 @@
 package agentinit
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestAgentSpecsDefineSupportedAgents(t *testing.T) {
 	seen := map[string]bool{}
@@ -28,6 +31,9 @@ func TestAgentSpecsDefineSupportedAgents(t *testing.T) {
 		if spec.Supports.Instructions && len(spec.Instructions) == 0 {
 			t.Fatalf("%s: instructions capability missing specs", id)
 		}
+		if spec.Skill.GlobalLinkPath != nil && !spec.Supports.Skills {
+			t.Fatalf("%s: skill link configured without skills capability", id)
+		}
 	}
 	if len(seen) != len(agentSpecs) {
 		t.Fatalf("supported agents = %d, specs = %d", len(seen), len(agentSpecs))
@@ -36,4 +42,36 @@ func TestAgentSpecsDefineSupportedAgents(t *testing.T) {
 
 func TestAgentSpecCapabilitiesNameBelongsToAgentSpec(t *testing.T) {
 	var _ AgentSpecCapabilities
+}
+
+func TestAgentSpecsDeclareSkillLinkSurfaces(t *testing.T) {
+	home := t.TempDir()
+	wantLinks := map[string]string{
+		AgentClaudeCode: filepath.Join(home, ".claude", "skills", globalSkillName),
+		AgentWindsurf:   filepath.Join(home, ".codeium", "windsurf", "skills", globalSkillName),
+		AgentPi:         filepath.Join(home, ".pi", "agent", "skills", globalSkillName),
+	}
+	canonicalSkillAgents := map[string]bool{
+		AgentCursor:   true,
+		AgentCodex:    true,
+		AgentOpenCode: true,
+		AgentFx:       true,
+	}
+
+	for _, spec := range agentSpecs {
+		want, shouldLink := wantLinks[spec.ID]
+		switch {
+		case shouldLink:
+			if spec.Skill.GlobalLinkPath == nil {
+				t.Fatalf("%s: missing skill link path", spec.ID)
+			}
+			if got := spec.Skill.GlobalLinkPath(home); got != want {
+				t.Fatalf("%s: skill link path = %q, want %q", spec.ID, got, want)
+			}
+		case canonicalSkillAgents[spec.ID]:
+			if spec.Skill.GlobalLinkPath != nil {
+				t.Fatalf("%s: unexpected skill link for canonical ~/.agents/skills consumer", spec.ID)
+			}
+		}
+	}
 }
