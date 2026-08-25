@@ -32,8 +32,8 @@ func TestConfigSnippetsForAll(t *testing.T) {
 		}
 		snippets = append(snippets, agentSnippets...)
 	}
-	if len(snippets) != 9 {
-		t.Fatalf("snippets = %d, want 9", len(snippets))
+	if len(snippets) != 10 {
+		t.Fatalf("snippets = %d, want 10", len(snippets))
 	}
 }
 
@@ -104,6 +104,28 @@ func TestFxConfigUsesNativeMCPShape(t *testing.T) {
 	}
 	if !strings.Contains(content, `"other"`) {
 		t.Fatalf("unrelated fx MCP config was not preserved:\n%s", content)
+	}
+}
+
+func TestPiConfigUsesMCPServersShape(t *testing.T) {
+	home := t.TempDir()
+	configPath := filepath.Join(home, ".pi", "agent", "mcp.json")
+	writeTestFile(t, configPath, `{
+  "mcpServers": {
+    "other": {"command": "/bin/other"}
+  }
+}`)
+
+	if _, err := Refresh(home, "/bin/mnemo", "pi"); err != nil {
+		t.Fatalf("refresh pi: %v", err)
+	}
+
+	content := readTestFile(t, configPath)
+	if !strings.Contains(content, `"mcpServers"`) || !strings.Contains(content, `"MNEMO_AGENT": "pi"`) || !strings.Contains(content, `"MNEMO_MCP_CLIENT": "pi"`) {
+		t.Fatalf("Pi MCP config missing mnemo server or provenance env:\n%s", content)
+	}
+	if !strings.Contains(content, `"other"`) {
+		t.Fatalf("unrelated Pi MCP config was not preserved:\n%s", content)
 	}
 }
 

@@ -203,6 +203,28 @@ var agentSpecs = []AgentSpec{
 		}},
 		Supports: AgentSpecCapabilities{MCP: true, Instructions: true, Skills: true},
 	},
+	{
+		ID:     AgentPi,
+		Label:  piLabel(),
+		Detect: detectFromPaths(piDetectionPaths),
+		MCP: MCPConfigSpec{
+			Snippets:  piConfigSnippets,
+			Uninstall: piUninstallConfig,
+			Check:     piCheckMCP,
+		},
+		Instructions: []InstructionSpec{{
+			Scope:   InstructionScopeGlobal,
+			Path:    piInstructionPath,
+			Install: piInstallInstructions,
+			Remove:  piRemoveInstructions,
+			Check:   piCheckInstructions,
+		}, {
+			Scope:   InstructionScopeProject,
+			Path:    piProjectInstructionPath,
+			Install: piInstallProjectInstructions,
+		}},
+		Supports: AgentSpecCapabilities{MCP: true, MCPConditional: true, Instructions: true, Skills: true},
+	},
 }
 
 var agentSpecsByID = indexAgentSpecs(agentSpecs)

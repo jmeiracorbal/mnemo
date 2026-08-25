@@ -202,6 +202,7 @@ func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
 		filepath.Join("..", "..", "templates", "rules", "cursor.mdc"),
 		filepath.Join("..", "..", "templates", "rules", "cursor-global.mdc"),
 		filepath.Join("..", "..", "templates", "rules", "windsurf.md"),
+		filepath.Join("..", "..", "templates", "rules", "pi.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "mnemo.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "session-start-protocol.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "post-compact-protocol-header.md"),

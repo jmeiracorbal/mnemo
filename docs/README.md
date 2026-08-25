@@ -22,4 +22,5 @@ This directory contains the extended mnemo documentation. Start here when you ne
 | [Cursor memory surfaces](memories/cursor.md) | Cursor rules, User Rules, Team Rules, and import candidates. |
 | [Windsurf memory surfaces](memories/windsurf.md) | Cascade Memories, Rules, and conversion notes. |
 | [OpenCode memory surfaces](memories/opencode.md) | OpenCode instruction discovery and conversion notes. |
+| [Pi memory surfaces](memories/pi.md) | Pi context files, system prompt modes, Skills, and optional MCP extension behavior. |
 | [fx memory surfaces](memories/fx.md) | fx `AGENTS.md` instructions and `~/.fx/memories.json` memory store. |

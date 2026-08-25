@@ -41,6 +41,7 @@ Agents for init / install-instructions:
   --agent=codex        Codex global AGENTS.md instructions / .mnemo activation
   --agent=opencode     OpenCode global AGENTS.md instructions / .mnemo activation
   --agent=fx           fx global AGENTS.md instructions / .mnemo activation
+  --agent=pi           Pi global APPEND_SYSTEM.md instructions / .mnemo activation
   --agent=all          All agents
   --path=DIR           Target project directory for init/doctor (default: current directory)
 
@@ -56,7 +57,7 @@ Setup status options:
   --home=DIR           Override home directory for global agent checks
 
 Setup print-config options:
-  AGENT                claudecode | cursor | windsurf | codex | opencode | fx | all
+  AGENT                claudecode | cursor | windsurf | codex | opencode | fx | pi | all
   --home=DIR           Use DIR when rendering user-level config paths
   --mnemo-bin=PATH     Use PATH as the mnemo binary in snippets
 

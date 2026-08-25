@@ -48,6 +48,7 @@ Agents for `mnemo init`, `mnemo install-instructions` and setup commands:
 --agent=codex        Codex global AGENTS.md instructions / .mnemo activation
 --agent=opencode     OpenCode global AGENTS.md instructions / .mnemo activation
 --agent=fx           fx global AGENTS.md instructions / .mnemo activation
+--agent=pi           Pi global APPEND_SYSTEM.md instructions / .mnemo activation
 --agent=all          All agents
 ```
 

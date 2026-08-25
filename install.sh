@@ -9,6 +9,7 @@
 #   bash -s -- --agent=codex
 #   bash -s -- --agent=opencode
 #   bash -s -- --agent=fx
+#   bash -s -- --agent=pi
 #   bash -s -- --agent=all
 #
 # Environment overrides:
@@ -206,6 +207,9 @@ agent_detected() {
     fx)
       command -v fx >/dev/null 2>&1 || [ -d "$HOME/.fx" ]
       ;;
+    pi)
+      command -v pi >/dev/null 2>&1 || [ -d "$HOME/.pi/agent" ]
+      ;;
     *) return 1 ;;
   esac
 }
@@ -213,7 +217,7 @@ agent_detected() {
 detect_agents() {
   local found=""
   local agent
-  for agent in claudecode cursor windsurf codex opencode fx; do
+  for agent in claudecode cursor windsurf codex opencode fx pi; do
     if agent_detected "$agent"; then
       found="$found $agent"
     fi
@@ -277,17 +281,17 @@ main() {
       ok "Done. Run 'mnemo init --agent=all' in projects that should use mnemo."
       ;;
     all)
-      for selected in claudecode cursor windsurf codex opencode fx; do
+      for selected in claudecode cursor windsurf codex opencode fx pi; do
         setup_agent "$selected" "$mnemo_bin"
       done
       ok "Done. Run 'mnemo init --agent=all' in projects that should use mnemo."
       ;;
-    claudecode|cursor|windsurf|codex|opencode|fx)
+    claudecode|cursor|windsurf|codex|opencode|fx|pi)
       setup_agent "$AGENT" "$mnemo_bin"
       ok "Done. Run 'mnemo init --agent=${AGENT}' in projects that should use mnemo."
       ;;
     *)
-      err "Unknown agent: ${AGENT}. Valid options: auto | claudecode | cursor | windsurf | codex | opencode | fx | all"
+      err "Unknown agent: ${AGENT}. Valid options: auto | claudecode | cursor | windsurf | codex | opencode | fx | pi | all"
       ;;
   esac
 }

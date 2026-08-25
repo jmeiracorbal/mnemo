@@ -92,3 +92,24 @@ func TestInstallProjectInstructionsWindsurf(t *testing.T) {
 		t.Fatalf("windsurf rule missing: %v", err)
 	}
 }
+
+func TestInstallProjectInstructionsPi(t *testing.T) {
+	root := t.TempDir()
+
+	paths, err := InstallProjectInstructions(root, "pi")
+	if err != nil {
+		t.Fatalf("install pi project instructions: %v", err)
+	}
+	if len(paths) != 2 {
+		t.Fatalf("expected 2 paths, got %d", len(paths))
+	}
+
+	piPath := filepath.Join(root, ".pi", "APPEND_SYSTEM.md")
+	piData, err := os.ReadFile(piPath)
+	if err != nil {
+		t.Fatalf("read Pi APPEND_SYSTEM.md: %v", err)
+	}
+	if !strings.Contains(string(piData), "PI MEMORY GUIDANCE") {
+		t.Fatalf("Pi project prompt extension missing memory guidance:\n%s", string(piData))
+	}
+}
