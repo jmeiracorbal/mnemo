@@ -8,8 +8,9 @@ Relevant surfaces:
 
 1. Context files loaded at startup, especially `AGENTS.md` and `CLAUDE.md`.
 2. System prompt files: `.pi/SYSTEM.md` replaces the default system prompt, while `.pi/APPEND_SYSTEM.md` extends it.
-3. Skills under `~/.pi/agent/skills/` and `.pi/skills/`.
-4. Optional MCP support through community extensions such as `pi-mcp-adapter`, `pi-mcp-extension`, or `pi-mcp`, which read standard MCP configuration.
+3. Skills under `~/.pi/agent/skills/`, `~/.agents/skills/`, `.pi/skills/`, and project `.agents/skills/`.
+4. Session JSONL under `~/.pi/agent/sessions/`, which is resumable conversation history rather than curated semantic memory.
+5. Optional MCP support through community extensions such as `pi-mcp-adapter`, `pi-mcp-extension`, or `pi-mcp`, which read standard MCP configuration.
 
 Pi is also available through Vercel AI SDK's experimental harness layer, but mnemo integration should treat Pi first as an agent runtime with instruction, skill, and optional MCP surfaces.
 
@@ -27,7 +28,14 @@ Skills:
 
 - Global skills: `~/.pi/agent/skills/**/SKILL.md`.
 - Project skills: `.pi/skills/**/SKILL.md`.
-- Pi also documents package-provided skills.
+- Shared global skills: `~/.agents/skills/**/SKILL.md`.
+- Project shared skills: `.agents/skills/**/SKILL.md` from the current working directory up through parent directories.
+- Pi also documents package-provided, settings-provided, and CLI-provided skills.
+
+Sessions:
+
+- Session history: `~/.pi/agent/sessions/`, organized by working directory.
+- Pi can export/import sessions as JSONL, but these are transcripts and branches, not a curated memory database.
 
 MCP:
 
@@ -46,7 +54,14 @@ Instructions:
 Skills:
 
 - `SKILL.md` files use the Agent Skills-style markdown package shape.
-- Skill availability depends on Pi's skill discovery and active tool set.
+- Skill availability depends on Pi's skill discovery, project trust, and active tool set.
+- Context files load before project trust, while project-local `.pi` resources and project `.agents/skills` depend on the Pi trust flow.
+- Skills are capability packages, not observations; import their metadata/instructions only when converting agent behavior, not as factual project memory by default.
+
+Sessions:
+
+- JSONL sessions preserve conversation history, branching, compaction, and tool calls.
+- Treat sessions as audit/export material. Do not ingest them automatically as memory because they can contain stale plans, failed attempts, secrets, or transient user prompts.
 
 Native memory:
 
@@ -61,6 +76,7 @@ Recommended import order:
 2. `.pi/APPEND_SYSTEM.md` because it extends the default prompt and is likely policy/guidance.
 3. `.pi/SYSTEM.md` only with explicit review because it replaces the entire system prompt.
 4. Global `~/.pi/agent/*` instruction files only with explicit user-scope opt-in.
+5. Session JSONL only through an explicit transcript-import mode, never through the default memory importer.
 
 Suggested mapping:
 
@@ -74,11 +90,14 @@ Important importer behavior:
 - Prefer `APPEND_SYSTEM.md` for generated mnemo integration guidance; avoid writing `SYSTEM.md` so mnemo does not replace Pi's default prompt.
 - Treat Pi MCP as conditional on an installed MCP extension until Pi documents a built-in MCP config contract.
 - Preserve source path, heading, scope, and whether the file was global or project-local.
+- Preserve project-trust context for `.pi/skills`, `.pi/settings.json`, and project `.agents/skills` if those surfaces are ever imported.
+- Do not treat Pi sessions, package manifests, model settings, keybindings, themes, or extension code as memory import sources by default.
 
 ## Sources
 
 - https://github.com/earendil-works/pi
 - https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md
+- https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/skills.md
 - https://vercel.com/blog/ai-sdk-7
 - https://www.npmjs.com/package/pi-mcp-adapter
 - https://www.npmjs.com/package/pi-mcp-extension

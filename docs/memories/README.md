@@ -22,7 +22,7 @@ Conversation transcripts, opaque editor state, cloud-only state, and model-provi
 | Cursor | Rules (`.cursor/rules/*.mdc`), User Rules, Team Rules, `AGENTS.md` | `.cursor/rules/**/*.mdc`, `AGENTS.md`, legacy `.cursorrules` if present | High for project rules; low for opaque/editor-managed memories |
 | Windsurf | Cascade Memories plus Rules / `AGENTS.md` | `~/.codeium/windsurf/memories/`, `~/.codeium/windsurf/memories/global_rules.md`, `.windsurf/rules/**/*.md`, `AGENTS.md`, legacy `.windsurfrules` if present | Medium for generated Memories; high for Rules |
 | OpenCode | `AGENTS.md` instruction discovery and session instruction deltas | `~/.config/opencode/AGENTS.md`, repo/nested `AGENTS.md` | High for markdown instructions; low for session internals |
-| Pi | `AGENTS.md` / `CLAUDE.md`, `.pi/SYSTEM.md`, `.pi/APPEND_SYSTEM.md`, Skills, optional MCP extension config | `AGENTS.md`, `CLAUDE.md`, `.pi/APPEND_SYSTEM.md`, reviewed `.pi/SYSTEM.md`, optional `~/.pi/agent/*` files | High for markdown instructions; no native semantic memory store documented |
+| Pi | `AGENTS.md` / `CLAUDE.md`, `.pi/SYSTEM.md`, `.pi/APPEND_SYSTEM.md`, Skills, session JSONL, optional MCP extension config | `AGENTS.md`, `CLAUDE.md`, `.pi/APPEND_SYSTEM.md`, reviewed `.pi/SYSTEM.md`, optional `~/.pi/agent/*` instruction files | High for markdown instructions; no native semantic memory store documented; session history is out of scope by default |
 | fx | `AGENTS.md` project instructions plus `~/.fx/memories.json` | `~/.fx/AGENTS.md`, repo/nested `AGENTS.md`, `~/.fx/memories.json` | High for JSON string memories and AGENTS.md |
 
 ## Memory equivalence diagram
@@ -73,6 +73,23 @@ flowchart LR
 
 This equivalence is intentionally conservative: mnemo should preserve where each memory came from and whether it behaved like an instruction or an observation before turning it into canonical mnemo data.
 
+### Runtime support vs importability
+
+mnemo can provide a complete runtime memory integration for an agent even when that agent has no native semantic memory store to import. The importer should therefore keep two questions separate:
+
+1. **Can the agent use mnemo now?** This is runtime support through MCP, hooks, instructions, and/or skills.
+2. **Can mnemo safely ingest that agent's old memories?** This depends on whether the agent exposes durable, structured memory artifacts.
+
+| Agent | Runtime mnemo support | Native semantic memory import | Import stance |
+|---|---|---|---|
+| Claude Code | MCP, plugin hooks, instructions, skill link | Yes, auto-memory markdown via `MEMORY.md` index and topic files | Importable with index/reference expansion and review |
+| Codex | MCP, hooks, instructions, canonical skill path | No documented native semantic store | Import instruction hierarchy only |
+| Cursor | MCP, hooks, rules, canonical skill path | No documented local semantic store | Import rules/instructions; preserve rule metadata |
+| Windsurf | MCP, hooks, rules, skill link | Yes, Cascade Memories | Import memories/rules with workspace and trigger provenance |
+| OpenCode | MCP, plugin hooks, instructions, canonical skill path | No documented native semantic store | Import instructions; ignore session internals by default |
+| Pi | MCP through a Pi MCP extension, APPEND_SYSTEM guidance, skill link | No documented native semantic store; sessions are JSONL history, not curated memory | Runtime support is complete; import instructions only unless the user explicitly selects session exports |
+| fx | MCP, instructions, canonical skill path | Yes, `~/.fx/memories.json` strings | Import preference strings only with user approval |
+
 ## Index and reference patterns
 
 | Agent | Has a `MEMORY.md`-style index? | Importer note |
@@ -82,7 +99,7 @@ This equivalence is intentionally conservative: mnemo should preserve where each
 | Cursor | No central memory index | `.mdc` rules are direct import units, but rule bodies may reference supporting files with `@file` links; preserve/follow those separately. |
 | Windsurf | No documented memory index | Generated Memories are local workspace items; Rules are direct files with activation metadata, not a manifest. |
 | OpenCode | No | `AGENTS.md` files and discovered nested instructions are direct instruction sources; V2 config `instructions` entries are parsed but not resolved into model context. |
-| Pi | No | `AGENTS.md`, `CLAUDE.md`, `SYSTEM.md`, and `APPEND_SYSTEM.md` are direct instruction sources; preserve prompt mode because `SYSTEM.md` replaces the default prompt. |
+| Pi | No | `AGENTS.md`, `CLAUDE.md`, `SYSTEM.md`, and `APPEND_SYSTEM.md` are direct instruction sources; sessions live under `~/.pi/agent/sessions/` but are conversation history, not a memory manifest. Preserve prompt mode because `SYSTEM.md` replaces the default prompt. |
 | fx | No | `~/.fx/memories.json` is the direct memory store: a JSON array of strings. `AGENTS.md` files are scoped instructions. |
 
 ## Importer design implications
@@ -102,6 +119,7 @@ This equivalence is intentionally conservative: mnemo should preserve where each
 - Windsurf Cascade Memories and Rules docs: https://docs.windsurf.com/es/windsurf/cascade/memories
 - OpenCode V2 instructions docs: https://opencode.ai/v2/docs/instructions
 - Pi repository and coding agent docs: https://github.com/earendil-works/pi
+- Pi coding agent skills docs: https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/skills.md
 - Pi MCP extension docs: https://github.com/dmmulroy/pi-mcp
 - fx project instructions docs: https://fx.sh/docs/configure-fx/project-instructions
 - fx memory tool source: https://raw.githubusercontent.com/vercel-labs/fx/main/src/tools/memory/memory.zig
