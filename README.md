@@ -157,6 +157,28 @@ No potential memory conflicts found.
 
 Read the complete setup guide in [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
+### Codex hook review
+
+Codex protects every hook in `~/.codex/hooks.json` with an interactive trust
+review. mnemo currently installs Codex `SessionStart` and `Stop` hooks; the same
+Codex trust mechanism will also apply whenever a mnemo-owned hook is added or
+its command changes.
+
+If Codex says a mnemo hook needs review, or if `mnemo setup status --agent=codex`
+shows the Codex `Hooks` column as `no`, open Codex normally and approve the
+interactive hook prompt (press `a` or follow the prompt shown by Codex). Codex
+will then write the matching `trusted_hash` entries under `[hooks.state]` in
+`~/.codex/config.toml`. Re-run:
+
+```bash
+mnemo setup status --agent=codex
+mnemo doctor --agent=codex --path=.
+```
+
+to confirm the Codex hooks are trusted and active. Do not manually copy hashes
+between machines; approve hooks in the Codex UI so the hash matches the local
+hook command.
+
 ## Documentation
 
 | Guide | Contents |
