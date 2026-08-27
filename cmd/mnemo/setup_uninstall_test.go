@@ -101,6 +101,23 @@ func TestUninstallSetupRemovesCursorConfigAndRuntimeFiles(t *testing.T) {
 	assertMissing(t, filepath.Join(home, ".cursor", "hooks", "stop.sh"))
 }
 
+func TestUninstallSetupRemovesClaudeCodeUserMCPConfig(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".claude.json"), `{"mcpServers":{"other":{"command":"other"}}}`)
+
+	if _, err := refreshSetup(setupRefreshOptions{Agent: "claudecode", Home: home, MnemoBin: "/bin/mnemo"}); err != nil {
+		t.Fatalf("refresh setup: %v", err)
+	}
+	if _, err := uninstallSetup(setupUninstallOptions{Agent: "claudecode", Home: home}); err != nil {
+		t.Fatalf("uninstall setup: %v", err)
+	}
+
+	config := readTestFile(t, filepath.Join(home, ".claude.json"))
+	if !strings.Contains(config, "other") || strings.Contains(config, "mnemo") {
+		t.Fatalf("unexpected Claude user MCP config:\n%s", config)
+	}
+}
+
 func assertMissing(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); !os.IsNotExist(err) {

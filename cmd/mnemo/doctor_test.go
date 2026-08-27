@@ -10,9 +10,18 @@ import (
 )
 
 func TestParseDoctorArgs(t *testing.T) {
-	opts := parseDoctorArgs([]string{"--json", "--agent=codex", "--path=/repo", "--home=/home/test", "--data-dir=/data"})
+	opts, err := parseDoctorArgs([]string{"--json", "--agent=codex", "--path=/repo", "--home=/home/test", "--data-dir=/data"})
+	if err != nil {
+		t.Fatalf("parse doctor args: %v", err)
+	}
 	if !opts.JSON || opts.Agent != "codex" || opts.Path != "/repo" || opts.Home != "/home/test" || opts.DataDir != "/data" {
 		t.Fatalf("unexpected options: %+v", opts)
+	}
+}
+
+func TestParseDoctorArgsRejectsUnknown(t *testing.T) {
+	if _, err := parseDoctorArgs([]string{"--bogus"}); err == nil {
+		t.Fatal("expected unknown argument error")
 	}
 }
 
@@ -24,14 +33,10 @@ func TestBuildDoctorReportChecksCodexGlobalInstall(t *testing.T) {
 	if err := agentinit.EnsureMarkerWithID(project, "project-123"); err != nil {
 		t.Fatalf("marker: %v", err)
 	}
-	if _, err := agentinit.InstallGlobalInstructions(home, "codex"); err != nil {
-		t.Fatalf("install instructions: %v", err)
+	if _, err := agentinit.Refresh(home, "/bin/mnemo", "codex"); err != nil {
+		t.Fatalf("refresh codex: %v", err)
 	}
-	writeFile(t, filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.mnemo]\ncommand = \"mnemo\"\nargs = [\"mcp\", \"--tools=agent\"]\n\n[mcp_servers.mnemo.env]\nMNEMO_AGENT = \"codex\"\nMNEMO_MCP_CLIENT = \"codex\"\nMNEMO_MCP_TRANSPORT = \"stdio\"\n")
-	writeFile(t, filepath.Join(home, ".codex", "hooks.json"), `{"hooks":{"SessionStart":[],"Stop":[]}}`)
-	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "session-start.sh"))
-	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "stop.sh"))
-	writeFile(t, filepath.Join(home, ".codex", "hooks", "mnemo-protocol.md"), "protocol")
+	appendCodexHookTrustForStatus(t, home)
 
 	report := doctor.BuildReport(doctor.Options{Agent: "codex", Path: project, Home: home, DataDir: dataDir})
 

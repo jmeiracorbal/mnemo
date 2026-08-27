@@ -10,7 +10,11 @@ import (
 )
 
 func runDoctor() {
-	opts := parseDoctorArgs(os.Args[2:])
+	opts, err := parseDoctorArgs(os.Args[2:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo doctor: %v\n", err)
+		os.Exit(1)
+	}
 	report := doctor.BuildReport(toDoctorOptions(opts))
 
 	if opts.JSON {
@@ -29,7 +33,7 @@ func runDoctor() {
 	}
 }
 
-func parseDoctorArgs(args []string) doctorOptions {
+func parseDoctorArgs(args []string) (doctorOptions, error) {
 	opts := doctorOptions{Agent: "all", Path: "."}
 	for _, arg := range args {
 		switch {
@@ -43,6 +47,8 @@ func parseDoctorArgs(args []string) doctorOptions {
 			opts.Home = arg[len("--home="):]
 		case strings.HasPrefix(arg, "--data-dir="):
 			opts.DataDir = arg[len("--data-dir="):]
+		default:
+			return opts, fmt.Errorf("unknown argument %q", arg)
 		}
 	}
 	if opts.Agent == "" {
@@ -51,7 +57,7 @@ func parseDoctorArgs(args []string) doctorOptions {
 	if opts.Path == "" {
 		opts.Path = "."
 	}
-	return opts
+	return opts, nil
 }
 
 func toDoctorOptions(opts doctorOptions) doctor.Options {

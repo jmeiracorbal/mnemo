@@ -99,10 +99,20 @@ func cursorCheckMCP(home string) Check {
 }
 
 func cursorCheckRuntime(home string) Check {
+	hooksPath := filepath.Join(home, ".cursor", "hooks.json")
+	hooksDir := filepath.Join(home, ".cursor", "hooks")
 	paths := []string{
-		filepath.Join(home, ".cursor", "hooks.json"),
-		filepath.Join(home, ".cursor", "hooks", "before-submit-prompt.sh"),
-		filepath.Join(home, ".cursor", "hooks", "stop.sh"),
+		hooksPath,
+		filepath.Join(hooksDir, "before-submit-prompt.sh"),
+		filepath.Join(hooksDir, "stop.sh"),
+		filepath.Join(hooksDir, "session-start-protocol.md"),
 	}
-	return checkFiles("cursor", "runtime_files.cursor", "Cursor global hooks installed", paths, true)
+	check := checkFiles("cursor", "runtime_files.cursor", "Cursor global hooks installed", paths, true)
+	if check.Status != "ok" {
+		return check
+	}
+	return checkJSONHookCommands(hooksPath, "runtime_files.cursor", "cursor", "Cursor global hooks installed", map[string][]string{
+		"beforeSubmitPrompt": {filepath.Join(hooksDir, "before-submit-prompt.sh")},
+		"stop":               {filepath.Join(hooksDir, "stop.sh")},
+	})
 }

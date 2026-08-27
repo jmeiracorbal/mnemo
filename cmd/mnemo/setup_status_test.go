@@ -21,17 +21,21 @@ func TestParseSetupStatusArgs(t *testing.T) {
 	}
 }
 
+func TestParseSetupStatusArgsRejectsUnknown(t *testing.T) {
+	if _, err := parseSetupStatusArgs([]string{"--bogus"}, func() (string, error) {
+		return "/home/test", nil
+	}); err == nil {
+		t.Fatal("expected unknown argument error")
+	}
+}
+
 func TestBuildSetupStatusReportReportsConfiguredCodex(t *testing.T) {
 	home := t.TempDir()
 
-	if _, err := agentinit.InstallGlobalInstructions(home, "codex"); err != nil {
-		t.Fatalf("install instructions: %v", err)
+	if _, err := agentinit.Refresh(home, "/bin/mnemo", "codex"); err != nil {
+		t.Fatalf("refresh codex: %v", err)
 	}
-	writeFile(t, filepath.Join(home, ".codex", "config.toml"), "[mcp_servers.mnemo]\ncommand = \"mnemo\"\nargs = [\"mcp\", \"--tools=agent\"]\n\n[mcp_servers.mnemo.env]\nMNEMO_AGENT = \"codex\"\nMNEMO_MCP_CLIENT = \"codex\"\nMNEMO_MCP_TRANSPORT = \"stdio\"\n")
-	writeFile(t, filepath.Join(home, ".codex", "hooks.json"), `{"hooks":{"SessionStart":[],"Stop":[]}}`)
-	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "session-start.sh"))
-	writeExecutable(t, filepath.Join(home, ".codex", "hooks", "stop.sh"))
-	writeFile(t, filepath.Join(home, ".codex", "hooks", "mnemo-protocol.md"), "protocol")
+	appendCodexHookTrustForStatus(t, home)
 
 	report := buildSetupStatusReport(setupStatusOptions{Agent: "codex", Home: home})
 	if report.Status != "ok" {
@@ -127,16 +131,17 @@ func TestBuildSetupStatusReportChecksClaudeCodePluginHooks(t *testing.T) {
 			if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
 				t.Fatalf("install instructions: %v", err)
 			}
-			writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo","env":{"MNEMO_AGENT":"claudecode","MNEMO_MCP_CLIENT":"claudecode"}}}}`)
+			writeFile(t, filepath.Join(home, ".claude.json"), claudeMCPFixture())
 			writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), fmt.Sprintf(registry, installPath))
 			writeFile(t, filepath.Join(installPath, ".claude-plugin", "plugin.json"), `{"name":"mnemo"}`)
-			writeFile(t, filepath.Join(installPath, "hooks", "hooks.json"), `{"hooks":{}}`)
+			writeClaudePluginHooksJSON(t, filepath.Join(installPath, "hooks", "hooks.json"))
 			for _, script := range []string{
 				"session-start.sh",
 				"session-stop.sh",
 				"subagent-stop.sh",
 				"post-compact.sh",
 				"post-compact-resume.sh",
+				"user-prompt-submit.sh",
 				"post-file-edit.sh",
 				"post-bash-git.sh",
 			} {
@@ -155,13 +160,46 @@ func TestBuildSetupStatusReportChecksClaudeCodePluginHooks(t *testing.T) {
 	}
 }
 
+func TestBuildSetupStatusReportWarnsOnClaudeCodeMissingHookCommands(t *testing.T) {
+	home := t.TempDir()
+	installPath := filepath.Join(home, "plugin-cache", "mnemo")
+
+	if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
+		t.Fatalf("install instructions: %v", err)
+	}
+	writeFile(t, filepath.Join(home, ".claude.json"), claudeMCPFixture())
+	writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), fmt.Sprintf(`{"plugins":{"mnemo@mnemo":{"installPath":"%s"}}}`, installPath))
+	writeFile(t, filepath.Join(installPath, ".claude-plugin", "plugin.json"), `{"name":"mnemo"}`)
+	writeFile(t, filepath.Join(installPath, "hooks", "hooks.json"), `{"hooks":{}}`)
+	for _, script := range []string{
+		"session-start.sh",
+		"session-stop.sh",
+		"subagent-stop.sh",
+		"post-compact.sh",
+		"post-compact-resume.sh",
+		"user-prompt-submit.sh",
+		"post-file-edit.sh",
+		"post-bash-git.sh",
+	} {
+		writeExecutable(t, filepath.Join(installPath, "scripts", script))
+	}
+
+	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
+	if report.Status != "warning" || report.Summary.Warnings != 1 {
+		t.Fatalf("unexpected report: %+v", report)
+	}
+	if got := report.Rows[0].Hooks; got != "no" {
+		t.Fatalf("hooks = %q, want no", got)
+	}
+}
+
 func TestBuildSetupStatusReportAllowsClaudeCodeWithoutPluginRegistry(t *testing.T) {
 	home := t.TempDir()
 
 	if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
 		t.Fatalf("install instructions: %v", err)
 	}
-	writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo","env":{"MNEMO_AGENT":"claudecode","MNEMO_MCP_CLIENT":"claudecode"}}}}`)
+	writeFile(t, filepath.Join(home, ".claude.json"), claudeMCPFixture())
 
 	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
 	if report.Status != "ok" || report.Summary.OK != 1 || report.Summary.Warnings != 0 || report.Summary.Errors != 0 {
@@ -179,7 +217,7 @@ func TestBuildSetupStatusReportCountsRuntimeErrors(t *testing.T) {
 	if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
 		t.Fatalf("install instructions: %v", err)
 	}
-	writeFile(t, filepath.Join(home, ".claude", ".mcp.json"), `{"mcpServers":{"mnemo":{"command":"mnemo","env":{"MNEMO_AGENT":"claudecode","MNEMO_MCP_CLIENT":"claudecode"}}}}`)
+	writeFile(t, filepath.Join(home, ".claude.json"), claudeMCPFixture())
 	writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), `{`)
 
 	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
@@ -189,4 +227,51 @@ func TestBuildSetupStatusReportCountsRuntimeErrors(t *testing.T) {
 	if got := report.Rows[0].Hooks; got != "error" {
 		t.Fatalf("hooks = %q, want error", got)
 	}
+}
+
+func appendCodexHookTrustForStatus(t *testing.T, home string) {
+	t.Helper()
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	hooksPath := filepath.Join(home, ".codex", "hooks.json")
+	content := readTestFile(t, configPath)
+	content += fmt.Sprintf(`
+[hooks.state.%q]
+trusted_hash = "sha256:test-session-start"
+
+[hooks.state.%q]
+trusted_hash = "sha256:test-stop"
+`, hooksPath+":session_start:0:0", hooksPath+":stop:0:0")
+	writeFile(t, configPath, content)
+}
+
+func claudeMCPFixture() string {
+	return `{"mcpServers":{"mnemo":{"type":"stdio","command":"mnemo","args":["mcp","--tools=agent"],"env":{"MNEMO_AGENT":"claudecode","MNEMO_MCP_CLIENT":"claudecode","MNEMO_MCP_TRANSPORT":"stdio"}}}}`
+}
+
+func writeClaudePluginHooksJSON(t *testing.T, path string) {
+	t.Helper()
+	writeFile(t, path, `{
+  "hooks": {
+    "SessionStart": [
+      {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh"}]},
+      {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-compact-resume.sh"}]}
+    ],
+    "SubagentStop": [
+      {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/subagent-stop.sh"}]}
+    ],
+    "Stop": [
+      {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-stop.sh"}]}
+    ],
+    "PostCompact": [
+      {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-compact.sh"}]}
+    ],
+    "UserPromptSubmit": [
+      {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit.sh"}]}
+    ],
+    "PostToolUse": [
+      {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-file-edit.sh"}]},
+      {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-bash-git.sh"}]}
+    ]
+  }
+}`)
 }

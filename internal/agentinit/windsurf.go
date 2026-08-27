@@ -96,10 +96,20 @@ func windsurfCheckMCP(home string) Check {
 }
 
 func windsurfCheckRuntime(home string) Check {
+	hooksPath := filepath.Join(home, ".codeium", "windsurf", "hooks.json")
+	hooksDir := filepath.Join(home, ".codeium", "windsurf", "hooks")
 	paths := []string{
-		filepath.Join(home, ".codeium", "windsurf", "hooks.json"),
-		filepath.Join(home, ".codeium", "windsurf", "hooks", "pre-user-prompt.sh"),
-		filepath.Join(home, ".codeium", "windsurf", "hooks", "post-cascade-response.sh"),
+		hooksPath,
+		filepath.Join(hooksDir, "pre-user-prompt.sh"),
+		filepath.Join(hooksDir, "post-cascade-response.sh"),
+		filepath.Join(hooksDir, "session-start-protocol.md"),
 	}
-	return checkFiles("windsurf", "runtime_files.windsurf", "Windsurf global hooks installed", paths, true)
+	check := checkFiles("windsurf", "runtime_files.windsurf", "Windsurf global hooks installed", paths, true)
+	if check.Status != "ok" {
+		return check
+	}
+	return checkJSONHookCommands(hooksPath, "runtime_files.windsurf", "windsurf", "Windsurf global hooks installed", map[string][]string{
+		"pre_user_prompt":                       {filepath.Join(hooksDir, "pre-user-prompt.sh")},
+		"post_cascade_response_with_transcript": {filepath.Join(hooksDir, "post-cascade-response.sh")},
+	})
 }
