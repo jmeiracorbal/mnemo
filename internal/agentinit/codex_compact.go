@@ -29,6 +29,7 @@ func writeCodexCompactionPrompt(home string) ([]string, error) {
 }
 
 func upsertCodexCompactPromptFile(path, promptPath string) error {
+	const key = "experimental_compact_prompt_file"
 	line := fmt.Sprintf("experimental_compact_prompt_file = %q", promptPath)
 	data, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
@@ -36,28 +37,26 @@ func upsertCodexCompactPromptFile(path, promptPath string) error {
 	}
 
 	lines := strings.Split(string(data), "\n")
-	var out []string
-	replaced := false
+	out := make([]string, 0, len(lines)+1)
 	for _, lineText := range lines {
 		trimmed := strings.TrimSpace(lineText)
-		if strings.HasPrefix(trimmed, "experimental_compact_prompt_file") {
-			if !replaced {
-				out = append(out, line)
-				replaced = true
-			}
+		if gotKey, _, ok := tomlAssignment(trimmed); ok && gotKey == key {
 			continue
 		}
 		out = append(out, lineText)
 	}
 
-	content := strings.TrimRight(strings.Join(out, "\n"), "\n")
-	if !replaced {
-		if content != "" {
-			content += "\n\n"
+	insertAt := len(out)
+	for i, lineText := range out {
+		if isTOMLTableHeader(strings.TrimSpace(lineText)) {
+			insertAt = i
+			break
 		}
-		content += line
 	}
-	content += "\n"
+	out = append(out, "")
+	copy(out[insertAt+1:], out[insertAt:])
+	out[insertAt] = line
+	content := strings.TrimRight(strings.Join(out, "\n"), "\n") + "\n"
 
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err

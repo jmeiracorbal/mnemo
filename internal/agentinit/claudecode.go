@@ -30,6 +30,10 @@ func claudeCodeSkillLinkPath(home string) string {
 	return filepath.Join(home, ".claude", "skills", globalSkillName)
 }
 
+func claudeCodeMCPPath(home string) string {
+	return filepath.Join(home, ".claude.json")
+}
+
 func claudeCodeInstallInstructions(home string) (string, error) {
 	path := claudeCodeInstructionPath(home)
 	if err := AppendSection(path, templates.Global); err != nil {
@@ -47,10 +51,27 @@ func claudeCodeRemoveInstructions(home string) (string, bool, error) {
 func claudeCodeConfigSnippets(home, mnemoBin string) []ConfigSnippet {
 	return []ConfigSnippet{{
 		Agent:   claudeCodeLabel(),
-		Path:    filepath.Join(home, ".claude", ".mcp.json"),
+		Path:    claudeCodeMCPPath(home),
 		Format:  "json",
-		Content: mcpServersJSON(mnemoBin, AgentClaudeCode),
+		Content: claudeCodeMCPJSON(mnemoBin),
 	}}
+}
+
+func claudeCodeMCPJSON(mnemoBin string) string {
+	return prettyJSON(map[string]any{
+		"mcpServers": map[string]any{
+			"mnemo": map[string]any{
+				"type":    "stdio",
+				"command": mnemoBin,
+				"args":    []string{"mcp", "--tools=agent"},
+				"env": map[string]string{
+					"MNEMO_AGENT":         AgentClaudeCode,
+					"MNEMO_MCP_CLIENT":    AgentClaudeCode,
+					"MNEMO_MCP_TRANSPORT": "stdio",
+				},
+			},
+		},
+	})
 }
 
 func claudeCodeRuntimeAssets() []assetTarget {
@@ -59,7 +80,7 @@ func claudeCodeRuntimeAssets() []assetTarget {
 }
 
 func claudeCodeUninstallConfig(home string) ([]string, error) {
-	path := filepath.Join(home, ".claude", ".mcp.json")
+	path := claudeCodeMCPPath(home)
 	changed, err := removeMCPServer(path, "mcpServers", "mnemo")
 	return appendChanged(path, changed, err)
 }
@@ -69,7 +90,7 @@ func claudeCodeCheckInstructions(home string) Check {
 }
 
 func claudeCodeCheckMCP(home string) Check {
-	path := filepath.Join(home, ".claude", ".mcp.json")
+	path := claudeCodeMCPPath(home)
 	return checkJSONMCPWithEnv(path, "mcp_config.claudecode", "claudecode", "env", "mcpServers", "mnemo")
 }
 
@@ -93,10 +114,22 @@ func claudeCodeCheckRuntime(home string) Check {
 		filepath.Join(installPath, "scripts", "subagent-stop.sh"),
 		filepath.Join(installPath, "scripts", "post-compact.sh"),
 		filepath.Join(installPath, "scripts", "post-compact-resume.sh"),
+		filepath.Join(installPath, "scripts", "user-prompt-submit.sh"),
 		filepath.Join(installPath, "scripts", "post-file-edit.sh"),
 		filepath.Join(installPath, "scripts", "post-bash-git.sh"),
 	}
-	return checkFiles("claudecode", "runtime_files.claudecode", "Claude Code plugin hooks installed", paths, true)
+	check := checkFiles("claudecode", "runtime_files.claudecode", "Claude Code plugin hooks installed", paths, true)
+	if check.Status != "ok" {
+		return check
+	}
+	return checkJSONHookCommands(filepath.Join(installPath, "hooks", "hooks.json"), "runtime_files.claudecode", "claudecode", "Claude Code plugin hooks installed", map[string][]string{
+		"SessionStart":     {"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh", "${CLAUDE_PLUGIN_ROOT}/scripts/post-compact-resume.sh"},
+		"SubagentStop":     {"${CLAUDE_PLUGIN_ROOT}/scripts/subagent-stop.sh"},
+		"Stop":             {"${CLAUDE_PLUGIN_ROOT}/scripts/session-stop.sh"},
+		"PostCompact":      {"${CLAUDE_PLUGIN_ROOT}/scripts/post-compact.sh"},
+		"UserPromptSubmit": {"${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit.sh"},
+		"PostToolUse":      {"${CLAUDE_PLUGIN_ROOT}/scripts/post-file-edit.sh", "${CLAUDE_PLUGIN_ROOT}/scripts/post-bash-git.sh"},
+	})
 }
 
 func claudeMnemoPluginInstallPath(home string) (string, error) {

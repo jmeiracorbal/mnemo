@@ -79,6 +79,27 @@ func TestBuildSetupConfigSnippetsForCodex(t *testing.T) {
 	}
 }
 
+func TestBuildSetupConfigSnippetsForClaudeCode(t *testing.T) {
+	snippets, err := buildSetupConfigSnippets(setupPrintConfigOptions{
+		Agent:    "claudecode",
+		Home:     "/home/test",
+		MnemoBin: "/bin/mnemo",
+	})
+	if err != nil {
+		t.Fatalf("build snippets: %v", err)
+	}
+	if len(snippets) != 1 {
+		t.Fatalf("snippets = %d, want 1", len(snippets))
+	}
+	content := snippets[0].Content
+	if snippets[0].Path != "/home/test/.claude.json" ||
+		!strings.Contains(content, `"type": "stdio"`) ||
+		!strings.Contains(content, `"command": "/bin/mnemo"`) ||
+		!strings.Contains(content, `"MNEMO_AGENT": "claudecode"`) {
+		t.Fatalf("unexpected Claude MCP snippet: %+v", snippets[0])
+	}
+}
+
 func TestBuildSetupConfigSnippetsForAll(t *testing.T) {
 	snippets, err := buildSetupConfigSnippets(setupPrintConfigOptions{
 		Agent:    "all",

@@ -32,11 +32,6 @@ if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
   fi
 fi
 
-OBS_COUNT=$(mnemo session project-obs-count "$TRAJECTORY_ID" 2>/dev/null)
 mnemo session end "$TRAJECTORY_ID" >/dev/null 2>&1 || true
-
-if [ "${OBS_COUNT:-0}" = "0" ]; then
-  printf "\n[mnemo] warning: session ended with 0 memories saved.\n" >&2
-fi
 
 exit 0

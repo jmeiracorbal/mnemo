@@ -1,6 +1,7 @@
 package agentinit
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -114,11 +115,15 @@ func codexCheckMCP(home string) Check {
 		return checkError("codex", "mcp_config.codex", "read MCP config: "+err.Error(), path)
 	}
 	content := string(data)
-	if !strings.Contains(content, "[mcp_servers.mnemo]") || !strings.Contains(content, "mcp") {
+	if !tomlHasSection(content, "[mcp_servers.mnemo]") {
 		return checkWarning("codex", "mcp_config.codex", "MCP config does not contain mnemo server", path)
 	}
-	if !strings.Contains(content, "[mcp_servers.mnemo.env]") ||
-		!strings.Contains(content, `MNEMO_AGENT = "codex"`) {
+	if !tomlSectionHasKey(content, "[mcp_servers.mnemo]", "command") ||
+		!tomlSectionHasAssignment(content, "[mcp_servers.mnemo]", "args", `["mcp", "--tools=agent"]`) {
+		return checkWarning("codex", "mcp_config.codex", "MCP config is missing mnemo agent tool invocation", path)
+	}
+	if !tomlHasSection(content, "[mcp_servers.mnemo.env]") ||
+		!tomlSectionHasAssignment(content, "[mcp_servers.mnemo.env]", "MNEMO_AGENT", `"codex"`) {
 		return checkWarning("codex", "mcp_config.codex", "MCP config is missing mnemo provenance environment", path)
 	}
 	return checkOK("codex", "mcp_config.codex", "MCP config contains mnemo server", path)
@@ -131,7 +136,14 @@ func codexCheckRuntime(home string) Check {
 		filepath.Join(home, ".codex", "hooks", "stop.sh"),
 		filepath.Join(home, ".codex", "hooks", "mnemo-protocol.md"),
 	}
-	return checkFiles("codex", "runtime_files.codex", "Codex global hooks installed", paths, true)
+	check := checkFiles("codex", "runtime_files.codex", "Codex global hooks installed", paths, true)
+	if check.Status != "ok" {
+		return check
+	}
+	if trustCheck := codexCheckHookTrust(home); trustCheck.ID != "" {
+		return trustCheck
+	}
+	return check
 }
 
 func upsertCodexMCPConfig(path, section string) error {
@@ -172,7 +184,270 @@ func upsertCodexMCPConfig(path, section string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(content), 0644)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return err
+	}
+	_, err = migrateCodexHookFeatureFlag(path)
+	return err
+}
+
+func migrateCodexHookFeatureFlag(path string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	lines := strings.Split(string(data), "\n")
+	out := make([]string, 0, len(lines))
+	inFeatures := false
+	hooksSeen := false
+	codexHooksValue := ""
+	changed := false
+
+	flushFeatures := func() {
+		if inFeatures && codexHooksValue != "" && !hooksSeen {
+			out = append(out, "hooks = "+codexHooksValue)
+			changed = true
+		}
+	}
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if isTOMLTableHeader(trimmed) {
+			flushFeatures()
+			name, _ := tomlTableName(trimmed)
+			inFeatures = name == "features"
+			hooksSeen = false
+			codexHooksValue = ""
+		}
+		if inFeatures {
+			key, value, ok := tomlAssignment(trimmed)
+			if ok {
+				switch key {
+				case "codex_hooks":
+					if codexHooksValue == "" {
+						codexHooksValue = value
+					}
+					changed = true
+					continue
+				case "hooks":
+					hooksSeen = true
+				}
+			}
+		}
+		out = append(out, line)
+	}
+	flushFeatures()
+	if !changed {
+		return false, nil
+	}
+
+	content := strings.TrimRight(strings.Join(out, "\n"), "\n") + "\n"
+	return true, os.WriteFile(path, []byte(content), 0644)
+}
+
+func tomlAssignment(line string) (key, value string, ok bool) {
+	if line == "" || strings.HasPrefix(line, "#") {
+		return "", "", false
+	}
+	idx := strings.Index(line, "=")
+	if idx < 0 {
+		return "", "", false
+	}
+	key = strings.TrimSpace(line[:idx])
+	value = strings.TrimSpace(line[idx+1:])
+	return key, value, key != ""
+}
+
+func codexCheckHookTrust(home string) Check {
+	hooksPath := filepath.Join(home, ".codex", "hooks.json")
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	identities, missingCommands, err := codexMnemoHookIdentities(hooksPath, home)
+	if err != nil {
+		return checkError("codex", "runtime_files.codex", "parse Codex hooks: "+err.Error(), hooksPath)
+	}
+	if len(missingCommands) > 0 {
+		return Check{
+			ID:       "runtime_files.codex",
+			Status:   "warning",
+			Severity: "warning",
+			Agent:    "codex",
+			Message:  "Codex hooks.json is missing mnemo hook commands",
+			Path:     hooksPath,
+			Details:  map[string]string{"missing_commands": strings.Join(missingCommands, ",")},
+		}
+	}
+
+	data, err := os.ReadFile(configPath)
+	if os.IsNotExist(err) {
+		return Check{
+			ID:       "runtime_files.codex",
+			Status:   "warning",
+			Severity: "warning",
+			Agent:    "codex",
+			Message:  "Codex mnemo hooks need review in Codex",
+			Path:     hooksPath,
+			Details:  map[string]string{"missing_trust": strings.Join(codexHookIdentityStrings(identities), ",")},
+		}
+	}
+	if err != nil {
+		return checkError("codex", "runtime_files.codex", "read Codex config: "+err.Error(), configPath)
+	}
+
+	var missingTrust []string
+	content := string(data)
+	for _, identity := range identities {
+		if !tomlHasSection(content, codexHookTrustSection(identity.Identity)) {
+			missingTrust = append(missingTrust, identity.String())
+		}
+	}
+	if len(missingTrust) > 0 {
+		return Check{
+			ID:       "runtime_files.codex",
+			Status:   "warning",
+			Severity: "warning",
+			Agent:    "codex",
+			Message:  "Codex mnemo hooks need review in Codex",
+			Path:     hooksPath,
+			Details:  map[string]string{"missing_trust": strings.Join(missingTrust, ",")},
+		}
+	}
+	return Check{}
+}
+
+type codexHookIdentity struct {
+	Event    string
+	Identity string
+	Command  string
+}
+
+func (i codexHookIdentity) String() string {
+	return i.Event + ":" + i.Command
+}
+
+func codexHookIdentityStrings(identities []codexHookIdentity) []string {
+	out := make([]string, 0, len(identities))
+	for _, identity := range identities {
+		out = append(out, identity.String())
+	}
+	return out
+}
+
+func codexMnemoHookIdentities(hooksPath, home string) ([]codexHookIdentity, []string, error) {
+	data, err := os.ReadFile(hooksPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	var root map[string]any
+	if err := json.Unmarshal(data, &root); err != nil {
+		return nil, nil, err
+	}
+	hooks, ok := root["hooks"].(map[string]any)
+	if !ok {
+		return nil, []string{"SessionStart", "Stop"}, nil
+	}
+
+	expectedCommands := map[string]string{
+		"SessionStart": filepath.Join(home, ".codex", "hooks", "session-start.sh"),
+		"Stop":         filepath.Join(home, ".codex", "hooks", "stop.sh"),
+	}
+	events := []string{"SessionStart", "Stop"}
+	var identities []codexHookIdentity
+	var missing []string
+	for _, event := range events {
+		command := expectedCommands[event]
+		found := false
+		items, _ := hooks[event].([]any)
+		for itemIndex, item := range items {
+			itemMap, _ := item.(map[string]any)
+			handlers, _ := itemMap["hooks"].([]any)
+			for hookIndex, handler := range handlers {
+				handlerMap, _ := handler.(map[string]any)
+				if got, _ := handlerMap["command"].(string); got == command {
+					found = true
+					identities = append(identities, codexHookIdentity{
+						Event:    event,
+						Identity: codexHookTrustIdentity(hooksPath, event, itemIndex, hookIndex),
+						Command:  command,
+					})
+				}
+			}
+		}
+		if !found {
+			missing = append(missing, event)
+		}
+	}
+	return identities, missing, nil
+}
+
+func codexHookTrustIdentity(hooksPath, event string, itemIndex, hookIndex int) string {
+	return fmt.Sprintf("%s:%s:%d:%d", hooksPath, codexHookEventKey(event), itemIndex, hookIndex)
+}
+
+func codexHookTrustSection(identity string) string {
+	return fmt.Sprintf("[hooks.state.%q]", identity)
+}
+
+func tomlHasSection(content, section string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == section {
+			return true
+		}
+	}
+	return false
+}
+
+func tomlSectionHasKey(content, section, wantKey string) bool {
+	for _, line := range tomlSectionLines(content, section) {
+		key, _, ok := tomlAssignment(strings.TrimSpace(line))
+		if ok && key == wantKey {
+			return true
+		}
+	}
+	return false
+}
+
+func tomlSectionHasAssignment(content, section, wantKey, wantValue string) bool {
+	for _, line := range tomlSectionLines(content, section) {
+		key, value, ok := tomlAssignment(strings.TrimSpace(line))
+		if ok && key == wantKey && value == wantValue {
+			return true
+		}
+	}
+	return false
+}
+
+func tomlSectionLines(content, section string) []string {
+	var lines []string
+	inSection := false
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if isTOMLTableHeader(trimmed) {
+			if inSection {
+				break
+			}
+			inSection = trimmed == section
+			continue
+		}
+		if inSection {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func codexHookEventKey(event string) string {
+	switch event {
+	case "SessionStart":
+		return "session_start"
+	case "Stop":
+		return "stop"
+	default:
+		return strings.ToLower(event)
+	}
 }
 
 func removeCodexMCPConfig(path string) (bool, error) {

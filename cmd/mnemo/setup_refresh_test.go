@@ -35,8 +35,8 @@ func TestRefreshSetupWritesCodexFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refresh setup: %v", err)
 	}
-	if len(updated) != 13 {
-		t.Fatalf("updated paths = %d, want 13 (%v)", len(updated), updated)
+	if len(updated) != 10 {
+		t.Fatalf("updated paths = %d, want 10 (%v)", len(updated), updated)
 	}
 
 	config := readTestFile(t, filepath.Join(home, ".codex", "config.toml"))
@@ -60,6 +60,39 @@ func TestRefreshSetupWritesCodexFiles(t *testing.T) {
 	}
 }
 
+func TestRefreshSetupScopesAgentSpecificSkillLinks(t *testing.T) {
+	home := t.TempDir()
+
+	if _, err := refreshSetup(setupRefreshOptions{Agent: "cursor", Home: home, MnemoBin: "mnemo"}); err != nil {
+		t.Fatalf("refresh setup: %v", err)
+	}
+
+	if !agentinit.GlobalSkillInstalled(home) {
+		t.Fatal("canonical global skill not installed")
+	}
+	for _, path := range []string{
+		filepath.Join(home, ".claude", "skills", "mnemo-memory"),
+		filepath.Join(home, ".codeium", "windsurf", "skills", "mnemo-memory"),
+		filepath.Join(home, ".pi", "agent", "skills", "mnemo-memory"),
+	} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("unexpected agent-specific skill link %s after cursor-only refresh: %v", path, err)
+		}
+	}
+
+	if _, err := refreshSetup(setupRefreshOptions{Agent: "windsurf", Home: home, MnemoBin: "mnemo"}); err != nil {
+		t.Fatalf("refresh windsurf setup: %v", err)
+	}
+	windsurfLink := filepath.Join(home, ".codeium", "windsurf", "skills", "mnemo-memory")
+	info, err := os.Lstat(windsurfLink)
+	if err != nil {
+		t.Fatalf("stat windsurf skill link: %v", err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("%s is not a symlink", windsurfLink)
+	}
+}
+
 func TestRefreshSetupPreservesExistingJSONConfig(t *testing.T) {
 	home := t.TempDir()
 	writeFile(t, filepath.Join(home, ".cursor", "mcp.json"), `{"mcpServers":{"other":{"command":"other"}}}`)
@@ -72,6 +105,30 @@ func TestRefreshSetupPreservesExistingJSONConfig(t *testing.T) {
 	if !strings.Contains(content, `"other"`) || !strings.Contains(content, `"mnemo"`) {
 		t.Fatalf("merged config did not preserve existing server:\n%s", content)
 	}
+}
+
+func TestRefreshSetupWritesClaudeCodeUserMCPConfig(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, filepath.Join(home, ".claude.json"), `{"theme":"dark","mcpServers":{"other":{"command":"other"}}}`)
+
+	if _, err := refreshSetup(setupRefreshOptions{Agent: "claudecode", Home: home, MnemoBin: "/bin/mnemo"}); err != nil {
+		t.Fatalf("refresh setup: %v", err)
+	}
+
+	content := readTestFile(t, filepath.Join(home, ".claude.json"))
+	for _, want := range []string{
+		`"theme": "dark"`,
+		`"other"`,
+		`"mnemo"`,
+		`"type": "stdio"`,
+		`"command": "/bin/mnemo"`,
+		`"MNEMO_AGENT": "claudecode"`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("Claude user MCP config missing %q:\n%s", want, content)
+		}
+	}
+	assertMissing(t, filepath.Join(home, ".claude", ".mcp.json"))
 }
 
 func TestRefreshSetupReplacesCodexMCPNestedTables(t *testing.T) {

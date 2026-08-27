@@ -72,7 +72,7 @@ func refreshSetup(opts setupRefreshOptions) ([]string, error) {
 	}
 	var updated []string
 
-	skillFiles, err := agentinit.InstallGlobalSkill(opts.Home)
+	skillFiles, err := agentinit.InstallGlobalSkillForAgents(opts.Home, agents)
 	if err != nil {
 		return nil, fmt.Errorf("global skill: %w", err)
 	}
