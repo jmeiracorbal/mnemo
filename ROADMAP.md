@@ -125,7 +125,11 @@ Already applied and no longer pending:
 
 Remaining near-term goals:
 
-- unificar la fuente de verdad del esquema para que sqlc y las migraciones no evolucionen por caminos paralelos;
+- replace inline runtime schema evolution with a versioned SQL migration plan:
+  - keep a canonical current schema for new databases and `sqlc` generation;
+  - store structural changes as ordered migration scripts under `database/migrations/`, for example `0001-create-schema-database.sql`, `0002-add-new-column-example.sql`, and so on;
+  - make `store.go` responsible for migration orchestration only: discover applied migrations, detect pending scripts, apply them in order, and fail loudly when the database is ahead, inconsistent, or missing required fields;
+  - avoid balancing DDL or data-shape changes between migration scripts and ad hoc runtime queries;
 - keep future setup/status/doctor changes flowing through `AgentSpec` so installers, diagnostics, and tests do not drift again.
 
 ## Later-stage ideas
