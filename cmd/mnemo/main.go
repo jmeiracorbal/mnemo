@@ -43,6 +43,9 @@ func main() {
 	case "doctor":
 		runDoctor()
 		return
+	case "db":
+		runDB()
+		return
 	case "setup":
 		runSetup()
 		return

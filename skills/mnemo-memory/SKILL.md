@@ -27,7 +27,19 @@ mnemo doctor --path <root>
 mnemo doctor --json --path <root>
 ```
 
-Use the output to explain missing `.mnemo`, PATH, global instruction, MCP, hook/plugin, or store issues. Do not repair configuration automatically unless the user explicitly asks for setup or install changes.
+Use the output to explain missing `.mnemo`, PATH, global instruction, MCP, hook/plugin, or store issues. Do not repair global setup automatically unless the user explicitly asks for setup or install changes.
+
+### Database upgrade recovery
+
+mnemo applies safe database migrations automatically when any CLI, MCP, or hook path opens the store. If an older local database is detected, the normal agent workflow should recover it without a separate user decision.
+
+If a mnemo command or MCP tool reports that the database requires migration, is dirty, is ahead of the bundled migrations, or has an inconsistent schema:
+
+1. Run `mnemo db migrate --check` to inspect the state without writing.
+2. If the state only shows pending bundled migrations, run `mnemo db migrate` and retry the original mnemo action.
+3. If the state is dirty, ahead, or inconsistent, stop and report the exact diagnostic instead of editing SQLite manually.
+
+Never add ad hoc DDL or direct SQLite repairs in an agent workflow; schema changes must come from bundled mnemo migrations.
 
 ## 2. Recover relevant context
 

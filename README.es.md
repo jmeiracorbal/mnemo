@@ -93,7 +93,8 @@ mnemo search "SQLite" --project miapp
 | **Agent Skills portables** | Enseñan a los agentes compatibles cuándo y cómo usar mnemo sin recurrir a memoria nativa. |
 | **Captura pasiva** | Extrae aprendizajes útiles de transcripciones y salidas de subagentes. |
 | **Provenance de agentes** | Registra metadatos consultables en SQL sobre agente, origen, tool, modelo y cliente MCP en escrituras que los aportan. |
-| **Diagnóstico** | `mnemo doctor` comprueba activación, setup global, MCP, hooks, memorias competidoras y salud del store. |
+| **Diagnóstico** | `mnemo doctor` comprueba activación, setup global, MCP, hooks, memorias competidoras y salud de migraciones de la base de datos. |
+| **Seguridad de base de datos** | Las migraciones seguras se aplican automáticamente; `mnemo db migrate --check` valida el store local para CI o troubleshooting. |
 | **Mantenimiento de proyectos** | `mnemo projects list`, `mnemo projects merge` y `mnemo projects rename` ayudan a depurar identidades duplicadas o poco claras. |
 | **Curación de memoria** | `mnemo memories review` detecta observaciones duplicadas o conflictivas para reparación aprobada. |
 

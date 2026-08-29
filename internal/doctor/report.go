@@ -1,17 +1,15 @@
 package doctor
 
 import (
-	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
-	_ "modernc.org/sqlite"
+	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
 )
 
 type Options struct {
@@ -183,38 +181,32 @@ func checkBinaryOnPath() Check {
 }
 
 func checkStoreReadOnly(dataDir string) Check {
-	dbPath := filepath.Join(dataDir, "memory.db")
-	if _, err := os.Stat(dbPath); errors.Is(err, os.ErrNotExist) {
-		return warningCheck("store", "memory database not found yet", dbPath)
-	} else if err != nil {
-		return errorCheck("store", "stat memory database: "+err.Error(), dbPath)
-	}
-	db, err := sql.Open("sqlite", sqliteReadOnlyDBURI(dbPath))
+	status, err := dbmigrate.CheckDataDir(dataDir)
 	if err != nil {
-		return errorCheck("store", "open memory database read-only: "+err.Error(), dbPath)
+		return errorCheck("store", err.Error(), dbmigrate.DBPath(dataDir))
 	}
-	defer func() {
-		_ = db.Close()
-	}()
-	if err := db.Ping(); err != nil {
-		return errorCheck("store", "ping memory database read-only: "+err.Error(), dbPath)
+	details := map[string]string{
+		"state":           string(status.State),
+		"current_version": status.CurrentVersion,
+		"latest_version":  status.LatestVersion,
 	}
-	counts := map[string]string{}
-	queries := map[string]string{
-		"sessions":     "SELECT COUNT(*) FROM sessions",
-		"observations": "SELECT COUNT(*) FROM observations",
-		"user_prompts": "SELECT COUNT(*) FROM user_prompts",
+	switch status.State {
+	case dbmigrate.StateMissing:
+		return Check{ID: "store", Status: "warning", Severity: "warning", Message: status.Message, Path: status.DBPath, Details: details}
+	case dbmigrate.StateUpToDate:
+		return Check{ID: "store", Status: "ok", Severity: "info", Message: "memory database schema is up to date", Path: status.DBPath, Details: details}
+	case dbmigrate.StatePending:
+		details["pending"] = strings.TrimSpace(strings.Join(pendingVersions(status.Pending), ","))
+		return Check{ID: "store", Status: "warning", Severity: "warning", Message: status.Message, Path: status.DBPath, Details: details}
+	default:
+		return Check{ID: "store", Status: "error", Severity: "error", Message: status.Message, Path: status.DBPath, Details: details}
 	}
-	for table, query := range queries {
-		var count int
-		if err := db.QueryRow(query).Scan(&count); err != nil {
-			return errorCheck("store", "query "+table+": "+err.Error(), dbPath)
-		}
-		counts[table] = fmt.Sprintf("%d", count)
-	}
-	return Check{ID: "store", Status: "ok", Severity: "info", Message: "memory database opens read-only", Path: dbPath, Details: counts}
 }
 
-func sqliteReadOnlyDBURI(dbPath string) string {
-	return "file:" + filepath.ToSlash(dbPath) + "?mode=ro&immutable=1"
+func pendingVersions(pending []dbmigrate.Migration) []string {
+	versions := make([]string, 0, len(pending))
+	for _, migration := range pending {
+		versions = append(versions, migration.Version)
+	}
+	return versions
 }

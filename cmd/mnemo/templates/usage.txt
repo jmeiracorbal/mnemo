@@ -21,6 +21,7 @@ Usage:
   mnemo memories supersede OLD_ID --by=NEW_ID [--reason=TEXT]  Mark a memory as superseded by another
   mnemo memories consolidate-topic --from=TOPIC --to=TOPIC (--dry-run|--yes) [--json]  Consolidate memory topic keys
   mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
+  mnemo db migrate [--data-dir=DIR] [--check] [--json]  Validate or apply database migrations
   mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
   mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual setup config snippets
   mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]  Refresh installed global setup files
@@ -44,6 +45,11 @@ Agents for init / install-instructions:
   --agent=pi           Pi global APPEND_SYSTEM.md instructions / .mnemo activation
   --agent=all          All agents
   --path=DIR           Target project directory for init/doctor (default: current directory)
+
+Database options:
+  --check              Validate migration/schema state without writing
+  --json               Emit a stable JSON migration status
+  --data-dir=DIR       Override mnemo data directory (default: ~/.mnemo)
 
 Doctor options:
   --json               Emit a stable JSON diagnostic envelope
