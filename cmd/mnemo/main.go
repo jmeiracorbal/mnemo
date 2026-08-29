@@ -26,6 +26,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	maybeWarnUpdate(os.Args[1:])
+
 	// Commands that don't need the store.
 	switch os.Args[1] {
 	case "json":

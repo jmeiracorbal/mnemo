@@ -36,6 +36,8 @@ mnemo db migrate --json
 
 `mnemo doctor` also runs the same read-only schema validator and reports whether the local store is missing, pending, current, or inconsistent.
 
+Released mnemo binaries also warn on interactive CLI use when a newer version is available. The warning is skipped for MCP, hooks, and JSON-output commands so agent integrations stay machine-readable.
+
 ## Development workflow
 
 After changing the schema, a migration, or a query, regenerate and test:

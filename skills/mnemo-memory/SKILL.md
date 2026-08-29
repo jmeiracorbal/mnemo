@@ -41,6 +41,12 @@ If a mnemo command or MCP tool reports that the database requires migration, is 
 
 Never add ad hoc DDL or direct SQLite repairs in an agent workflow; schema changes must come from bundled mnemo migrations.
 
+### Version update notice
+
+When an interactive mnemo CLI call prints `[mnemo] update available`, tell the user the installed and latest versions and ask for confirmation before updating. If approved, run the installer command shown by mnemo, then refresh global setup with `mnemo setup refresh --agent=all`, and retry the original mnemo command or diagnostic.
+
+Do not update mnemo silently, and do not run update checks from MCP, hooks, or JSON-output paths.
+
 ## 2. Recover relevant context
 
 - At session start, resume, or after compaction, call `mem_context` before significant work.
