@@ -22,6 +22,7 @@ Usage:
   mnemo memories consolidate-topic --from=TOPIC --to=TOPIC (--dry-run|--yes) [--json]  Consolidate memory topic keys
   mnemo doctor [--json] [--agent=AGENT] [--path=DIR]  Run read-only diagnostics
   mnemo db migrate [--data-dir=DIR] [--check] [--json]  Validate or apply database migrations
+  mnemo update [--check] [--yes] [--agent=AGENT] [--json]  Check for and install a newer mnemo release
   mnemo setup status [--json] [--agent=AGENT] [--home=DIR]  Show global agent setup status
   mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual setup config snippets
   mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]  Refresh installed global setup files
@@ -50,6 +51,12 @@ Database options:
   --check              Validate migration/schema state without writing
   --json               Emit a stable JSON migration status
   --data-dir=DIR       Override mnemo data directory (default: ~/.mnemo)
+
+Update options:
+  --check              Check for an update without installing
+  --yes, -y            Install an available update without prompting
+  --agent=AGENT        Refresh setup for one agent, auto, or all after install (default: all)
+  --json               Emit stable JSON output; only valid with --check
 
 Doctor options:
   --json               Emit a stable JSON diagnostic envelope

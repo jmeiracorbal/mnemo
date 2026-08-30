@@ -1,6 +1,7 @@
 package updatecheck
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -89,6 +90,9 @@ func TestShouldCheckSkipsMachineAndAgentPaths(t *testing.T) {
 	if ShouldCheck("0.33.2", []string{"doctor", "--json"}, fakeTTY, getenv) {
 		t.Fatal("json output should skip")
 	}
+	if ShouldCheck("0.33.2", []string{"update"}, fakeTTY, getenv) {
+		t.Fatal("update command handles its own checks")
+	}
 	agentEnv := func(key string) string {
 		if key == "MNEMO_SOURCE" {
 			return "hook"
@@ -97,5 +101,17 @@ func TestShouldCheckSkipsMachineAndAgentPaths(t *testing.T) {
 	}
 	if ShouldCheck("0.33.2", []string{"save"}, fakeTTY, agentEnv) {
 		t.Fatal("hook source should skip")
+	}
+}
+
+func TestWriteNoticeSeparatesUpdateCommandFromAgentGuidance(t *testing.T) {
+	var out bytes.Buffer
+	WriteNotice(&out, "v0.33.1", Result{LatestVersion: "0.34.0", URL: "https://example.test/release"})
+	text := out.String()
+	if !strings.Contains(text, "run 'mnemo update'") {
+		t.Fatalf("notice should point to first-class update command: %q", text)
+	}
+	if strings.Contains(text, "curl -sSfL") {
+		t.Fatalf("notice should not delegate confirmation/install to a curl snippet: %q", text)
 	}
 }

@@ -9,11 +9,10 @@ import (
 )
 
 func maybeWarnUpdate(args []string) {
+	if !updatecheck.ShouldPrompt(version, args, os.Stdin, os.Stderr, os.Getenv) {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	updatecheck.MaybeNotify(ctx, updatecheck.NotifyOptions{
-		CurrentVersion: version,
-		Args:           args,
-		Stderr:         os.Stderr,
-	})
+	maybeOfferUpdate(ctx, args, defaultUpdateRuntime())
 }

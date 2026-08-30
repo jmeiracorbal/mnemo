@@ -95,6 +95,7 @@ mnemo search "SQLite" --project miapp
 | **Provenance de agentes** | Registra metadatos consultables en SQL sobre agente, origen, tool, modelo y cliente MCP en escrituras que los aportan. |
 | **Diagnóstico** | `mnemo doctor` comprueba activación, setup global, MCP, hooks, memorias competidoras y salud de migraciones de la base de datos. |
 | **Seguridad de base de datos** | Las migraciones seguras se aplican automáticamente; `mnemo db migrate --check` valida el store local para CI o troubleshooting. |
+| **Autoactualización** | Los binarios publicados comprueban nuevas releases en uso interactivo y pueden confirmar, descargar e instalar con `mnemo update`. |
 | **Mantenimiento de proyectos** | `mnemo projects list`, `mnemo projects merge` y `mnemo projects rename` ayudan a depurar identidades duplicadas o poco claras. |
 | **Curación de memoria** | `mnemo memories review` detecta observaciones duplicadas o conflictivas para reparación aprobada. |
 
@@ -158,6 +159,23 @@ No potential memory conflicts found.
 | Build desde fuente | Desarrollas mnemo | `go build -o ~/.local/bin/mnemo ./cmd/mnemo/` |
 
 Consulta la guía completa en [docs/INSTALLATION.md](docs/INSTALLATION.md).
+
+### Actualizaciones
+
+Los binarios publicados de mnemo comprueban GitHub Releases durante el uso CLI
+interactivo. Si existe una release más nueva, mnemo muestra las versiones
+instalada/disponible y pregunta antes de modificar nada:
+
+```bash
+mnemo update
+mnemo update --yes --agent=all
+mnemo update --check --json
+```
+
+`mnemo update` descarga el instalador oficial, lo fija a la última release
+detectada y refresca el setup de agentes después de instalar. Las comprobaciones
+se omiten en rutas MCP, hooks y salidas JSON para no romper integraciones
+machine-readable.
 
 <a id="documentacion"></a>
 

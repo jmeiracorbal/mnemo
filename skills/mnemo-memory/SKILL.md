@@ -43,9 +43,18 @@ Never add ad hoc DDL or direct SQLite repairs in an agent workflow; schema chang
 
 ### Version update notice
 
-When an interactive mnemo CLI call prints `[mnemo] update available`, tell the user the installed and latest versions and ask for confirmation before updating. If approved, run the installer command shown by mnemo, then refresh global setup with `mnemo setup refresh --agent=all`, and retry the original mnemo command or diagnostic.
+Do not treat this skill as the update mechanism. Released mnemo binaries own
+version detection, confirmation, download and installation.
 
-Do not update mnemo silently, and do not run update checks from MCP, hooks, or JSON-output paths.
+When an interactive mnemo CLI call prints `[mnemo] update available`, tell the
+user the installed and latest versions. If mnemo prompts `Update now? [y/N]`,
+let the user answer the prompt. If the command is not currently prompting and
+the user explicitly approves an update, run `mnemo update` or
+`mnemo update --yes --agent=all`, then retry the original mnemo command or
+diagnostic.
+
+Do not update mnemo silently, and do not run update checks from MCP, hooks, or
+JSON-output paths.
 
 ## 2. Recover relevant context
 

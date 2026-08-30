@@ -95,3 +95,4 @@ mnemo init --agent=claudecode             # second run: no duplicate agent entry
 | Duplicate project identities | `mnemo projects list --json` | Run `mnemo projects merge --auto-by-path --dry-run` and approve only safe merges. |
 | Conflicting memories | `mnemo memories review --project=<project>` | Mark stale/reviewed, supersede, or consolidate topic keys after review. |
 | Setup drift | `mnemo setup status --agent=all` | Run `mnemo setup refresh --agent=all`. |
+| Outdated mnemo binary | `mnemo update --check` | Run `mnemo update` and approve the prompt, or `mnemo update --yes --agent=all` in an already-approved automation. |

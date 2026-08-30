@@ -245,7 +245,7 @@ func TestShippedMnemoMemorySkill(t *testing.T) {
 		"mnemo db migrate --check",
 		"Never add ad hoc DDL",
 		"[mnemo] update available",
-		"mnemo setup refresh --agent=all",
+		"mnemo update",
 	}
 	for _, value := range required {
 		if !strings.Contains(content, value) {

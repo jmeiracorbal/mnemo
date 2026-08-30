@@ -48,6 +48,9 @@ func main() {
 	case "db":
 		runDB()
 		return
+	case "update":
+		runUpdate()
+		return
 	case "setup":
 		runSetup()
 		return

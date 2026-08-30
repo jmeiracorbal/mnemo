@@ -40,6 +40,25 @@ MNEMO_DRY_RUN=true bash install.sh
 MNEMO_INSTALL_DIR="$HOME/.local/bin" bash install.sh
 ```
 
+## Update an installed binary
+
+Released binaries check GitHub Releases during interactive CLI use. If a newer
+release exists, mnemo itself shows the installed/latest versions and asks before
+installing.
+
+You can also run the update flow explicitly:
+
+```bash
+mnemo update
+mnemo update --yes --agent=all
+mnemo update --check --json
+```
+
+`mnemo update` downloads the official installer, sets `MNEMO_VERSION` to the
+latest detected release, installs the matching binary and refreshes agent setup.
+This is separate from agent skill guidance: the skill only tells agents how to
+respond to update notices; it is not the update mechanism.
+
 ## Claude Code plugin
 
 Claude Code users may install through the plugin marketplace:
