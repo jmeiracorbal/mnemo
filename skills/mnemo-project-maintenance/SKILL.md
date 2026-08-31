@@ -23,7 +23,7 @@ Use mnemo CLI commands to find and consolidate duplicate project identities. Thi
    mnemo version
    ```
 
-   If the version is older than `v0.26.0` or the binary is missing, ask the user to update mnemo before planning merges.
+   If the version is older than `v0.26.0` or the binary is missing, ask the user to run `mnemo update` before planning merges.
 
 2. Build the project inventory:
 

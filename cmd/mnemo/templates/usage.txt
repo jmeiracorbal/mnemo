@@ -55,7 +55,7 @@ Database options:
 Update options:
   --check              Check for an update without installing
   --yes, -y            Install an available update without prompting
-  --agent=AGENT        Refresh setup for one agent, auto, or all after install (default: all)
+  --agent=AGENT        Refresh mnemo integration files for one agent, auto, or all after install (default: all)
   --json               Emit stable JSON output; only valid with --check
 
 Doctor options:

@@ -35,7 +35,7 @@ Run a read-only review when any of these happen:
    mnemo version
    ```
 
-   If the version is older than the release that introduced `mnemo memories`, ask the user to update mnemo before planning repairs.
+   If the version is older than the release that introduced `mnemo memories`, ask the user to run `mnemo update` before planning repairs.
 
 2. Run a read-only review, scoped when possible:
 

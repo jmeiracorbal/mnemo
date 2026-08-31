@@ -39,8 +39,10 @@ mnemo db migrate --json
 Released mnemo binaries also check for newer releases on interactive CLI use.
 When one exists, mnemo asks before installing. Users can run `mnemo update`
 directly to review, confirm, download and install, or `mnemo update --check
---json` for automation. The check/prompt is skipped for MCP, hooks, and
-JSON-output commands so agent integrations stay machine-readable.
+--json` for automation. The update installs the mnemo binary and refreshes
+mnemo's agent integration files; it does not update the agent applications
+themselves. The check/prompt is skipped for MCP, hooks, and JSON-output commands
+so agent integrations stay machine-readable.
 
 ## Development workflow
 

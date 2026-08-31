@@ -172,8 +172,11 @@ mnemo update --check --json
 ```
 
 `mnemo update` downloads the official installer, pins it to the detected latest
-release and refreshes agent setup after installing. Update checks are skipped in
-MCP, hook and JSON-output paths so integrations remain machine-readable.
+release and refreshes mnemo's agent integration files after installing. It does
+not update Claude Code, Codex, Cursor or other agent applications themselves.
+Restart active agent sessions after updating so they reload the refreshed
+binary, hooks and skills. Update checks are skipped in MCP, hook and JSON-output
+paths so integrations remain machine-readable.
 
 ### Codex hook review
 

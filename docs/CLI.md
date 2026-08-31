@@ -84,7 +84,11 @@ mnemo update --check --json
 
 Interactive update notices are owned by the mnemo binary. Skills may tell an
 agent how to react to the notice, but the CLI performs detection, confirmation,
-download and installation. MCP, hook and JSON-output paths skip the notice.
+download and installation. `--agent=all` refreshes mnemo integration files for
+all supported agents after the binary update; it does not update the agent
+applications themselves. Restart active agent sessions after updating so they
+reload refreshed hooks, MCP config and skills. MCP, hook and JSON-output paths
+skip the notice.
 
 Export everything to JSON:
 

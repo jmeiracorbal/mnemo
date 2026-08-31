@@ -50,11 +50,14 @@ When an interactive mnemo CLI call prints `[mnemo] update available`, tell the
 user the installed and latest versions. If mnemo prompts `Update now? [y/N]`,
 let the user answer the prompt. If the command is not currently prompting and
 the user explicitly approves an update, run `mnemo update` or
-`mnemo update --yes --agent=all`, then retry the original mnemo command or
-diagnostic.
+`mnemo update --yes --agent=all`, then tell the user to restart active agent
+sessions so they reload the refreshed binary, hooks, MCP config and skills.
+After restart, retry the original mnemo command or diagnostic.
 
-Do not update mnemo silently, and do not run update checks from MCP, hooks, or
-JSON-output paths.
+Remember that `mnemo update` updates the mnemo binary and mnemo-owned agent
+integration files only; it does not update Claude Code, Codex, Cursor or other
+agent applications themselves. Do not update mnemo silently, and do not run
+update checks from MCP, hooks, or JSON-output paths.
 
 ## 2. Recover relevant context
 

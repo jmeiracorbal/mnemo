@@ -173,9 +173,11 @@ mnemo update --check --json
 ```
 
 `mnemo update` descarga el instalador oficial, lo fija a la última release
-detectada y refresca el setup de agentes después de instalar. Las comprobaciones
-se omiten en rutas MCP, hooks y salidas JSON para no romper integraciones
-machine-readable.
+detectada y refresca los archivos de integración de mnemo para agentes después
+de instalar. No actualiza Claude Code, Codex, Cursor ni otras aplicaciones de
+agente. Reinicia las sesiones activas de agentes después de actualizar para que
+recarguen el binario, hooks y skills refrescados. Las comprobaciones se omiten
+en rutas MCP, hooks y salidas JSON para no romper integraciones machine-readable.
 
 <a id="documentacion"></a>
 
