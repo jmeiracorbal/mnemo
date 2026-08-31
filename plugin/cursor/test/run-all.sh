@@ -1,5 +1,5 @@
 #!/bin/bash
-# mnemo — Cursor hooks test harness (Cursor 2.6.x format)
+# mnemo — Cursor hooks integration tests (Cursor 2.6.x format)
 # Usage: ./run-all.sh [test-name]
 #   test-name: before-submit-prompt | stop | stop-with-transcript
 #              (omit to run all)

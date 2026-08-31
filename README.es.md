@@ -96,6 +96,7 @@ mnemo search "SQLite" --project miapp
 | **Diagnóstico** | `mnemo doctor` comprueba activación, setup global, MCP, hooks, memorias competidoras y salud de migraciones de la base de datos. |
 | **Seguridad de base de datos** | Las migraciones seguras se aplican automáticamente; `mnemo db migrate --check` valida el store local para CI o troubleshooting. |
 | **Autoactualización** | Los binarios publicados comprueban nuevas releases en uso interactivo y pueden confirmar, descargar e instalar con `mnemo update`. |
+| **CLI programable** | La ayuda generada con Cobra mantiene alineados el menú de comandos y sus subcomandos con el ejecutable. |
 | **Mantenimiento de proyectos** | `mnemo projects list`, `mnemo projects merge` y `mnemo projects rename` ayudan a depurar identidades duplicadas o poco claras. |
 | **Curación de memoria** | `mnemo memories review` detecta observaciones duplicadas o conflictivas para reparación aprobada. |
 
