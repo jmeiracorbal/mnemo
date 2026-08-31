@@ -40,9 +40,6 @@ mnemo is a local memory layer for agentic development. It stores decisions, bugs
 
 Instead of spreading project knowledge across `MEMORY.md`, native editor memory, chat transcripts and human notes, mnemo gives every supported agent the same project-scoped source of truth.
 
-> [!IMPORTANT]
-> mnemo does not automatically support every harness; it provides a stable memory contract that any harness can implement and validate.
-
 ## Quick Start
 
 Install the binary and configure your detected agents:
@@ -95,6 +92,7 @@ mnemo search "SQLite" --project myapp
 | **Diagnostics** | `mnemo doctor` checks project activation, global setup, MCP, hooks, competing memory surfaces and database migration health. |
 | **Database safety** | Safe schema migrations run automatically; `mnemo db migrate --check` validates the local store for CI or troubleshooting. |
 | **Self-update** | Released binaries check for newer releases on interactive CLI use and can confirm, download and install with `mnemo update`. |
+| **Programmable CLI** | Cobra-generated help keeps the command menu and nested subcommands aligned with the executable. |
 | **Project maintenance** | `mnemo projects list`, `mnemo projects merge` and `mnemo projects rename` help curate duplicate or unclear project identities. |
 | **Memory curation** | `mnemo memories review` surfaces duplicate or conflicting observations for approved repair. |
 

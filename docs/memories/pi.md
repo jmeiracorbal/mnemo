@@ -12,7 +12,7 @@ Relevant surfaces:
 4. Session JSONL under `~/.pi/agent/sessions/`, which is resumable conversation history rather than curated semantic memory.
 5. Optional MCP support through community extensions such as `pi-mcp-adapter`, `pi-mcp-extension`, or `pi-mcp`, which read standard MCP configuration.
 
-Pi is also available through Vercel AI SDK's experimental harness layer, but mnemo integration should treat Pi first as an agent runtime with instruction, skill, and optional MCP surfaces.
+mnemo treats Pi as an agent runtime with instruction, skill, and optional MCP surfaces.
 
 ## Locations
 

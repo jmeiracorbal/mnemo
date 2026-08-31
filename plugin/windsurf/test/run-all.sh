@@ -1,5 +1,5 @@
 #!/bin/bash
-# mnemo — Windsurf hooks test harness
+# mnemo — Windsurf hooks integration tests
 # Usage: ./run-all.sh [test-name]
 #   test-name: pre-user-prompt | post-cascade-response | post-cascade-with-transcript
 #              (omit to run all)
