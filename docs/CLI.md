@@ -12,6 +12,7 @@ mnemo setup print-config AGENT [--home=DIR] [--mnemo-bin=PATH]  Print manual set
 mnemo setup refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]  Refresh installed global setup files
 mnemo setup AGENT [--home=DIR] [--mnemo-bin=PATH]  Alias for setup refresh --agent=AGENT
 mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for an agent
+mnemo update [--check] [--yes] [--agent=AGENT] [--json]  Check for and install a newer mnemo release
 mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
 mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]  Merge one project into another
 mnemo projects merge --auto-by-path (--dry-run|--yes) [--json]  Merge duplicate project identities by shared directory
@@ -71,6 +72,23 @@ Show context from previous sessions:
 ```bash
 mnemo context myapp
 ```
+
+Check and install released updates:
+
+```bash
+mnemo update --check
+mnemo update
+mnemo update --yes --agent=all
+mnemo update --check --json
+```
+
+Interactive update notices are owned by the mnemo binary. Skills may tell an
+agent how to react to the notice, but the CLI performs detection, confirmation,
+download and installation. `--agent=all` refreshes mnemo integration files for
+all supported agents after the binary update; it does not update the agent
+applications themselves. Restart active agent sessions after updating so they
+reload refreshed hooks, MCP config and skills. MCP, hook and JSON-output paths
+skip the notice.
 
 Export everything to JSON:
 

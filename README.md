@@ -92,7 +92,9 @@ mnemo search "SQLite" --project myapp
 | **Portable Agent Skills** | Skills teach compatible agents when and how to use mnemo without falling back to native memory. |
 | **Passive capture** | Extracts useful learnings from transcripts and subagent output. |
 | **Agent provenance** | Records SQL-queryable agent, source, tool, model and MCP client metadata for writes that provide it. |
-| **Diagnostics** | `mnemo doctor` checks project activation, global setup, MCP, hooks, competing memory surfaces and store health. |
+| **Diagnostics** | `mnemo doctor` checks project activation, global setup, MCP, hooks, competing memory surfaces and database migration health. |
+| **Database safety** | Safe schema migrations run automatically; `mnemo db migrate --check` validates the local store for CI or troubleshooting. |
+| **Self-update** | Released binaries check for newer releases on interactive CLI use and can confirm, download and install with `mnemo update`. |
 | **Project maintenance** | `mnemo projects list`, `mnemo projects merge` and `mnemo projects rename` help curate duplicate or unclear project identities. |
 | **Memory curation** | `mnemo memories review` surfaces duplicate or conflicting observations for approved repair. |
 
@@ -156,6 +158,25 @@ No potential memory conflicts found.
 | Source build | You develop mnemo itself | `go build -o ~/.local/bin/mnemo ./cmd/mnemo/` |
 
 Read the complete setup guide in [docs/INSTALLATION.md](docs/INSTALLATION.md).
+
+### Updates
+
+Released mnemo binaries check GitHub Releases during interactive CLI use. When
+a newer release exists, mnemo itself prints the installed/latest versions and
+asks before changing anything:
+
+```bash
+mnemo update
+mnemo update --yes --agent=all
+mnemo update --check --json
+```
+
+`mnemo update` downloads the official installer, pins it to the detected latest
+release and refreshes mnemo's agent integration files after installing. It does
+not update Claude Code, Codex, Cursor or other agent applications themselves.
+Restart active agent sessions after updating so they reload the refreshed
+binary, hooks and skills. Update checks are skipped in MCP, hook and JSON-output
+paths so integrations remain machine-readable.
 
 ### Codex hook review
 

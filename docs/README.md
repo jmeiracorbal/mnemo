@@ -1,12 +1,12 @@
 # Documentation index
 
-This directory contains the extended mnemo documentation. Start here when you need setup details, command references, agent integration notes, storage internals, troubleshooting guidance, or research material for future memory migration features.
+This directory contains the extended mnemo documentation. Start here when you need setup and update details, command references, agent integration notes, storage internals, troubleshooting guidance, or research material for future memory migration features.
 
 ## Core documentation
 
 | Document | Purpose |
 |---|---|
-| [Installation](INSTALLATION.md) | Install script, plugin setup, project activation, and verification. |
+| [Installation](INSTALLATION.md) | Install script, self-update flow, plugin setup, project activation, and verification. |
 | [Agent integration](AGENT_INTEGRATION.md) | Hook behavior, global paths, `.mnemo` marker semantics, and Agent Skills integration. |
 | [CLI reference](CLI.md) | Commands, examples, MCP tools, and search modes. |
 | [Troubleshooting](TROUBLESHOOTING.md) | `doctor`, `setup status`, manual checks, and idempotency validation. |

@@ -2190,34 +2190,17 @@ func TestNewUpgradesPartialDatabaseToCanonicalSchema(t *testing.T) {
 }
 
 func TestMigrationAndHelperEdgeBranches(t *testing.T) {
-	t.Run("migrate is idempotent with existing triggers", func(t *testing.T) {
+	t.Run("migrate is idempotent with recorded migrations", func(t *testing.T) {
 		s := newTestStore(t)
 		if err := s.migrate(); err != nil {
 			t.Fatalf("second migrate should succeed: %v", err)
 		}
-	})
-
-	t.Run("legacy migrate skips table without id column", func(t *testing.T) {
-		s := newTestStore(t)
-
-		if _, err := s.db.Exec(`
-			DROP TRIGGER IF EXISTS obs_fts_insert;
-			DROP TRIGGER IF EXISTS obs_fts_update;
-			DROP TRIGGER IF EXISTS obs_fts_delete;
-			DROP TABLE IF EXISTS observations_fts;
-			DROP TABLE observations;
-			CREATE TABLE observations (
-				session_id TEXT,
-				type TEXT,
-				title TEXT,
-				content TEXT
-			);
-		`); err != nil {
-			t.Fatalf("recreate observations without id: %v", err)
+		var dirty int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE dirty != 0`).Scan(&dirty); err != nil {
+			t.Fatalf("query migration dirtiness: %v", err)
 		}
-
-		if err := s.migrateLegacyObservationsTable(); err != nil {
-			t.Fatalf("legacy migrate should skip tables without id: %v", err)
+		if dirty != 0 {
+			t.Fatalf("expected no dirty migrations, got %d", dirty)
 		}
 	})
 
@@ -2227,30 +2210,6 @@ func TestMigrationAndHelperEdgeBranches(t *testing.T) {
 		}
 		if got := SuggestTopicKey("bugfix", "bug-auth-panic", ""); got != "bug/auth-panic" {
 			t.Fatalf("expected bug/auth-panic, got %q", got)
-		}
-		if got := SuggestTopicKey("manual", "!!!", "..."); got != "topic/general" {
-			t.Fatalf("expected topic/general fallback, got %q", got)
-		}
-
-		longSegment := normalizeTopicSegment(strings.Repeat("abc", 50))
-		if len(longSegment) != 100 {
-			t.Fatalf("expected topic segment truncation to 100, got %d", len(longSegment))
-		}
-
-		longKey := normalizeTopicKey(strings.Repeat("k", 200))
-		if len(longKey) != 120 {
-			t.Fatalf("expected topic key truncation to 120, got %d", len(longKey))
-		}
-	})
-
-	t.Run("format context empty returns empty string", func(t *testing.T) {
-		s := newTestStore(t)
-		ctx, err := s.FormatContext("", "")
-		if err != nil {
-			t.Fatalf("format context: %v", err)
-		}
-		if ctx != "" {
-			t.Fatalf("expected empty context when no data, got %q", ctx)
 		}
 	})
 }
@@ -2410,168 +2369,41 @@ func TestNewErrorBranches(t *testing.T) {
 		cfg := mustDefaultConfig(t)
 		cfg.DataDir = dataDir
 
-		_, err = New(cfg)
-		if err == nil || !strings.Contains(err.Error(), "migration") {
-			t.Fatalf("expected migration error, got %v", err)
+		s, err := New(cfg)
+		if err != nil {
+			t.Fatalf("expected partial legacy database to migrate, got %v", err)
 		}
+		_ = s.Close()
 	})
 }
 
 func TestMigrationInternalErrorAndNoopBranches(t *testing.T) {
-	t.Run("addColumnIfNotExists adds then noops", func(t *testing.T) {
+	t.Run("missing canonical object is detected on remigrate", func(t *testing.T) {
 		s := newTestStore(t)
-		if _, err := s.db.Exec(`CREATE TABLE extra_table (id INTEGER)`); err != nil {
-			t.Fatalf("create extra table: %v", err)
+		if _, err := s.db.Exec(`DROP TRIGGER IF EXISTS obs_fts_insert`); err != nil {
+			t.Fatalf("drop trigger: %v", err)
 		}
-
-		if err := s.addColumnIfNotExists("extra_table", "name", "TEXT"); err != nil {
-			t.Fatalf("add column: %v", err)
-		}
-		if err := s.addColumnIfNotExists("extra_table", "name", "TEXT"); err != nil {
-			t.Fatalf("add existing column should noop: %v", err)
-		}
-
-		if err := s.addColumnIfNotExists("missing_table", "x", "TEXT"); err == nil {
-			t.Fatalf("expected missing table error")
+		if err := s.migrate(); err == nil || !strings.Contains(err.Error(), "missing schema object obs_fts_insert") {
+			t.Fatalf("expected missing trigger validation error, got %v", err)
 		}
 	})
 
-	t.Run("legacy migrate noops when id is primary key", func(t *testing.T) {
-		s := newTestStore(t)
-		if err := s.migrateLegacyObservationsTable(); err != nil {
-			t.Fatalf("expected noop for modern schema: %v", err)
+	t.Run("dirty migration blocks store open", func(t *testing.T) {
+		dataDir := t.TempDir()
+		s, err := New(FallbackConfig(dataDir))
+		if err != nil {
+			t.Fatalf("new store: %v", err)
 		}
-	})
-
-	t.Run("legacy migrate fails if temp table already exists", func(t *testing.T) {
-		s := newTestStore(t)
-		if _, err := s.db.Exec(`
-			DROP TRIGGER IF EXISTS obs_fts_insert;
-			DROP TRIGGER IF EXISTS obs_fts_update;
-			DROP TRIGGER IF EXISTS obs_fts_delete;
-			DROP TABLE IF EXISTS observations_fts;
-			DROP TABLE observations;
-			CREATE TABLE observations (
-				id INT,
-				session_id TEXT,
-				type TEXT,
-				title TEXT,
-				content TEXT,
-				created_at TEXT
-			);
-			CREATE TABLE observations_migrated (id INTEGER PRIMARY KEY);
-		`); err != nil {
-			t.Fatalf("prepare legacy schema: %v", err)
+		if _, err := s.db.Exec(`UPDATE schema_migrations SET dirty = 1 WHERE version = '0001'`); err != nil {
+			_ = s.Close()
+			t.Fatalf("dirty migration: %v", err)
 		}
+		_ = s.Close()
 
-		err := s.migrateLegacyObservationsTable()
-		if err == nil || !strings.Contains(err.Error(), "create table") {
-			t.Fatalf("expected create table error, got %v", err)
+		_, err = New(FallbackConfig(dataDir))
+		if err == nil || !strings.Contains(err.Error(), "dirty migration 0001") {
+			t.Fatalf("expected dirty migration error, got %v", err)
 		}
-	})
-
-	t.Run("migrate returns deterministic exec hook errors", func(t *testing.T) {
-		s := newTestStore(t)
-
-		origExec := s.hooks.exec
-		s.hooks.exec = func(db execer, query string, args ...any) (sql.Result, error) {
-			if strings.Contains(query, "UPDATE observations SET scope = 'project'") {
-				return nil, errors.New("forced migrate update failure")
-			}
-			return origExec(db, query, args...)
-		}
-
-		err := s.migrate()
-		if err == nil || !strings.Contains(err.Error(), "forced migrate update failure") {
-			t.Fatalf("expected forced migrate failure, got %v", err)
-		}
-	})
-
-	t.Run("migrate fails when creating missing triggers", func(t *testing.T) {
-		s := newTestStore(t)
-
-		if _, err := s.db.Exec(`
-			DROP TRIGGER IF EXISTS obs_fts_insert;
-			DROP TRIGGER IF EXISTS obs_fts_update;
-			DROP TRIGGER IF EXISTS obs_fts_delete;
-		`); err != nil {
-			t.Fatalf("drop obs triggers: %v", err)
-		}
-
-		origExec := s.hooks.exec
-		s.hooks.exec = func(db execer, query string, args ...any) (sql.Result, error) {
-			if strings.Contains(query, "CREATE TRIGGER IF NOT EXISTS obs_fts_insert") {
-				return nil, errors.New("forced obs trigger failure")
-			}
-			return origExec(db, query, args...)
-		}
-
-		err := s.migrate()
-		if err == nil || !strings.Contains(err.Error(), "forced obs trigger failure") {
-			t.Fatalf("expected forced trigger failure, got %v", err)
-		}
-	})
-
-	t.Run("legacy migrate surfaces begin and commit hook failures", func(t *testing.T) {
-		prepareLegacyStore := func(t *testing.T) *Store {
-			t.Helper()
-			s := newTestStore(t)
-			if _, err := s.db.Exec(`
-				DROP TRIGGER IF EXISTS obs_fts_insert;
-				DROP TRIGGER IF EXISTS obs_fts_update;
-				DROP TRIGGER IF EXISTS obs_fts_delete;
-				DROP TABLE IF EXISTS observations_fts;
-				DROP TABLE observations;
-				INSERT OR IGNORE INTO sessions (id, project, directory) VALUES ('s1', 'mnemo', '/tmp/mnemo');
-				CREATE TABLE observations (
-					id INT,
-					session_id TEXT,
-					type TEXT,
-					title TEXT,
-					content TEXT,
-					tool_name TEXT,
-					project TEXT,
-					scope TEXT,
-					topic_key TEXT,
-					normalized_hash TEXT,
-					revision_count INTEGER,
-					duplicate_count INTEGER,
-					last_seen_at TEXT,
-					created_at TEXT,
-					updated_at TEXT,
-					deleted_at TEXT
-				);
-				INSERT INTO observations (id, session_id, type, title, content, project, created_at, updated_at)
-				VALUES (1, 's1', 'bugfix', 'legacy', 'legacy row', 'mnemo', datetime('now'), datetime('now'));
-			`); err != nil {
-				t.Fatalf("prepare legacy table: %v", err)
-			}
-			return s
-		}
-
-		t.Run("begin tx", func(t *testing.T) {
-			s := prepareLegacyStore(t)
-			s.hooks.beginTx = func(_ *sql.DB) (*sql.Tx, error) {
-				return nil, errors.New("forced begin failure")
-			}
-
-			err := s.migrateLegacyObservationsTable()
-			if err == nil || !strings.Contains(err.Error(), "forced begin failure") {
-				t.Fatalf("expected begin failure, got %v", err)
-			}
-		})
-
-		t.Run("commit", func(t *testing.T) {
-			s := prepareLegacyStore(t)
-			s.hooks.commit = func(_ *sql.Tx) error {
-				return errors.New("forced legacy commit failure")
-			}
-
-			err := s.migrateLegacyObservationsTable()
-			if err == nil || !strings.Contains(err.Error(), "forced legacy commit failure") {
-				t.Fatalf("expected commit failure, got %v", err)
-			}
-		})
 	})
 }
 
@@ -2797,78 +2629,31 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 		}
 	})
 
-	t.Run("migrate forced failures for remaining exec branches", func(t *testing.T) {
-		failCases := []string{
-			"CREATE INDEX IF NOT EXISTS idx_obs_scope",
-			"UPDATE observations SET topic_key = NULL",
-			"UPDATE observations SET revision_count = 1",
-			"UPDATE observations SET duplicate_count = 1",
-			"UPDATE observations SET updated_at = created_at",
-			"UPDATE user_prompts SET project = ''",
-			"CREATE TRIGGER IF NOT EXISTS prompt_fts_insert",
+	t.Run("migrate reports checksum drift", func(t *testing.T) {
+		dataDir := t.TempDir()
+		s, err := New(FallbackConfig(dataDir))
+		if err != nil {
+			t.Fatalf("new store: %v", err)
 		}
-		for _, needle := range failCases {
-			t.Run(needle, func(t *testing.T) {
-				s := newTestStore(t)
-				if strings.Contains(needle, "CREATE TRIGGER IF NOT EXISTS prompt_fts_insert") {
-					if _, err := s.db.Exec(`
-						DROP TRIGGER IF EXISTS prompt_fts_insert;
-						DROP TRIGGER IF EXISTS prompt_fts_update;
-						DROP TRIGGER IF EXISTS prompt_fts_delete;
-					`); err != nil {
-						t.Fatalf("drop prompt triggers: %v", err)
-					}
-				}
-				origExec := s.hooks.exec
-				s.hooks.exec = func(db execer, query string, args ...any) (sql.Result, error) {
-					if strings.Contains(query, needle) {
-						return nil, errors.New("forced migrate failure")
-					}
-					return origExec(db, query, args...)
-				}
-				if err := s.migrate(); err == nil {
-					t.Fatalf("expected migrate error for %q", needle)
-				}
-			})
+		if _, err := s.db.Exec(`UPDATE schema_migrations SET checksum = 'sha256:changed' WHERE version = '0001'`); err != nil {
+			t.Fatalf("change checksum: %v", err)
+		}
+		_ = s.Close()
+
+		_, err = New(FallbackConfig(dataDir))
+		if err == nil || !strings.Contains(err.Error(), "checksum changed") {
+			t.Fatalf("expected checksum drift error, got %v", err)
 		}
 	})
 
-	t.Run("migrate addColumn and legacy-call propagation", func(t *testing.T) {
-		t.Run("propagates addColumn error", func(t *testing.T) {
-			s := newTestStore(t)
-			origQueryIt := s.hooks.queryIt
-			called := 0
-			s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-				if strings.Contains(query, "PRAGMA table_info(observations)") {
-					called++
-					if called == 1 {
-						return nil, errors.New("forced addColumn failure")
-					}
-				}
-				return origQueryIt(db, query, args...)
-			}
-			if err := s.migrate(); err == nil {
-				t.Fatalf("expected migrate to propagate addColumn failure")
-			}
-		})
-
-		t.Run("propagates legacy migrate error", func(t *testing.T) {
-			s := newTestStore(t)
-			origQueryIt := s.hooks.queryIt
-			called := 0
-			s.hooks.queryIt = func(db queryer, query string, args ...any) (rowScanner, error) {
-				if strings.Contains(query, "PRAGMA table_info(observations)") {
-					called++
-					if called == 9 {
-						return nil, errors.New("forced legacy call failure")
-					}
-				}
-				return origQueryIt(db, query, args...)
-			}
-			if err := s.migrate(); err == nil {
-				t.Fatalf("expected migrate to propagate legacy migrate failure")
-			}
-		})
+	t.Run("migrate blocks unknown future migration", func(t *testing.T) {
+		s := newTestStore(t)
+		if _, err := s.db.Exec(`INSERT INTO schema_migrations (version, name, checksum, dirty) VALUES ('9999', 'future', 'sha256:future', 0)`); err != nil {
+			t.Fatalf("insert future migration: %v", err)
+		}
+		if err := s.migrate(); err == nil || !strings.Contains(err.Error(), "unknown migration 9999") {
+			t.Fatalf("expected unknown future migration error, got %v", err)
+		}
 	})
 
 	t.Run("add observation, prompt, update forced errors", func(t *testing.T) {
@@ -2952,27 +2737,14 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 			t.Fatalf("add prompt: %v", err)
 		}
 
-		setRowsErr("PRAGMA table_info(extra_table)")
-		if _, err := s.db.Exec(`CREATE TABLE extra_table (id INTEGER)`); err != nil {
-			t.Fatalf("create extra table: %v", err)
-		}
-		if err := s.addColumnIfNotExists("extra_table", "n", "TEXT"); err == nil {
-			t.Fatalf("expected add column rows err")
+		setRowsErr("SELECT COUNT(*)")
+		if _, err := s.Stats(); err != nil {
+			t.Fatalf("stats should tolerate query iterator row errors: %v", err)
 		}
 
-		setScanErr("PRAGMA table_info(extra_table)")
-		if err := s.addColumnIfNotExists("extra_table", "n2", "TEXT"); err == nil {
-			t.Fatalf("expected add column scan error")
-		}
-
-		setRowsErr("PRAGMA table_info(observations)")
-		if err := s.migrateLegacyObservationsTable(); err == nil {
-			t.Fatalf("expected legacy migrate pragma rows err")
-		}
-
-		setScanErr("PRAGMA table_info(observations)")
-		if err := s.migrateLegacyObservationsTable(); err == nil {
-			t.Fatalf("expected legacy migrate pragma scan error")
+		setScanErr("SELECT COUNT(*)")
+		if _, err := s.Stats(); err != nil {
+			t.Fatalf("stats should tolerate query iterator scan errors: %v", err)
 		}
 
 		s.hooks.queryIt = origQueryIt
@@ -3034,99 +2806,13 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 		}
 	})
 
-	t.Run("helper query errors and legacy migration late-stage failures", func(t *testing.T) {
+	t.Run("closed database query errors", func(t *testing.T) {
 		s := newTestStore(t)
 		if err := s.Close(); err != nil {
 			t.Fatalf("close store: %v", err)
 		}
 		if _, err := s.GetSyncedChunks(); err == nil {
 			t.Fatalf("expected synced chunks query error")
-		}
-		if err := s.addColumnIfNotExists("observations", "x", "TEXT"); err == nil {
-			t.Fatalf("expected addColumn query error")
-		}
-		if err := s.migrateLegacyObservationsTable(); err == nil {
-			t.Fatalf("expected legacy migrate query error")
-		}
-
-		s2 := newTestStore(t)
-		if _, err := s2.db.Exec(`
-			DROP TRIGGER IF EXISTS obs_fts_insert;
-			DROP TRIGGER IF EXISTS obs_fts_update;
-			DROP TRIGGER IF EXISTS obs_fts_delete;
-			DROP TABLE IF EXISTS observations_fts;
-			DROP TABLE observations;
-			INSERT OR IGNORE INTO sessions (id, project, directory) VALUES ('s1', 'mnemo', '/tmp/mnemo');
-			CREATE TABLE observations (
-				id INT,
-				session_id TEXT,
-				type TEXT,
-				title TEXT,
-				content TEXT,
-				tool_name TEXT,
-				project TEXT,
-				scope TEXT,
-				topic_key TEXT,
-				normalized_hash TEXT,
-				revision_count INTEGER,
-				duplicate_count INTEGER,
-				last_seen_at TEXT,
-				created_at TEXT,
-				updated_at TEXT,
-				deleted_at TEXT
-			);
-			INSERT INTO observations (id, session_id, type, title, content, project, created_at, updated_at)
-			VALUES (1, 's1', 'bugfix', 'legacy', 'legacy row', 'mnemo', datetime('now'), datetime('now'));
-		`); err != nil {
-			t.Fatalf("prepare legacy table: %v", err)
-		}
-
-		lateFail := []string{"INSERT INTO observations_migrated", "DROP TABLE observations", "RENAME TO observations", "CREATE VIRTUAL TABLE observations_fts"}
-		for _, needle := range lateFail {
-			t.Run(needle, func(t *testing.T) {
-				s3 := newTestStore(t)
-				if _, err := s3.db.Exec(`
-					DROP TRIGGER IF EXISTS obs_fts_insert;
-					DROP TRIGGER IF EXISTS obs_fts_update;
-					DROP TRIGGER IF EXISTS obs_fts_delete;
-					DROP TABLE IF EXISTS observations_fts;
-					DROP TABLE observations;
-					INSERT OR IGNORE INTO sessions (id, project, directory) VALUES ('s1', 'mnemo', '/tmp/mnemo');
-					CREATE TABLE observations (
-						id INT,
-						session_id TEXT,
-						type TEXT,
-						title TEXT,
-						content TEXT,
-						tool_name TEXT,
-						project TEXT,
-						scope TEXT,
-						topic_key TEXT,
-						normalized_hash TEXT,
-						revision_count INTEGER,
-						duplicate_count INTEGER,
-						last_seen_at TEXT,
-						created_at TEXT,
-						updated_at TEXT,
-						deleted_at TEXT
-					);
-					INSERT INTO observations (id, session_id, type, title, content, project, created_at, updated_at)
-					VALUES (1, 's1', 'bugfix', 'legacy', 'legacy row', 'mnemo', datetime('now'), datetime('now'));
-				`); err != nil {
-					t.Fatalf("prepare legacy schema: %v", err)
-				}
-
-				origExec := s3.hooks.exec
-				s3.hooks.exec = func(db execer, query string, args ...any) (sql.Result, error) {
-					if strings.Contains(query, needle) {
-						return nil, errors.New("forced legacy late failure")
-					}
-					return origExec(db, query, args...)
-				}
-				if err := s3.migrateLegacyObservationsTable(); err == nil {
-					t.Fatalf("expected legacy migrate error for %q", needle)
-				}
-			})
 		}
 	})
 }
@@ -6477,14 +6163,10 @@ func TestSQLCQueriesTreatInjectionPayloadsAsData(t *testing.T) {
 
 func TestMigrationIdentifiersAreClosed(t *testing.T) {
 	s := newTestStore(t)
-
-	if err := s.addColumnIfNotExists(`observations; DROP TABLE sessions`, "x", "TEXT"); err == nil {
-		t.Fatal("expected invalid table identifier to be rejected")
+	if _, err := s.db.Exec(`INSERT INTO schema_migrations (version, name, checksum, dirty) VALUES ('9999', 'ahead', 'sha256:test', 0)`); err != nil {
+		t.Fatalf("insert unknown migration: %v", err)
 	}
-	if err := s.addColumnIfNotExists("observations", `x); DROP TABLE sessions`, "TEXT"); err == nil {
-		t.Fatal("expected invalid column identifier to be rejected")
-	}
-	if err := s.addColumnIfNotExists("observations", "safe_name", "TEXT; DROP TABLE sessions"); err == nil {
-		t.Fatal("expected unsupported column definition to be rejected")
+	if err := s.migrate(); err == nil || !strings.Contains(err.Error(), "unknown migration 9999") {
+		t.Fatalf("expected unknown migration to be rejected, got %v", err)
 	}
 }

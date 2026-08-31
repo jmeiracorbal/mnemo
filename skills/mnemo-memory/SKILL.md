@@ -27,7 +27,37 @@ mnemo doctor --path <root>
 mnemo doctor --json --path <root>
 ```
 
-Use the output to explain missing `.mnemo`, PATH, global instruction, MCP, hook/plugin, or store issues. Do not repair configuration automatically unless the user explicitly asks for setup or install changes.
+Use the output to explain missing `.mnemo`, PATH, global instruction, MCP, hook/plugin, or store issues. Do not repair global setup automatically unless the user explicitly asks for setup or install changes.
+
+### Database upgrade recovery
+
+mnemo applies safe database migrations automatically when any CLI, MCP, or hook path opens the store. If an older local database is detected, the normal agent workflow should recover it without a separate user decision.
+
+If a mnemo command or MCP tool reports that the database requires migration, is dirty, is ahead of the bundled migrations, or has an inconsistent schema:
+
+1. Run `mnemo db migrate --check` to inspect the state without writing.
+2. If the state only shows pending bundled migrations, run `mnemo db migrate` and retry the original mnemo action.
+3. If the state is dirty, ahead, or inconsistent, stop and report the exact diagnostic instead of editing SQLite manually.
+
+Never add ad hoc DDL or direct SQLite repairs in an agent workflow; schema changes must come from bundled mnemo migrations.
+
+### Version update notice
+
+Do not treat this skill as the update mechanism. Released mnemo binaries own
+version detection, confirmation, download and installation.
+
+When an interactive mnemo CLI call prints `[mnemo] update available`, tell the
+user the installed and latest versions. If mnemo prompts `Update now? [y/N]`,
+let the user answer the prompt. If the command is not currently prompting and
+the user explicitly approves an update, run `mnemo update` or
+`mnemo update --yes --agent=all`, then tell the user to restart active agent
+sessions so they reload the refreshed binary, hooks, MCP config and skills.
+After restart, retry the original mnemo command or diagnostic.
+
+Remember that `mnemo update` updates the mnemo binary and mnemo-owned agent
+integration files only; it does not update Claude Code, Codex, Cursor or other
+agent applications themselves. Do not update mnemo silently, and do not run
+update checks from MCP, hooks, or JSON-output paths.
 
 ## 2. Recover relevant context
 

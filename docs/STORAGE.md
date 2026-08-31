@@ -12,7 +12,7 @@ The database is created automatically on first use. Project activation markers l
 
 ## Schema and search
 
-The schema uses SQLite with FTS5 for full-text search. Runtime queries are defined under `internal/db/queries` and compiled into type-safe Go code with sqlc.
+The schema uses SQLite with FTS5 for full-text search. The canonical current schema lives in `database/schema.sql`, versioned runtime migrations live in `database/migrations/`, and runtime queries are defined under `internal/db/queries` and compiled into type-safe Go code with sqlc.
 
 Important concepts:
 
@@ -24,13 +24,34 @@ Important concepts:
 | `observation_reviews` | Tracks reviewed/stale/superseded memory conflict states. |
 | FTS tables | Provide local full-text search. |
 
+## Database migrations
+
+mnemo applies safe pending migrations automatically when the store opens. If a database is inconsistent, dirty, or ahead of the bundled migrations, mnemo blocks with a clear error instead of trying an unsafe repair. Use the explicit database command for CI, troubleshooting, or manual repair checks:
+
+```bash
+mnemo db migrate --check
+mnemo db migrate
+mnemo db migrate --json
+```
+
+`mnemo doctor` also runs the same read-only schema validator and reports whether the local store is missing, pending, current, or inconsistent.
+
+Released mnemo binaries also check for newer releases on interactive CLI use.
+When one exists, mnemo asks before installing. Users can run `mnemo update`
+directly to review, confirm, download and install, or `mnemo update --check
+--json` for automation. The update installs the mnemo binary and refreshes
+mnemo's agent integration files; it does not update the agent applications
+themselves. The check/prompt is skipped for MCP, hooks, and JSON-output commands
+so agent integrations stay machine-readable.
+
 ## Development workflow
 
-After changing the schema or a query, regenerate and test:
+After changing the schema, a migration, or a query, regenerate and test:
 
 ```bash
 go tool sqlc generate
 git diff --exit-code -- internal/db/generated
+go test ./internal/db/migrate ./internal/store ./internal/doctor ./cmd/mnemo
 go test ./...
 ```
 
