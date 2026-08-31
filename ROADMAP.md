@@ -121,17 +121,11 @@ Already applied and no longer pending:
 - setup writes are delegated to the `mnemo` binary through `mnemo setup refresh`, which owns MCP config, hooks, global instructions, and runtime files;
 - per-agent expectations are centralized in `internal/agentinit.AgentSpec`, covering paths, MCP snippets/checks, hooks, skills, install, uninstall, status, and doctor-facing checks;
 - `cmd/mnemo` is split by command domain, with `main.go` acting as the router;
-- `internal/agentinit` owns per-agent setup logic, including routes, snippets, runtime assets, uninstall, and diagnostic checks.
+- `internal/agentinit` owns per-agent setup logic, including routes, snippets, runtime assets, uninstall, and diagnostic checks;
+- database schema evolution uses a canonical schema plus versioned idempotent migrations, startup validation, `mnemo db migrate`, and doctor checks.
 
 Remaining near-term goals:
 
-- replace inline runtime schema evolution with a versioned SQL migration plan:
-  - keep a canonical current schema for new databases, migrated existing databases, and `sqlc` generation;
-  - store structural changes as ordered migration scripts under `database/migrations/`, for example `0001-create-schema-database.sql`, `0002-add-new-column-example.sql`, and so on;
-  - require every migration script to be idempotent so upgrades from older mnemo databases do not break when a schema change ships;
-  - make `store.go` responsible for migration orchestration only: discover applied migrations, detect pending scripts, apply them in order, and fail loudly when the database is ahead, inconsistent, or missing required fields;
-  - add a startup/project-detection validator that checks the database migration state before normal operation and forces a clear update path when the local database requires a migration, similar to a tool telling the user that an update command is required;
-  - avoid balancing DDL or data-shape changes between migration scripts and ad hoc runtime queries;
 - keep future setup/status/doctor changes flowing through `AgentSpec` so installers, diagnostics, and tests do not drift again.
 
 ## Later-stage ideas

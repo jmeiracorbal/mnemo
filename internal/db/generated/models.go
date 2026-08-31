@@ -94,6 +94,14 @@ type ProvenanceContext struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+type SchemaMigration struct {
+	Version   string `json:"version"`
+	Name      string `json:"name"`
+	Checksum  string `json:"checksum"`
+	Dirty     int64  `json:"dirty"`
+	AppliedAt string `json:"applied_at"`
+}
+
 type Session struct {
 	ID           string         `json:"id"`
 	Project      string         `json:"project"`

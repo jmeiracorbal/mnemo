@@ -26,6 +26,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	maybeWarnUpdate(os.Args[1:])
+
 	// Commands that don't need the store.
 	switch os.Args[1] {
 	case "json":
@@ -42,6 +44,12 @@ func main() {
 		return
 	case "doctor":
 		runDoctor()
+		return
+	case "db":
+		runDB()
+		return
+	case "update":
+		runUpdate()
 		return
 	case "setup":
 		runSetup()

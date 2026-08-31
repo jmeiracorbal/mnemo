@@ -93,7 +93,9 @@ mnemo search "SQLite" --project myapp
 | **可移植 Agent Skills** | 教会兼容代理何时以及如何使用 mnemo，而不是回退到原生记忆。 |
 | **被动捕获** | 从 transcript 和子代理输出中提取有价值的学习内容。 |
 | **代理溯源** | 对提供相关信息的写入，记录可通过 SQL 查询的代理、来源、工具、模型和 MCP 客户端元数据。 |
-| **诊断** | `mnemo doctor` 检查项目启用、全局配置、MCP、hooks、竞争记忆表面和存储健康状态。 |
+| **诊断** | `mnemo doctor` 检查项目启用、全局配置、MCP、hooks、竞争记忆表面和数据库迁移健康状态。 |
+| **数据库安全** | 安全迁移会自动应用；`mnemo db migrate --check` 可为 CI 或故障排查验证本地存储。 |
+| **自更新** | 已发布的二进制文件会在交互式 CLI 使用时检查新 release，并可通过 `mnemo update` 确认、下载和安装。 |
 | **项目维护** | `mnemo projects list`、`mnemo projects merge` 和 `mnemo projects rename` 帮助整理重复或不清晰的项目身份。 |
 | **记忆整理** | `mnemo memories review` 显示可能重复或冲突的 observations，便于经过确认后修复。 |
 
@@ -157,6 +159,23 @@ No potential memory conflicts found.
 | 源码构建 | 开发 mnemo 本身 | `go build -o ~/.local/bin/mnemo ./cmd/mnemo/` |
 
 完整安装指南见 [docs/INSTALLATION.md](docs/INSTALLATION.md)。
+
+### 更新
+
+已发布的 mnemo 二进制文件会在交互式 CLI 使用时检查 GitHub Releases。
+如果存在更新的 release，mnemo 会显示已安装/可用版本，并在修改任何内容前询问：
+
+```bash
+mnemo update
+mnemo update --yes --agent=all
+mnemo update --check --json
+```
+
+`mnemo update` 会下载官方安装器，将其固定到检测到的最新 release，
+安装匹配的二进制文件，并刷新 mnemo 的代理集成文件。它不会更新
+Claude Code、Codex、Cursor 或其他代理应用本身。更新后请重启活动代理会话，
+以便重新加载更新后的 binary、hooks 和 skills。MCP、hooks 和 JSON 输出路径会跳过更新检查，
+以保持机器可读集成稳定。
 
 ## 文档
 

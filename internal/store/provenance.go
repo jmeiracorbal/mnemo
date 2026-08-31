@@ -86,56 +86,6 @@ func SyncPullProvenance() ProvenanceInput {
 	return ProvenanceInput{AgentID: AgentExternal, SourceKindID: SourceSync, ToolID: ToolSyncPull}
 }
 
-func (s *Store) seedProvenanceCatalog() error {
-	statements := []string{
-		`INSERT OR IGNORE INTO agents (id, display_name, kind) VALUES
-			('unknown', 'Unknown', 'unknown'),
-			('external', 'External', 'agent'),
-			('cli', 'CLI', 'cli'),
-			('codex', 'Codex', 'agent'),
-			('claudecode', 'Claude Code', 'agent'),
-			('cursor', 'Cursor', 'agent'),
-			('windsurf', 'Windsurf', 'agent'),
-			('opencode', 'OpenCode', 'agent'),
-			('fx', 'fx', 'agent'),
-			('pi', 'Pi', 'agent')`,
-		`INSERT OR IGNORE INTO source_kinds (id, display_name) VALUES
-			('unknown', 'Unknown'),
-			('cli', 'CLI'),
-			('mcp', 'MCP'),
-			('hook', 'Hook'),
-			('passive_capture', 'Passive Capture'),
-			('import', 'Import'),
-			('skill', 'Skill'),
-			('sync', 'Sync')`,
-		`INSERT OR IGNORE INTO tools (id, display_name) VALUES
-			('unknown', 'Unknown'),
-			('mnemo_save', 'mnemo save'),
-			('mem_save', 'mem_save'),
-			('mem_save_prompt', 'mem_save_prompt'),
-			('mem_session_start', 'mem_session_start'),
-			('mem_session_end', 'mem_session_end'),
-			('mem_session_summary', 'mem_session_summary'),
-			('mem_capture_passive', 'mem_capture_passive'),
-			('mnemo_capture', 'mnemo capture'),
-			('mnemo_import', 'mnemo import'),
-			('sync_pull', 'sync pull'),
-			('hook_session_start', 'hook session start'),
-			('hook_session_stop', 'hook session stop')`,
-		`INSERT OR IGNORE INTO models (id, provider, display_name) VALUES
-			('unknown', '', 'Unknown')`,
-		`INSERT OR IGNORE INTO mcp_clients (id, name, version, transport) VALUES
-			('none', 'None', '', ''),
-			('unknown', 'Unknown', '', '')`,
-	}
-	for _, stmt := range statements {
-		if _, err := s.execHook(s.db, stmt); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *Store) ensureProvenanceTx(tx *sql.Tx, input ProvenanceInput) (int64, error) {
 	q := s.q.WithTx(tx)
 	normalized := normalizeProvenance(input)

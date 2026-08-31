@@ -1,3 +1,11 @@
+CREATE TABLE schema_migrations (
+    version TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    checksum TEXT NOT NULL,
+    dirty INTEGER NOT NULL DEFAULT 0,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE agents (
     id TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
