@@ -74,11 +74,11 @@ func ShouldCheck(currentVersion string, args []string, stderr *os.File, getenv f
 func commandSkipsUpdateCheck(args []string) bool {
 	command := args[0]
 	switch command {
-	case "mcp", "json", "json-merge", "extract-transcript", "update", "--version", "version":
+	case "mcp", "json", "json-merge", "extract-transcript", "update", "--version", "version", "help", "--help", "-h":
 		return true
 	}
 	for _, arg := range args[1:] {
-		if arg == "--json" || strings.HasPrefix(arg, "--json=") {
+		if arg == "--json" || strings.HasPrefix(arg, "--json=") || arg == "--help" || arg == "-h" {
 			return true
 		}
 	}

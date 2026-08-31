@@ -104,6 +104,14 @@ func TestShouldCheckSkipsMachineAndAgentPaths(t *testing.T) {
 	}
 }
 
+func TestCommandSkipsUpdateCheckForHelp(t *testing.T) {
+	for _, args := range [][]string{{"help"}, {"--help"}, {"-h"}, {"save", "--help"}} {
+		if !commandSkipsUpdateCheck(args) {
+			t.Fatalf("expected update check to skip %v", args)
+		}
+	}
+}
+
 func TestWriteNoticeSeparatesUpdateCommandFromAgentGuidance(t *testing.T) {
 	var out bytes.Buffer
 	WriteNotice(&out, "v0.33.1", Result{LatestVersion: "0.34.0", URL: "https://example.test/release"})
