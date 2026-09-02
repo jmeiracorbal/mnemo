@@ -170,10 +170,6 @@ func (s *Store) ApplyPulledMutation(targetKey string, mutation SyncMutation) err
 		if mutation.Seq <= state.LastPulledSeq {
 			return nil
 		}
-		if state.LastPulledSeq > 0 && mutation.Seq != state.LastPulledSeq+1 {
-			return fmt.Errorf("sync: seq gap: expected %d, got %d", state.LastPulledSeq+1, mutation.Seq)
-		}
-
 		switch mutation.Entity {
 		case SyncEntitySession:
 			if mutation.Op != SyncOpUpsert {

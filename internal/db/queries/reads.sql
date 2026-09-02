@@ -113,8 +113,8 @@ LIMIT sqlc.arg('result_limit');
 -- name: SearchPromptsFTS :many
 SELECT p.id, ifnull(p.sync_id, '') AS sync_id, p.session_id, p.content,
        ifnull(p.project, '') AS project, p.created_at, p.provenance_id
-FROM prompts_fts(sqlc.arg('fts_query'))
-JOIN user_prompts p ON p.id = prompts_fts.rowid
+FROM user_prompts_fts(sqlc.arg('fts_query'))
+JOIN user_prompts p ON p.id = user_prompts_fts.rowid
 WHERE (sqlc.arg('project') = '' OR p.project = sqlc.arg('project'))
-ORDER BY prompts_fts.rank
+ORDER BY user_prompts_fts.rank
 LIMIT sqlc.arg('result_limit');

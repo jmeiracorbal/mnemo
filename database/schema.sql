@@ -169,7 +169,7 @@ CREATE VIRTUAL TABLE observations_fts USING fts5(
     content_rowid='id'
 );
 
-CREATE VIRTUAL TABLE prompts_fts USING fts5(
+CREATE VIRTUAL TABLE user_prompts_fts USING fts5(
     content,
     project,
     content='user_prompts',
@@ -225,19 +225,19 @@ CREATE TRIGGER obs_fts_update AFTER UPDATE ON observations BEGIN
     VALUES (new.id, new.title, new.content, new.tool_name, new.type, new.project);
 END;
 
-CREATE TRIGGER prompt_fts_insert AFTER INSERT ON user_prompts BEGIN
-    INSERT INTO prompts_fts(rowid, content, project)
+CREATE TRIGGER user_prompt_fts_insert AFTER INSERT ON user_prompts BEGIN
+    INSERT INTO user_prompts_fts(rowid, content, project)
     VALUES (new.id, new.content, new.project);
 END;
 
-CREATE TRIGGER prompt_fts_delete AFTER DELETE ON user_prompts BEGIN
-    INSERT INTO prompts_fts(prompts_fts, rowid, content, project)
+CREATE TRIGGER user_prompt_fts_delete AFTER DELETE ON user_prompts BEGIN
+    INSERT INTO user_prompts_fts(user_prompts_fts, rowid, content, project)
     VALUES ('delete', old.id, old.content, old.project);
 END;
 
-CREATE TRIGGER prompt_fts_update AFTER UPDATE ON user_prompts BEGIN
-    INSERT INTO prompts_fts(prompts_fts, rowid, content, project)
+CREATE TRIGGER user_prompt_fts_update AFTER UPDATE ON user_prompts BEGIN
+    INSERT INTO user_prompts_fts(user_prompts_fts, rowid, content, project)
     VALUES ('delete', old.id, old.content, old.project);
-    INSERT INTO prompts_fts(rowid, content, project)
+    INSERT INTO user_prompts_fts(rowid, content, project)
     VALUES (new.id, new.content, new.project);
 END;

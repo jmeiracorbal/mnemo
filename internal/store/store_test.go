@@ -1692,6 +1692,36 @@ func TestApplyRemoteMutationIdempotent(t *testing.T) {
 	}
 }
 
+func TestApplyPulledMutationAcceptsRemoteHighWaterMarkGaps(t *testing.T) {
+	s := newTestStore(t)
+
+	if err := s.RecordPulledSeq(DefaultSyncTargetKey, 25400); err != nil {
+		t.Fatalf("seed last pulled seq: %v", err)
+	}
+
+	mutation := SyncMutation{
+		Seq:       25501,
+		TargetKey: DefaultSyncTargetKey,
+		Entity:    SyncEntitySession,
+		EntityKey: "remote-session-with-gap",
+		Op:        SyncOpUpsert,
+		Payload:   `{"id":"remote-session-with-gap","project":"mnemo","directory":"/remote"}`,
+		Source:    SyncSourceRemote,
+		Project:   "mnemo",
+	}
+	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, mutation); err != nil {
+		t.Fatalf("apply high-water-mark gap mutation: %v", err)
+	}
+
+	state, err := s.GetSyncState(DefaultSyncTargetKey)
+	if err != nil {
+		t.Fatalf("get sync state: %v", err)
+	}
+	if state.LastPulledSeq != 25501 {
+		t.Fatalf("expected last_pulled_seq=25501, got %d", state.LastPulledSeq)
+	}
+}
+
 func TestApplyPulledMutationAcceptsStringifiedSessionPayload(t *testing.T) {
 	s := newTestStore(t)
 
@@ -2108,11 +2138,11 @@ func TestMigratedStoreHasCanonicalSchemaObjects(t *testing.T) {
 		"session_tags",
 		"projects",
 		"observations_fts",
-		"prompts_fts",
+		"user_prompts_fts",
 		"idx_obs_scope",
 		"ux_observations_sync_id",
 		"obs_fts_insert",
-		"prompt_fts_insert",
+		"user_prompt_fts_insert",
 	}
 	for _, name := range required {
 		var count int
@@ -2238,10 +2268,10 @@ func TestExportImportEdgeBranches(t *testing.T) {
 		s := newTestStore(t)
 
 		if _, err := s.db.Exec(`
-			DROP TRIGGER IF EXISTS prompt_fts_insert;
-			DROP TRIGGER IF EXISTS prompt_fts_update;
-			DROP TRIGGER IF EXISTS prompt_fts_delete;
-			DROP TABLE IF EXISTS prompts_fts;
+			DROP TRIGGER IF EXISTS user_prompt_fts_insert;
+			DROP TRIGGER IF EXISTS user_prompt_fts_update;
+			DROP TRIGGER IF EXISTS user_prompt_fts_delete;
+			DROP TABLE IF EXISTS user_prompts_fts;
 			DROP TABLE user_prompts;
 		`); err != nil {
 			t.Fatalf("drop prompts: %v", err)

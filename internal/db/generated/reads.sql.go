@@ -567,10 +567,10 @@ func (q *Queries) SearchObservationsFTS(ctx context.Context, arg SearchObservati
 const searchPromptsFTS = `-- name: SearchPromptsFTS :many
 SELECT p.id, ifnull(p.sync_id, '') AS sync_id, p.session_id, p.content,
        ifnull(p.project, '') AS project, p.created_at, p.provenance_id
-FROM prompts_fts(?1)
-JOIN user_prompts p ON p.id = prompts_fts.rowid
+FROM user_prompts_fts(?1)
+JOIN user_prompts p ON p.id = user_prompts_fts.rowid
 WHERE (?2 = '' OR p.project = ?2)
-ORDER BY prompts_fts.rank
+ORDER BY user_prompts_fts.rank
 LIMIT ?3
 `
 

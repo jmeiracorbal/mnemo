@@ -8,6 +8,7 @@ import (
 )
 
 func TestResolveCloudConfigFailsWithoutCredentials(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("MNEMO_CLOUD_URL", "")
 	t.Setenv("MNEMO_CLOUD_KEY", "")
 	t.Setenv("MNEMO_CLOUD_CLIENT_ID", "")

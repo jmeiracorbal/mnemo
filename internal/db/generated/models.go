@@ -79,11 +79,6 @@ type Project struct {
 	CreatedAt string `json:"created_at"`
 }
 
-type PromptsFt struct {
-	Content string `json:"content"`
-	Project string `json:"project"`
-}
-
 type ProvenanceContext struct {
 	ID           int64  `json:"id"`
 	AgentID      string `json:"agent_id"`
@@ -174,4 +169,9 @@ type UserPrompt struct {
 	Project      sql.NullString `json:"project"`
 	CreatedAt    string         `json:"created_at"`
 	ProvenanceID sql.NullInt64  `json:"provenance_id"`
+}
+
+type UserPromptsFt struct {
+	Content string `json:"content"`
+	Project string `json:"project"`
 }
