@@ -55,7 +55,7 @@ mnemo sync pull         # apply remote mutations locally
 mnemo sync status       # local state only; does not contact cloud
 ```
 
-All write commands are idempotent. `sync run` skips rows whose `origin_id` equals this client's `client_id` while still advancing the local pull cursor.
+All write commands are idempotent. `sync run` skips rows whose `origin_id` equals this client's `client_id` while still advancing the local pull cursor. The pull cursor is a remote high-water mark, so gaps in visible cloud sequence numbers are valid when filtered rows exist.
 
 Flags available on `run`, `push`, and `pull`:
 
@@ -70,7 +70,7 @@ Flags available on `run`, `push`, and `pull`:
 
 ## Provider
 
-The current provider is **Turso** (libSQL/SQLite). The cloud database mirrors the local schema exactly — `sessions`, `observations`, `user_prompts`, `sync_mutations` and provenance tables. Migrations are applied automatically on first sync.
+The current provider is **Turso** (libSQL/SQLite). The cloud database mirrors the local schema exactly — `sessions`, `observations`, `user_prompts`, FTS tables such as `user_prompts_fts`, `sync_mutations` and provenance tables. Migrations are applied automatically on first sync.
 
 The `CloudProvider` interface (`internal/cloudsync/provider.go`) is designed for future providers (e.g. a hosted mnemo-cloud service).
 

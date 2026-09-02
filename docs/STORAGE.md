@@ -22,7 +22,7 @@ Important concepts:
 | `observations` | Stores durable memories: decisions, bug fixes, discoveries, conventions and notes. |
 | `user_prompts` | Stores prompt templates or user prompt records when captured. |
 | `observation_reviews` | Tracks reviewed/stale/superseded memory conflict states. |
-| FTS tables | Provide local full-text search. |
+| FTS tables | Provide local full-text search; FTS table names follow their owning domain tables, e.g. `observations_fts` and `user_prompts_fts`. |
 
 ## Database migrations
 
@@ -34,7 +34,7 @@ mnemo db migrate
 mnemo db migrate --json
 ```
 
-`mnemo doctor` also runs the same read-only schema validator and reports whether the local store is missing, pending, current, or inconsistent.
+`mnemo doctor` also runs the same read-only schema validator and reports whether the local store is missing, pending, current, or inconsistent. Migration `0021` renames the prompt search index from the legacy `prompts_fts` name to `user_prompts_fts` and recreates the FTS triggers/shadow-table prefix without preserving the old objects.
 
 Released mnemo binaries also check for newer releases on interactive CLI use.
 When one exists, mnemo asks before installing. Users can run `mnemo update`
