@@ -6170,3 +6170,122 @@ func TestMigrationIdentifiersAreClosed(t *testing.T) {
 		t.Fatalf("expected unknown migration to be rejected, got %v", err)
 	}
 }
+
+func TestBackfillAllSyncMutationsDoesNotRequireProjectEnrollment(t *testing.T) {
+	s := newTestStore(t)
+	if err := s.CreateSession("cloud-all-session", "brain", "/tmp/brain"); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	obsID, err := s.AddObservation(AddObservationParams{SessionID: "cloud-all-session", Type: "decision", Title: "Cloud all", Content: "sync everything", Project: "brain"})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	obs, err := s.GetObservation(obsID)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+	if _, err := s.db.Exec(`DELETE FROM sync_mutations`); err != nil {
+		t.Fatalf("delete sync mutations: %v", err)
+	}
+	if _, err := s.db.Exec(`UPDATE sync_state SET last_enqueued_seq = 0, last_acked_seq = 0, lifecycle = ?`, SyncLifecycleIdle); err != nil {
+		t.Fatalf("reset sync state: %v", err)
+	}
+
+	if err := s.BackfillAllSyncMutations(); err != nil {
+		t.Fatalf("BackfillAllSyncMutations: %v", err)
+	}
+	mutations, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 100)
+	if err != nil {
+		t.Fatalf("ListAllPendingSyncMutations: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, m := range mutations {
+		seen[m.Entity+":"+m.EntityKey] = true
+	}
+	if !seen[SyncEntitySession+":cloud-all-session"] || !seen[SyncEntityObservation+":"+obs.SyncID] {
+		t.Fatalf("expected session and observation backfill without enrollment, got %#v", mutations)
+	}
+
+	if err := s.BackfillAllSyncMutations(); err != nil {
+		t.Fatalf("BackfillAllSyncMutations second run: %v", err)
+	}
+	again, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 100)
+	if err != nil {
+		t.Fatalf("ListAllPendingSyncMutations second run: %v", err)
+	}
+	if len(again) != len(mutations) {
+		t.Fatalf("backfill should be idempotent: before=%d after=%d", len(mutations), len(again))
+	}
+}
+
+func TestRecordPulledSeqIsIdempotent(t *testing.T) {
+	s := newTestStore(t)
+	if err := s.RecordPulledSeq(DefaultSyncTargetKey, 10); err != nil {
+		t.Fatalf("RecordPulledSeq: %v", err)
+	}
+	if err := s.RecordPulledSeq(DefaultSyncTargetKey, 9); err != nil {
+		t.Fatalf("RecordPulledSeq older: %v", err)
+	}
+	state, err := s.GetSyncState(DefaultSyncTargetKey)
+	if err != nil {
+		t.Fatalf("GetSyncState: %v", err)
+	}
+	if state.LastPulledSeq != 10 {
+		t.Fatalf("expected last_pulled_seq=10, got %d", state.LastPulledSeq)
+	}
+}
+
+func TestApplyPulledMutationPreventsBackfillEcho(t *testing.T) {
+	s := newTestStore(t)
+	sessionPayload := syncSessionPayload{ID: "remote-cloud-session", Project: "brain", Directory: "/remote"}
+	sessionJSON, err := json.Marshal(sessionPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, SyncMutation{Seq: 1, TargetKey: DefaultSyncTargetKey, Entity: SyncEntitySession, EntityKey: "remote-cloud-session", Op: SyncOpUpsert, Payload: string(sessionJSON), Source: SyncSourceRemote, Project: "brain"}); err != nil {
+		t.Fatalf("ApplyPulledMutation session: %v", err)
+	}
+	obsPayload := syncObservationPayload{SyncID: "remote-cloud-obs", SessionID: "remote-cloud-session", Type: "decision", Title: "Remote", Content: "pulled", Project: &[]string{"brain"}[0], Scope: "project"}
+	obsJSON, err := json.Marshal(obsPayload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, SyncMutation{Seq: 2, TargetKey: DefaultSyncTargetKey, Entity: SyncEntityObservation, EntityKey: "remote-cloud-obs", Op: SyncOpUpsert, Payload: string(obsJSON), Source: SyncSourceRemote, Project: "brain"}); err != nil {
+		t.Fatalf("ApplyPulledMutation observation: %v", err)
+	}
+	if err := s.BackfillAllSyncMutations(); err != nil {
+		t.Fatalf("BackfillAllSyncMutations: %v", err)
+	}
+	pending, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 100)
+	if err != nil {
+		t.Fatalf("ListAllPendingSyncMutations: %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("remote-applied rows should not echo as pending local mutations: %#v", pending)
+	}
+}
+
+func TestDeleteObservationSyncPayloadIncludesProject(t *testing.T) {
+	s := newTestStore(t)
+	if err := s.CreateSession("delete-project-session", "brain", "/tmp/brain"); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	obsID, err := s.AddObservation(AddObservationParams{SessionID: "delete-project-session", Type: "decision", Title: "Delete project", Content: "logical delete", Project: "brain"})
+	if err != nil {
+		t.Fatalf("AddObservation: %v", err)
+	}
+	obs, err := s.GetObservation(obsID)
+	if err != nil {
+		t.Fatalf("GetObservation: %v", err)
+	}
+	if err := s.DeleteObservation(obsID, false); err != nil {
+		t.Fatalf("DeleteObservation: %v", err)
+	}
+	var payloadProject, rowProject string
+	if err := s.db.QueryRow(`SELECT ifnull(json_extract(payload, '$.project'), ''), project FROM sync_mutations WHERE entity = ? AND op = ? AND entity_key = ? ORDER BY seq DESC LIMIT 1`, SyncEntityObservation, SyncOpDelete, obs.SyncID).Scan(&payloadProject, &rowProject); err != nil {
+		t.Fatalf("read delete mutation: %v", err)
+	}
+	if payloadProject != "brain" || rowProject != "brain" {
+		t.Fatalf("delete mutation project mismatch: payload=%q row=%q", payloadProject, rowProject)
+	}
+}

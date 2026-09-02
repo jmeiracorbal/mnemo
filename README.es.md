@@ -182,6 +182,24 @@ en rutas MCP, hooks y salidas JSON para no romper integraciones machine-readable
 
 <a id="documentacion"></a>
 
+## Sincronización cloud
+
+mnemo puede replicar la memoria local en una base de datos Turso/libSQL en la nube, para que varias máquinas o agentes compartan las mismas observaciones. Configura las credenciales una sola vez:
+
+```bash
+mnemo setup cloud
+```
+
+Las credenciales se guardan en `~/.config/mnemo/cloud.toml` (XDG). Las variables de entorno `MNEMO_CLOUD_URL`, `MNEMO_CLOUD_KEY` y `MNEMO_CLOUD_CLIENT_ID` tienen prioridad sobre el archivo. La sincronización es local-first e idempotente — el store SQLite local sigue siendo la copia operativa.
+
+```bash
+mnemo sync run          # push y después pull
+mnemo sync status       # estado local sin contactar la nube
+mnemo setup cloud --validate   # prueba credenciales sin modificarlas
+```
+
+Consulta [docs/CLOUD_SYNC.md](docs/CLOUD_SYNC.md) para la referencia completa.
+
 ## Documentación
 
 | Guía | Contenido |

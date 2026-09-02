@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jmeiracorbal/mnemo/internal/cloudsync"
+	"github.com/jmeiracorbal/mnemo/internal/cloudsync/providers/turso"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -96,6 +98,12 @@ var memCurrentProjectDescription string
 //go:embed descriptions/mem_doctor.md
 var memDoctorDescription string
 
+//go:embed descriptions/mem_sync_status.md
+var memSyncStatusDescription string
+
+//go:embed descriptions/mem_sync_now.md
+var memSyncNowDescription string
+
 // ─── Tool Profiles ───────────────────────────────────────────────────────────
 
 // ProfileAgent contains the tool names that AI agents need during coding sessions.
@@ -117,6 +125,8 @@ var ProfileAgent = map[string]bool{
 	"mem_related_tags":      true,
 	"mem_current_project":   true,
 	"mem_doctor":            true,
+	"mem_sync_status":       true,
+	"mem_sync_now":          true,
 }
 
 // ProfileAdmin contains tools for CLI curation and dashboards.
@@ -347,7 +357,7 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 	if shouldRegister("mem_delete", allowlist) {
 		srv.AddTool(
 			mcp.NewTool("mem_delete",
-				mcp.WithDescription("Delete an observation by ID. Soft-delete by default; set hard_delete=true for permanent deletion."),
+				mcp.WithDescription("Delete an observation by ID. mnemo preserves decisions by using logical deletion; permanent deletion is not exposed through MCP."),
 				mcp.WithDeferLoading(true),
 				mcp.WithTitleAnnotation("Delete Memory"),
 				mcp.WithReadOnlyHintAnnotation(false),
@@ -359,7 +369,7 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 					mcp.Description("Observation ID to delete"),
 				),
 				mcp.WithBoolean("hard_delete",
-					mcp.Description("If true, permanently deletes the observation"),
+					mcp.Description("Deprecated; hard deletion is rejected because cloud sync preserves decisions with logical deletion"),
 				),
 			),
 			handleDelete(s),
@@ -706,6 +716,42 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 		)
 	}
 
+	// ─── mem_sync_status ─────────────────────────────────────────────────
+	if shouldRegister("mem_sync_status", allowlist) {
+		srv.AddTool(
+			mcp.NewTool("mem_sync_status",
+				mcp.WithDescription(strings.TrimSpace(memSyncStatusDescription)),
+				mcp.WithTitleAnnotation("Cloud Sync Status"),
+				mcp.WithReadOnlyHintAnnotation(true),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(false),
+				mcp.WithString("target",
+					mcp.Description("Sync target key (default: cloud)"),
+				),
+			),
+			handleSyncStatus(s),
+		)
+	}
+
+	// ─── mem_sync_now ────────────────────────────────────────────────────
+	if shouldRegister("mem_sync_now", allowlist) {
+		srv.AddTool(
+			mcp.NewTool("mem_sync_now",
+				mcp.WithDescription(strings.TrimSpace(memSyncNowDescription)),
+				mcp.WithTitleAnnotation("Sync Memory Cloud"),
+				mcp.WithReadOnlyHintAnnotation(false),
+				mcp.WithDestructiveHintAnnotation(false),
+				mcp.WithIdempotentHintAnnotation(true),
+				mcp.WithOpenWorldHintAnnotation(true),
+				mcp.WithString("mode",
+					mcp.Description("Sync mode: run (push then pull), push, or pull. Default: run."),
+				),
+			),
+			handleSyncNow(s),
+		)
+	}
+
 	registerDiagnosticTools(srv, allowlist)
 }
 
@@ -910,14 +956,14 @@ func handleDelete(s *store.Store) server.ToolHandlerFunc {
 		}
 
 		hardDelete := boolArg(req, "hard_delete", false)
-		if err := s.DeleteObservation(id, hardDelete); err != nil {
+		if hardDelete {
+			return mcp.NewToolResultError("hard_delete is not supported; mnemo preserves decisions with logical deletion"), nil
+		}
+		if err := s.DeleteObservation(id, false); err != nil {
 			return mcp.NewToolResultError("Failed to delete memory: " + err.Error()), nil
 		}
 
 		mode := "soft-deleted"
-		if hardDelete {
-			mode = "permanently deleted"
-		}
 		return mcp.NewToolResultText(fmt.Sprintf("Memory #%d %s", id, mode)), nil
 	}
 }
@@ -1428,4 +1474,63 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return string(runes[:max]) + "..."
+}
+
+func handleSyncStatus(s *store.Store) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		target, _ := req.GetArguments()["target"].(string)
+		if strings.TrimSpace(target) == "" {
+			target = store.DefaultSyncTargetKey
+		}
+		if err := s.BackfillAllSyncMutations(); err != nil {
+			return mcp.NewToolResultError("Sync backfill failed: " + err.Error()), nil
+		}
+		state, err := s.GetSyncState(target)
+		if err != nil {
+			return mcp.NewToolResultError("Sync status failed: " + err.Error()), nil
+		}
+		pending, err := s.ListAllPendingSyncMutations(target, 1_000_000)
+		if err != nil {
+			return mcp.NewToolResultError("Sync pending query failed: " + err.Error()), nil
+		}
+		return mcp.NewToolResultText(fmt.Sprintf("Sync target: %s\nLifecycle: %s\nPending local mutations: %d\nLast enqueued: %d\nLast acked: %d\nLast pulled: %d",
+			state.TargetKey, state.Lifecycle, len(pending), state.LastEnqueuedSeq, state.LastAckedSeq, state.LastPulledSeq)), nil
+	}
+}
+
+func handleSyncNow(s *store.Store) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		mode, _ := req.GetArguments()["mode"].(string)
+		if strings.TrimSpace(mode) == "" {
+			mode = "run"
+		}
+		cfg, err := cloudsync.ConfigFromEnv()
+		if err != nil {
+			return mcp.NewToolResultError("Sync config error: " + err.Error()), nil
+		}
+		backend, err := turso.Provider{}.NewBackend(cfg)
+		if err != nil {
+			return mcp.NewToolResultError("Sync backend error: " + err.Error()), nil
+		}
+		engine, err := cloudsync.NewEngine(s, backend, cfg)
+		if err != nil {
+			return mcp.NewToolResultError("Sync engine error: " + err.Error()), nil
+		}
+		var res *cloudsync.Result
+		switch strings.TrimSpace(mode) {
+		case "run":
+			res, err = engine.Sync(ctx)
+		case "push":
+			res, err = engine.Push(ctx)
+		case "pull":
+			res, err = engine.Pull(ctx)
+		default:
+			return mcp.NewToolResultError("mode must be run, push, or pull"), nil
+		}
+		if err != nil {
+			return mcp.NewToolResultError("Sync failed: " + err.Error()), nil
+		}
+		return mcp.NewToolResultText(fmt.Sprintf("Sync %s complete: pushed=%d pulled=%d skipped_own=%d pending=%d latest_seq=%d lifecycle=%s",
+			mode, res.Pushed, res.Pulled, res.SkippedOwn, res.Pending, res.LatestSeq, res.Lifecycle)), nil
+	}
 }
