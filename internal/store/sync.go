@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
@@ -214,10 +215,52 @@ func (s *Store) ApplyPulledMutation(targetKey string, mutation SyncMutation) err
 			return fmt.Errorf("unknown sync entity %q", mutation.Entity)
 		}
 
+		if mutation.Source == SyncSourceRemote {
+			if err := s.recordAppliedRemoteMutationTx(tx, targetKey, mutation); err != nil {
+				return err
+			}
+		}
+
 		return s.q.WithTx(tx).UpdateLastPulledSeq(context.Background(), dbgen.UpdateLastPulledSeqParams{
 			LastPulledSeq: mutation.Seq, Lifecycle: SyncLifecycleHealthy, TargetKey: targetKey,
 		})
 	})
+}
+
+func (s *Store) recordAppliedRemoteMutationTx(tx *sql.Tx, targetKey string, mutation SyncMutation) error {
+	project := mutation.Project
+	if project == "" {
+		project = extractProjectFromRawPayload(mutation.Payload)
+	}
+	res, err := s.execHook(tx, `
+		INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project, occurred_at, acked_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+		targetKey, mutation.Entity, mutation.EntityKey, mutation.Op, mutation.Payload, SyncSourceLocal, project)
+	if err != nil {
+		return err
+	}
+	localSeq, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	_, err = s.execHook(tx, `
+		UPDATE sync_state
+		SET last_enqueued_seq = CASE WHEN last_enqueued_seq < ? THEN ? ELSE last_enqueued_seq END,
+		    last_acked_seq = CASE WHEN last_acked_seq < ? THEN ? ELSE last_acked_seq END,
+		    lifecycle = ?,
+		    updated_at = datetime('now')
+		WHERE target_key = ?`, localSeq, localSeq, localSeq, localSeq, SyncLifecycleHealthy, targetKey)
+	return err
+}
+
+func extractProjectFromRawPayload(payload string) string {
+	var raw struct {
+		Project *string `json:"project"`
+	}
+	if err := json.Unmarshal([]byte(payload), &raw); err != nil || raw.Project == nil {
+		return ""
+	}
+	return strings.TrimSpace(*raw.Project)
 }
 
 func (s *Store) ensureSyncState(targetKey string) error {
@@ -515,5 +558,104 @@ func (s *Store) applyPromptUpsertTx(tx *sql.Tx, payload syncPromptPayload) error
 	return q.UpdatePrompt(context.Background(), dbgen.UpdatePromptParams{
 		SessionID: payload.SessionID, Content: payload.Content,
 		Project: sqlNullStringPtr(payload.Project), ProvenanceID: provenanceID, ID: existingID,
+	})
+}
+
+// BackfillAllSyncMutations ensures all locally stored sessions, observations, and prompts
+// have pending sync mutations. Cloud sync is complete by default; enrollment is kept only
+// for backward-compatible legacy commands and is not used by the cloud sync engine.
+func (s *Store) BackfillAllSyncMutations() error {
+	return s.withTx(func(tx *sql.Tx) error {
+		rows, err := s.queryItHook(tx, `
+			SELECT DISTINCT project FROM (
+				SELECT project FROM sessions
+				UNION SELECT ifnull(project, '') AS project FROM observations
+				UNION SELECT ifnull(project, '') AS project FROM user_prompts
+			) ORDER BY project ASC`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		projects := make([]string, 0)
+		for rows.Next() {
+			var project string
+			if err := rows.Scan(&project); err != nil {
+				return err
+			}
+			projects = append(projects, project)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if len(projects) == 0 {
+			if err := s.ensureSyncStateTx(tx, DefaultSyncTargetKey); err != nil {
+				return err
+			}
+		}
+		for _, project := range projects {
+			if err := s.backfillProjectSyncMutationsTx(tx, project); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// ListAllPendingSyncMutations returns all pending local mutations regardless of
+// legacy project enrollment. Cloud sync semantics require every local mutation to
+// be uploaded idempotently.
+func (s *Store) ListAllPendingSyncMutations(targetKey string, limit int) ([]SyncMutation, error) {
+	targetKey = normalizeSyncTargetKey(targetKey)
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.queryItHook(s.db, `
+		SELECT seq, target_key, entity, entity_key, op, payload, source, project, occurred_at, acked_at
+		FROM sync_mutations
+		WHERE target_key = ? AND acked_at IS NULL
+		ORDER BY seq ASC
+		LIMIT ?`, targetKey, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	mutations := make([]SyncMutation, 0)
+	for rows.Next() {
+		var mutation SyncMutation
+		if err := rows.Scan(&mutation.Seq, &mutation.TargetKey, &mutation.Entity, &mutation.EntityKey, &mutation.Op, &mutation.Payload, &mutation.Source, &mutation.Project, &mutation.OccurredAt, &mutation.AckedAt); err != nil {
+			return nil, err
+		}
+		mutations = append(mutations, mutation)
+	}
+	return mutations, rows.Err()
+}
+
+// RecordPulledSeq advances the pull cursor without applying a payload. It is used
+// for idempotently acknowledging this client's own mutations after they round-trip
+// through the cloud journal.
+func (s *Store) RecordPulledSeq(targetKey string, seq int64) error {
+	if seq <= 0 {
+		return nil
+	}
+	targetKey = normalizeSyncTargetKey(targetKey)
+	return s.withTx(func(tx *sql.Tx) error {
+		state, err := s.getSyncStateTx(tx, targetKey)
+		if err != nil {
+			return err
+		}
+		if seq <= state.LastPulledSeq {
+			return nil
+		}
+		return s.q.WithTx(tx).UpdateLastPulledSeq(context.Background(), dbgen.UpdateLastPulledSeqParams{
+			LastPulledSeq: seq, Lifecycle: SyncLifecycleHealthy, TargetKey: targetKey,
+		})
+	})
+}
+
+func (s *Store) ensureSyncStateTx(tx *sql.Tx, targetKey string) error {
+	return s.q.WithTx(tx).EnsureSyncState(context.Background(), dbgen.EnsureSyncStateParams{
+		TargetKey: normalizeSyncTargetKey(targetKey), Lifecycle: SyncLifecycleIdle,
 	})
 }

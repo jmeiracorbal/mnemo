@@ -47,3 +47,12 @@ func TestNewServerWithToolsRequiresVersion(t *testing.T) {
 		t.Fatal("expected error when version is whitespace")
 	}
 }
+
+func TestAgentProfileIncludesSyncTools(t *testing.T) {
+	allowlist := ResolveTools("agent")
+	for _, name := range []string{"mem_sync_status", "mem_sync_now"} {
+		if !allowlist[name] {
+			t.Fatalf("agent profile missing %s", name)
+		}
+	}
+}

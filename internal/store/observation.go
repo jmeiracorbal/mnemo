@@ -279,6 +279,8 @@ func (s *Store) DeleteObservation(id int64, hardDelete bool) error {
 
 		return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpDelete, syncObservationPayload{
 			SyncID:     obs.SyncID,
+			SessionID:  obs.SessionID,
+			Project:    obs.Project,
 			Deleted:    true,
 			DeletedAt:  &deletedAt,
 			HardDelete: hardDelete,
