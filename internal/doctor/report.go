@@ -7,8 +7,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/internal/cloudsync"
 	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
 )
 
@@ -96,6 +98,8 @@ func BuildReport(opts Options) Report {
 	if opts.DataDir != "" {
 		report.addCheck(checkStoreReadOnly(opts.DataDir))
 	}
+
+	report.addCheck(checkCloudConfig())
 
 	report.finalize()
 	return report
@@ -209,4 +213,59 @@ func pendingVersions(pending []dbmigrate.Migration) []string {
 		versions = append(versions, migration.Version)
 	}
 	return versions
+}
+
+// checkCloudConfig tests whether cloud sync credentials are present and reachable.
+// Cloud sync is optional, so a missing config is reported as ok (not a warning).
+// A configured but unreachable cloud is a warning.
+func checkCloudConfig() Check {
+	if !cloudsync.FileConfigExists() {
+		// Fall back to env vars; if those are empty too, cloud is simply not configured.
+		cfg, err := cloudsync.ConfigFromEnv()
+		if err != nil {
+			return Check{
+				ID: "cloud", Status: "ok", Severity: "info",
+				Message: "cloud sync: not configured (optional — run 'mnemo setup cloud' to enable)",
+			}
+		}
+		return pingCloudCheck(cfg, "env")
+	}
+
+	cfg, err := cloudsync.LoadFileConfig()
+	if err != nil {
+		return warningCheck("cloud", "cloud sync: cannot read config: "+err.Error(), "")
+	}
+
+	validated, err := cfg.Validate()
+	if err != nil {
+		path, _ := cloudsync.CloudConfigPath()
+		return warningCheck("cloud", "cloud sync: invalid config: "+err.Error(), path)
+	}
+	return pingCloudCheck(validated, "file")
+}
+
+func pingCloudCheck(cfg cloudsync.Config, source string) Check {
+	path, _ := cloudsync.CloudConfigPath()
+	details := map[string]string{
+		"provider": cfg.Provider,
+		"url":      cfg.URL,
+		"source":   source,
+	}
+
+	// Use a short timeout so doctor does not hang on a slow network.
+	pingCfg := cfg
+	pingCfg.Timeout = 5 * time.Second
+
+	if err := cloudsync.Ping(pingCfg); err != nil {
+		return Check{
+			ID: "cloud", Status: "warning", Severity: "warning",
+			Message: "cloud sync: connection failed: " + err.Error(),
+			Path:    path, Details: details,
+		}
+	}
+	return Check{
+		ID: "cloud", Status: "ok", Severity: "info",
+		Message: "cloud sync: connected (" + cfg.Provider + " @ " + cfg.URL + ")",
+		Path:    path, Details: details,
+	}
 }
