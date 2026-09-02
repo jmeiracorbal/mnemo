@@ -1,4 +1,4 @@
-package cloudsync
+package turso
 
 import (
 	"bytes"
@@ -12,46 +12,49 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	dbfiles "github.com/jmeiracorbal/mnemo/database"
+	"github.com/jmeiracorbal/mnemo/internal/cloudsync"
 )
 
-// TursoBackend implements CloudBackend against a Turso/libSQL database using the
-// Hrana v2 HTTP pipeline protocol. It executes the same SQLite SQL as the local
-// store, so the cloud database is an exact schema mirror of local.
-type TursoBackend struct {
+// Backend implements cloudsync.CloudBackend against a Turso/libSQL database
+// using the Hrana v2 HTTP pipeline protocol. It executes the same SQLite SQL
+// as the local store, so the cloud database is an exact schema mirror of local.
+type Backend struct {
 	httpURL  string
 	token    string
 	clientID string
 	client   *http.Client
 }
 
-// NewTursoBackend builds a TursoBackend from cfg.
-// cfg.URL may be libsql:// or https://.
-func NewTursoBackend(cfg Config) (*TursoBackend, error) {
+// New builds a Backend from cfg. cfg.URL may be libsql:// or https://.
+func New(cfg cloudsync.Config) (*Backend, error) {
 	validated, err := cfg.Validate()
 	if err != nil {
 		return nil, err
 	}
 	httpURL := strings.Replace(validated.URL, "libsql://", "https://", 1)
-	return &TursoBackend{
+	timeout := validated.Timeout
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+	return &Backend{
 		httpURL:  strings.TrimRight(httpURL, "/"),
 		token:    validated.Key,
 		clientID: validated.ClientID,
-		client:   &http.Client{Timeout: validated.Timeout},
+		client:   &http.Client{Timeout: timeout},
 	}, nil
 }
 
 // Migrate runs local SQLite migrations against the Turso database and then
-// applies the cloud-only extensions needed for multi-client sync
-// (origin_id + client_seq columns on sync_mutations).
+// applies cloud-only extensions (origin_id + client_seq on sync_mutations).
 // It is idempotent and safe to call on every startup.
-func (b *TursoBackend) Migrate() error {
+func (b *Backend) Migrate() error {
 	return b.migrate(dbfiles.Migrations)
 }
 
-func (b *TursoBackend) migrate(migrations fs.FS) error {
-	// 1. Ensure schema_migrations table exists.
+func (b *Backend) migrate(migrations fs.FS) error {
 	if _, err := b.pipeline([]hranaStmt{{SQL: `CREATE TABLE IF NOT EXISTS schema_migrations (
 		version TEXT PRIMARY KEY, name TEXT NOT NULL, checksum TEXT NOT NULL,
 		dirty INTEGER NOT NULL DEFAULT 0,
@@ -60,7 +63,6 @@ func (b *TursoBackend) migrate(migrations fs.FS) error {
 		return fmt.Errorf("create schema_migrations: %w", err)
 	}
 
-	// 2. Read which migrations have already been applied.
 	results, err := b.pipeline([]hranaStmt{{SQL: "SELECT version FROM schema_migrations"}})
 	if err != nil {
 		return fmt.Errorf("read applied migrations: %w", err)
@@ -74,7 +76,6 @@ func (b *TursoBackend) migrate(migrations fs.FS) error {
 		}
 	}
 
-	// 3. Apply pending migrations in order.
 	entries, err := fs.ReadDir(migrations, "migrations")
 	if err != nil {
 		return fmt.Errorf("read migrations dir: %w", err)
@@ -96,8 +97,6 @@ func (b *TursoBackend) migrate(migrations fs.FS) error {
 		hash := sha256.Sum256(sqlBytes)
 		checksum := hex.EncodeToString(hash[:])
 
-		// Evaluate -- mnemo:when-* guards before executing SQL. If guards fail the
-		// migration is skipped but still recorded so it is not retried.
 		shouldRun, err := b.migrateGuardsPass(string(sqlBytes))
 		if err != nil {
 			return fmt.Errorf("migration %s guard: %w", version, err)
@@ -121,8 +120,6 @@ func (b *TursoBackend) migrate(migrations fs.FS) error {
 		}
 	}
 
-	// 4. Cloud-only extensions: origin_id + client_seq on sync_mutations for
-	//    multi-client idempotent dedup. These are not in the local schema.
 	b.addColumnIfMissing("sync_mutations", "origin_id", "TEXT NOT NULL DEFAULT ''")
 	b.addColumnIfMissing("sync_mutations", "client_seq", "INTEGER NOT NULL DEFAULT 0")
 	if _, err := b.pipeline([]hranaStmt{{
@@ -131,7 +128,6 @@ func (b *TursoBackend) migrate(migrations fs.FS) error {
 		return fmt.Errorf("create cloud dedup index: %w", err)
 	}
 
-	// 5. Ensure sync_state has a cloud target row (needed for sync_mutations FK).
 	if _, err := b.pipeline([]hranaStmt{{
 		SQL:  `INSERT OR IGNORE INTO sync_state (target_key, lifecycle) VALUES (?, 'idle')`,
 		Args: []hranaValue{textVal("cloud")},
@@ -143,12 +139,10 @@ func (b *TursoBackend) migrate(migrations fs.FS) error {
 }
 
 // PushMutations applies mutation payloads to the cloud data tables and records
-// them in sync_mutations for pull by other clients.
-// The operation is idempotent: INSERT OR REPLACE for data rows and
-// INSERT OR IGNORE (via unique index) for journal rows.
-func (b *TursoBackend) PushMutations(entries []MutationEntry) (*PushResult, error) {
+// them in sync_mutations. The operation is idempotent.
+func (b *Backend) PushMutations(entries []cloudsync.MutationEntry) (*cloudsync.PushResult, error) {
 	if len(entries) == 0 {
-		return &PushResult{}, nil
+		return &cloudsync.PushResult{}, nil
 	}
 
 	stmts := []hranaStmt{{SQL: "BEGIN"}}
@@ -160,7 +154,6 @@ func (b *TursoBackend) PushMutations(entries []MutationEntry) (*PushResult, erro
 		}
 		stmts = append(stmts, datStmts...)
 
-		// Record in cloud journal for pull by other clients.
 		stmts = append(stmts, hranaStmt{
 			SQL: `INSERT OR IGNORE INTO sync_mutations
 				(target_key, entity, entity_key, op, payload, source, project, origin_id, client_seq, occurred_at)
@@ -183,12 +176,10 @@ func (b *TursoBackend) PushMutations(entries []MutationEntry) (*PushResult, erro
 	for i, e := range entries {
 		out[i] = e.LocalSeq
 	}
-	return &PushResult{AcceptedSeqs: out}, nil
+	return &cloudsync.PushResult{AcceptedSeqs: out}, nil
 }
 
-// mutationToSQL converts a single MutationEntry into the SQL statements that
-// apply it to the cloud data tables.
-func (b *TursoBackend) mutationToSQL(e MutationEntry) ([]hranaStmt, error) {
+func (b *Backend) mutationToSQL(e cloudsync.MutationEntry) ([]hranaStmt, error) {
 	switch e.Entity {
 	case "session":
 		var p mutationSessionPayload
@@ -201,7 +192,6 @@ func (b *TursoBackend) mutationToSQL(e MutationEntry) ([]hranaStmt, error) {
 			Args: []hranaValue{textVal(p.ID), textVal(p.Project), textVal(p.Directory),
 				maybeTextVal(p.EndedAt), maybeTextVal(p.Summary)},
 		}}
-		// INSERT OR REPLACE cascades-deletes existing session_tags; re-insert new ones.
 		if p.Tags != nil {
 			for _, tag := range *p.Tags {
 				stmts = append(stmts, hranaStmt{
@@ -232,7 +222,6 @@ func (b *TursoBackend) mutationToSQL(e MutationEntry) ([]hranaStmt, error) {
 			scope = "project"
 		}
 		stmts := []hranaStmt{{
-			// INSERT OR REPLACE cascades-deletes existing observation_tags.
 			SQL: `INSERT OR REPLACE INTO observations
 				(sync_id, session_id, type, title, content, tool_name, project, scope, topic_key)
 				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -242,7 +231,6 @@ func (b *TursoBackend) mutationToSQL(e MutationEntry) ([]hranaStmt, error) {
 				maybeTextVal(p.Project), textVal(scope), maybeTextVal(p.TopicKey),
 			},
 		}}
-		// Re-insert tags via subquery (no integer id needed).
 		if p.Tags != nil {
 			for _, tag := range *p.Tags {
 				stmts = append(stmts, hranaStmt{
@@ -268,9 +256,8 @@ func (b *TursoBackend) mutationToSQL(e MutationEntry) ([]hranaStmt, error) {
 	}
 }
 
-// PullMutations returns mutations from other clients that have a cloud seq
-// greater than sinceSeq.
-func (b *TursoBackend) PullMutations(sinceSeq int64, limit int) (*PullResult, error) {
+// PullMutations returns mutations from other clients with cloud seq > sinceSeq.
+func (b *Backend) PullMutations(sinceSeq int64, limit int) (*cloudsync.PullResult, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -285,7 +272,7 @@ func (b *TursoBackend) PullMutations(sinceSeq int64, limit int) (*PullResult, er
 		return nil, fmt.Errorf("cloud sync pull: %w", err)
 	}
 
-	var mutations []PulledMutation
+	var mutations []cloudsync.PulledMutation
 	latest := sinceSeq
 	if len(results) > 0 {
 		for _, row := range results[0].Rows {
@@ -297,14 +284,49 @@ func (b *TursoBackend) PullMutations(sinceSeq int64, limit int) (*PullResult, er
 			if seq > latest {
 				latest = seq
 			}
-			mutations = append(mutations, PulledMutation{
+			mutations = append(mutations, cloudsync.PulledMutation{
 				Seq: seq, OriginID: row[1].Value, ClientSeq: clientSeq,
 				Project: row[3].Value, Entity: row[4].Value, EntityKey: row[5].Value,
 				Op: row[6].Value, Payload: json.RawMessage(row[7].Value), OccurredAt: row[8].Value,
 			})
 		}
 	}
-	return &PullResult{Mutations: mutations, HasMore: len(mutations) == limit, LatestSeq: latest}, nil
+	return &cloudsync.PullResult{Mutations: mutations, HasMore: len(mutations) == limit, LatestSeq: latest}, nil
+}
+
+// ---------------------------------------------------------------------------
+// Mutation payload types (internal to Turso SQL mapping)
+// ---------------------------------------------------------------------------
+
+type mutationSessionPayload struct {
+	ID        string    `json:"id"`
+	Project   string    `json:"project"`
+	Directory string    `json:"directory"`
+	EndedAt   *string   `json:"ended_at,omitempty"`
+	Summary   *string   `json:"summary,omitempty"`
+	Tags      *[]string `json:"tags,omitempty"`
+}
+
+type mutationObservationPayload struct {
+	SyncID    string    `json:"sync_id"`
+	SessionID string    `json:"session_id"`
+	Type      string    `json:"type"`
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	ToolName  *string   `json:"tool_name,omitempty"`
+	Project   *string   `json:"project,omitempty"`
+	Scope     string    `json:"scope"`
+	TopicKey  *string   `json:"topic_key,omitempty"`
+	Tags      *[]string `json:"tags,omitempty"`
+	Deleted   bool      `json:"deleted,omitempty"`
+	DeletedAt *string   `json:"deleted_at,omitempty"`
+}
+
+type mutationPromptPayload struct {
+	SyncID    string  `json:"sync_id"`
+	SessionID string  `json:"session_id"`
+	Content   string  `json:"content"`
+	Project   *string `json:"project,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -321,10 +343,6 @@ type hranaValue struct {
 	Value string `json:"value,omitempty"`
 }
 
-// MarshalJSON ensures null values serialize as {"type":"null"} (no value field)
-// and all other types always include "value", even when it is an empty string.
-// The struct tag omitempty alone would drop "value":"" for text/integer types,
-// causing Turso's Hrana parser to report "missing field value".
 func (v hranaValue) MarshalJSON() ([]byte, error) {
 	if v.Type == "null" {
 		return []byte(`{"type":"null"}`), nil
@@ -363,7 +381,7 @@ type hranaResultItem struct {
 	} `json:"error,omitempty"`
 }
 
-func (b *TursoBackend) pipeline(stmts []hranaStmt) ([]hranaExecResult, error) {
+func (b *Backend) pipeline(stmts []hranaStmt) ([]hranaExecResult, error) {
 	reqs := make([]hranaRequest, 0, len(stmts)+1)
 	for i := range stmts {
 		reqs = append(reqs, hranaRequest{Type: "execute", Stmt: &stmts[i]})
@@ -386,7 +404,7 @@ func (b *TursoBackend) pipeline(stmts []hranaStmt) ([]hranaExecResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("turso: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("turso: pipeline returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
@@ -417,10 +435,7 @@ func (b *TursoBackend) pipeline(stmts []hranaStmt) ([]hranaExecResult, error) {
 	return out, nil
 }
 
-// migrateGuardsPass parses -- mnemo:when-* directives from a migration file and
-// evaluates each against the remote schema. Returns false if any guard says the
-// migration should be skipped (column already exists, etc.).
-func (b *TursoBackend) migrateGuardsPass(content string) (bool, error) {
+func (b *Backend) migrateGuardsPass(content string) (bool, error) {
 	shouldRun := true
 	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
@@ -440,8 +455,7 @@ func (b *TursoBackend) migrateGuardsPass(content string) (bool, error) {
 	return shouldRun, nil
 }
 
-// evalMigrateGuard evaluates a single migration guard directive against the remote schema.
-func (b *TursoBackend) evalMigrateGuard(kind, table, column string) (bool, error) {
+func (b *Backend) evalMigrateGuard(kind, table, column string) (bool, error) {
 	results, err := b.pipeline([]hranaStmt{{SQL: "PRAGMA table_info(" + table + ")"}})
 	if err != nil {
 		return false, err
@@ -450,39 +464,34 @@ func (b *TursoBackend) evalMigrateGuard(kind, table, column string) (bool, error
 	case "when-column-missing":
 		if len(results) > 0 {
 			for _, row := range results[0].Rows {
-				// PRAGMA table_info: cid, name, type, notnull, dflt_value, pk
 				if len(row) > 1 && row[1].Value == column {
-					return false, nil // column exists → skip
+					return false, nil
 				}
 			}
 		}
-		return true, nil // column absent → run
+		return true, nil
 	case "when-column-not-primary-key":
 		if len(results) > 0 {
 			for _, row := range results[0].Rows {
 				if len(row) > 5 && row[1].Value == column {
 					pk, _ := strconv.ParseInt(row[5].Value, 10, 64)
-					return pk != 1, nil // true when NOT a primary key → run
+					return pk != 1, nil
 				}
 			}
 		}
-		return false, nil // column not found → skip
+		return false, nil
 	default:
 		return false, fmt.Errorf("unknown migration guard %q", kind)
 	}
 }
 
-// addColumnIfMissing adds colName colDef to table if the column does not exist.
-// Errors are silently swallowed — the column either already exists or the main
-// migration will fail with a clearer message.
-func (b *TursoBackend) addColumnIfMissing(table, colName, colDef string) {
+func (b *Backend) addColumnIfMissing(table, colName, colDef string) {
 	results, err := b.pipeline([]hranaStmt{{SQL: "PRAGMA table_info(" + table + ")"}})
 	if err != nil {
 		return
 	}
 	if len(results) > 0 {
 		for _, row := range results[0].Rows {
-			// PRAGMA table_info: cid, name, type, notnull, dflt_value, pk
 			if len(row) > 1 && row[1].Value == colName {
 				return
 			}
@@ -495,10 +504,10 @@ func (b *TursoBackend) addColumnIfMissing(table, colName, colDef string) {
 // Hrana value helpers
 // ---------------------------------------------------------------------------
 
-func textVal(s string) hranaValue        { return hranaValue{Type: "text", Value: s} }
-func intVal(n int64) hranaValue          { return hranaValue{Type: "integer", Value: strconv.FormatInt(n, 10)} }
-func nullVal() hranaValue                { return hranaValue{Type: "null"} }
-func maybeTextVal(s *string) hranaValue  {
+func textVal(s string) hranaValue       { return hranaValue{Type: "text", Value: s} }
+func intVal(n int64) hranaValue         { return hranaValue{Type: "integer", Value: strconv.FormatInt(n, 10)} }
+func nullVal() hranaValue               { return hranaValue{Type: "null"} }
+func maybeTextVal(s *string) hranaValue {
 	if s == nil {
 		return nullVal()
 	}
@@ -509,23 +518,18 @@ func maybeTextVal(s *string) hranaValue  {
 // SQL statement splitter
 // ---------------------------------------------------------------------------
 
-// splitSQL splits a SQL script into individual statements, correctly handling
-// SQLite triggers (BEGIN/END) and single-quoted string literals.
 func splitSQL(script string) []string {
 	var stmts []string
 	var cur strings.Builder
-	depth := 0 // tracks BEGIN/END inside triggers
+	depth := 0
 	inStr := false
 
 	for i := 0; i < len(script); i++ {
 		ch := script[i]
-
-		// Inside a single-quoted string literal.
 		if inStr {
 			cur.WriteByte(ch)
 			if ch == '\'' {
 				if i+1 < len(script) && script[i+1] == '\'' {
-					// Escaped quote: ''
 					cur.WriteByte(script[i+1])
 					i++
 				} else {
@@ -534,8 +538,6 @@ func splitSQL(script string) []string {
 			}
 			continue
 		}
-
-		// Line comment: skip to end of line.
 		if ch == '-' && i+1 < len(script) && script[i+1] == '-' {
 			for i < len(script) && script[i] != '\n' {
 				i++
@@ -543,14 +545,11 @@ func splitSQL(script string) []string {
 			cur.WriteByte('\n')
 			continue
 		}
-
 		if ch == '\'' {
 			inStr = true
 			cur.WriteByte(ch)
 			continue
 		}
-
-		// Track BEGIN/END depth for trigger bodies.
 		up := strings.ToUpper(script[i:])
 		if strings.HasPrefix(up, "BEGIN") && !isWordChar(script, i+5) &&
 			strings.Contains(strings.ToUpper(cur.String()), "TRIGGER") {
@@ -558,9 +557,7 @@ func splitSQL(script string) []string {
 		} else if strings.HasPrefix(up, "END") && !isWordChar(script, i+3) && depth > 0 {
 			depth--
 		}
-
 		cur.WriteByte(ch)
-
 		if ch == ';' && depth == 0 {
 			if stmt := strings.TrimSpace(cur.String()); stmt != "" && stmt != ";" {
 				stmts = append(stmts, stmt)

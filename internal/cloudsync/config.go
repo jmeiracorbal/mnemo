@@ -65,25 +65,6 @@ func ConfigFromEnv() (Config, error) {
 	return cfg.Validate()
 }
 
-// NewBackend creates the CloudBackend for cfg by delegating to the registered
-// provider. For Turso this also runs idempotent migrations.
-func NewBackend(cfg Config) (CloudBackend, error) {
-	p, err := LookupProvider(cfg.Provider)
-	if err != nil {
-		return nil, err
-	}
-	return p.NewBackend(cfg)
-}
-
-// Ping tests the cloud connection without creating a full backend.
-func Ping(cfg Config) error {
-	p, err := LookupProvider(cfg.Provider)
-	if err != nil {
-		return err
-	}
-	return p.Ping(cfg)
-}
-
 func (c Config) Validate() (Config, error) {
 	c.URL = strings.TrimRight(strings.TrimSpace(c.URL), "/")
 	c.Key = strings.TrimSpace(c.Key)

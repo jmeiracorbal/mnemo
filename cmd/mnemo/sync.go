@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jmeiracorbal/mnemo/internal/cloudsync"
+	"github.com/jmeiracorbal/mnemo/internal/cloudsync/providers/turso"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -180,7 +181,7 @@ func runSyncAction(action string, f syncCloudFlags) error {
 		return handleCloudConfigError(err, f.jsonOut)
 	}
 
-	backend, err := cloudsync.NewBackend(cfg)
+	backend, err := turso.Provider{}.NewBackend(cfg)
 	if err != nil {
 		return handleCloudConnError(err, f.jsonOut)
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
 	"github.com/jmeiracorbal/mnemo/internal/cloudsync"
 	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
+	"github.com/jmeiracorbal/mnemo/internal/cloudsync/providers/turso"
 )
 
 type Options struct {
@@ -256,7 +257,7 @@ func pingCloudCheck(cfg cloudsync.Config, source string) Check {
 	pingCfg := cfg
 	pingCfg.Timeout = 5 * time.Second
 
-	if err := cloudsync.Ping(pingCfg); err != nil {
+	if err := (turso.Provider{}).Ping(pingCfg); err != nil {
 		return Check{
 			ID: "cloud", Status: "warning", Severity: "warning",
 			Message: "cloud sync: connection failed: " + err.Error(),

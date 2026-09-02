@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/jmeiracorbal/mnemo/internal/cloudsync"
+	"github.com/jmeiracorbal/mnemo/internal/cloudsync/providers/turso"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -1507,7 +1508,7 @@ func handleSyncNow(s *store.Store) server.ToolHandlerFunc {
 		if err != nil {
 			return mcp.NewToolResultError("Sync config error: " + err.Error()), nil
 		}
-		backend, err := cloudsync.NewBackend(cfg)
+		backend, err := turso.Provider{}.NewBackend(cfg)
 		if err != nil {
 			return mcp.NewToolResultError("Sync backend error: " + err.Error()), nil
 		}

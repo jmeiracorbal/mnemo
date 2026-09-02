@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jmeiracorbal/mnemo/internal/cloudsync"
+	"github.com/jmeiracorbal/mnemo/internal/cloudsync/providers/turso"
 )
 
 type setupCloudOptions struct {
@@ -94,7 +95,7 @@ func doCloudValidate() {
 		os.Exit(1)
 	}
 	fmt.Printf("  Testing connection (%s @ %s)...", validated.Provider, validated.URL)
-	if err := cloudsync.Ping(validated); err != nil {
+	if err := (turso.Provider{}).Ping(validated); err != nil {
 		fmt.Printf(" ✗\n")
 		fmt.Fprintf(os.Stderr, "✗ Connection failed: %v\n", err)
 		os.Exit(1)
@@ -123,7 +124,7 @@ func doCloudSaveNonInteractive(opts setupCloudOptions) {
 		fmt.Fprintf(os.Stderr, "✗ Save failed: %v\n", err)
 		os.Exit(1)
 	}
-	if err := cloudsync.Ping(validated); err != nil {
+	if err := (turso.Provider{}).Ping(validated); err != nil {
 		fmt.Fprintf(os.Stderr, "✗ Connection failed: %v\n", err)
 		fmt.Fprintln(os.Stderr, "Config saved but connection test failed. Run 'mnemo setup cloud --validate' to retest.")
 		os.Exit(1)
@@ -141,8 +142,8 @@ func doCloudSetupInteractive(opts setupCloudOptions) {
 	existing, _ := cloudsync.LoadFileConfig()
 
 	provider := promptWithDefault(r, "Provider [turso]", firstNonEmpty(opts.Provider, existing.Provider, "turso"))
-	if _, err := cloudsync.LookupProvider(provider); err != nil {
-		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
+	if provider != "turso" {
+		fmt.Fprintf(os.Stderr, "✗ unknown cloud provider %q\n", provider)
 		os.Exit(1)
 	}
 
@@ -177,7 +178,7 @@ func doCloudSetupInteractive(opts setupCloudOptions) {
 	fmt.Println("✓ Config saved.")
 
 	fmt.Printf("  Testing connection (%s @ %s)...", validated.Provider, validated.URL)
-	if err := cloudsync.Ping(validated); err != nil {
+	if err := (turso.Provider{}).Ping(validated); err != nil {
 		fmt.Printf(" ✗\n")
 		fmt.Fprintf(os.Stderr, "Connection test failed: %v\n", err)
 		fmt.Println("Config saved. Run 'mnemo setup cloud --validate' to retest, or 'mnemo setup cloud --delete' to remove.")

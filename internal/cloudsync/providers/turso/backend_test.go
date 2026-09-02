@@ -1,4 +1,4 @@
-package cloudsync
+package turso
 
 import (
 	"bytes"
@@ -7,18 +7,18 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/jmeiracorbal/mnemo/internal/cloudsync"
 )
 
-// roundTripFunc is an http.RoundTripper backed by a plain function,
-// used to fake HTTP responses in tests without a real network.
+// roundTripFunc is an http.RoundTripper backed by a plain function.
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-// newTursoTestBackend creates a TursoBackend pointed at a fake URL with the given transport.
-func newTursoTestBackend(t *testing.T, transport http.RoundTripper) *TursoBackend {
+func newTestBackend(t *testing.T, transport http.RoundTripper) *Backend {
 	t.Helper()
-	b, err := NewTursoBackend(Config{
+	b, err := New(cloudsync.Config{
 		URL:      "libsql://example.turso.io",
 		Key:      "test-token",
 		ClientID: "client-a",
@@ -30,8 +30,6 @@ func newTursoTestBackend(t *testing.T, transport http.RoundTripper) *TursoBacken
 	return b
 }
 
-// hranaOKBody builds a Hrana v2 success response for stmtCount statement results
-// plus one close result at the end.
 func hranaOKBody(stmtCount int) []byte {
 	results := make([]map[string]any, stmtCount+1)
 	for i := 0; i < stmtCount; i++ {
@@ -48,8 +46,6 @@ func hranaOKBody(stmtCount int) []byte {
 	return body
 }
 
-// hranaRowsBody builds a Hrana v2 success response for a single SELECT statement
-// that returns the given rows, plus one close result.
 func hranaRowsBody(rows [][]hranaValue) []byte {
 	type jVal = map[string]any
 	var jRows [][]jVal
@@ -77,13 +73,13 @@ func hranaRowsBody(rows [][]hranaValue) []byte {
 	return body
 }
 
-func TestTursoBackendPushEmptyEntriesReturnsEmptyResult(t *testing.T) {
+func TestBackendPushEmptyEntriesReturnsEmptyResult(t *testing.T) {
 	httpCalled := false
-	backend := newTursoTestBackend(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
+	b := newTestBackend(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
 		httpCalled = true
 		return nil, nil
 	}))
-	res, err := backend.PushMutations(nil)
+	res, err := b.PushMutations(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,9 +91,9 @@ func TestTursoBackendPushEmptyEntriesReturnsEmptyResult(t *testing.T) {
 	}
 }
 
-func TestTursoBackendPushSetsAuthorizationHeader(t *testing.T) {
+func TestBackendPushSetsAuthorizationHeader(t *testing.T) {
 	var gotAuth string
-	backend := newTursoTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+	b := newTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		gotAuth = r.Header.Get("Authorization")
 		return &http.Response{
 			StatusCode: http.StatusOK,
@@ -105,7 +101,7 @@ func TestTursoBackendPushSetsAuthorizationHeader(t *testing.T) {
 			Header:     make(http.Header),
 		}, nil
 	}))
-	_, err := backend.PushMutations([]MutationEntry{
+	_, err := b.PushMutations([]cloudsync.MutationEntry{
 		{LocalSeq: 1, Entity: "session", EntityKey: "s1", Op: "upsert",
 			Payload: json.RawMessage(`{"id":"s1","project":"p","directory":"/d"}`)},
 	})
@@ -117,18 +113,18 @@ func TestTursoBackendPushSetsAuthorizationHeader(t *testing.T) {
 	}
 }
 
-func TestTursoBackendPushSessionMutationWrapsInTransaction(t *testing.T) {
+func TestBackendPushSessionMutationWrapsInTransaction(t *testing.T) {
 	var bodyStr string
-	backend := newTursoTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		b, _ := io.ReadAll(r.Body)
-		bodyStr = string(b)
+	b := newTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		raw, _ := io.ReadAll(r.Body)
+		bodyStr = string(raw)
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(bytes.NewReader(hranaOKBody(4))),
 			Header:     make(http.Header),
 		}, nil
 	}))
-	res, err := backend.PushMutations([]MutationEntry{
+	res, err := b.PushMutations([]cloudsync.MutationEntry{
 		{LocalSeq: 7, Entity: "session", EntityKey: "s1", Op: "upsert",
 			Payload: json.RawMessage(`{"id":"s1","project":"brain","directory":"/home"}`)},
 	})
@@ -145,18 +141,18 @@ func TestTursoBackendPushSessionMutationWrapsInTransaction(t *testing.T) {
 	}
 }
 
-func TestTursoBackendPushJournalRowUsesInsertOrIgnore(t *testing.T) {
+func TestBackendPushJournalRowUsesInsertOrIgnore(t *testing.T) {
 	var bodyStr string
-	backend := newTursoTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		b, _ := io.ReadAll(r.Body)
-		bodyStr = string(b)
+	b := newTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		raw, _ := io.ReadAll(r.Body)
+		bodyStr = string(raw)
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(bytes.NewReader(hranaOKBody(4))),
 			Header:     make(http.Header),
 		}, nil
 	}))
-	_, err := backend.PushMutations([]MutationEntry{
+	_, err := b.PushMutations([]cloudsync.MutationEntry{
 		{LocalSeq: 1, Entity: "session", EntityKey: "s1", Op: "upsert",
 			Payload: json.RawMessage(`{"id":"s1","project":"p","directory":"/d"}`)},
 	})
@@ -168,18 +164,18 @@ func TestTursoBackendPushJournalRowUsesInsertOrIgnore(t *testing.T) {
 	}
 }
 
-func TestTursoBackendPushObservationMutationUsesInsertOrReplace(t *testing.T) {
+func TestBackendPushObservationMutationUsesInsertOrReplace(t *testing.T) {
 	var bodyStr string
-	backend := newTursoTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		b, _ := io.ReadAll(r.Body)
-		bodyStr = string(b)
+	b := newTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		raw, _ := io.ReadAll(r.Body)
+		bodyStr = string(raw)
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(bytes.NewReader(hranaOKBody(4))),
 			Header:     make(http.Header),
 		}, nil
 	}))
-	_, err := backend.PushMutations([]MutationEntry{
+	_, err := b.PushMutations([]cloudsync.MutationEntry{
 		{LocalSeq: 2, Entity: "observation", EntityKey: "obs-1", Op: "upsert",
 			Payload: json.RawMessage(`{"sync_id":"obs-1","session_id":"sess-1","type":"decision","title":"T","content":"C","scope":"project"}`)},
 	})
@@ -191,20 +187,20 @@ func TestTursoBackendPushObservationMutationUsesInsertOrReplace(t *testing.T) {
 	}
 }
 
-func TestTursoBackendPushObservationDeleteMutationUsesUpdate(t *testing.T) {
+func TestBackendPushObservationDeleteMutationUsesUpdate(t *testing.T) {
 	var bodyStr string
-	backend := newTursoTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		b, _ := io.ReadAll(r.Body)
-		bodyStr = string(b)
+	b := newTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		raw, _ := io.ReadAll(r.Body)
+		bodyStr = string(raw)
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(bytes.NewReader(hranaOKBody(4))),
 			Header:     make(http.Header),
 		}, nil
 	}))
-	_, err := backend.PushMutations([]MutationEntry{
+	_, err := b.PushMutations([]cloudsync.MutationEntry{
 		{LocalSeq: 3, Entity: "observation", EntityKey: "obs-del", Op: "delete",
-			OccurredAt: "2026-09-01T10:00:00Z",
+			OccurredAt: "2026-09-02T10:00:00Z",
 			Payload:    json.RawMessage(`{"sync_id":"obs-del","session_id":"sess-1","type":"decision","title":"T","content":"C","scope":"project"}`)},
 	})
 	if err != nil {
@@ -218,18 +214,18 @@ func TestTursoBackendPushObservationDeleteMutationUsesUpdate(t *testing.T) {
 	}
 }
 
-func TestTursoBackendPushPromptMutationUsesInsertOrReplace(t *testing.T) {
+func TestBackendPushPromptMutationUsesInsertOrReplace(t *testing.T) {
 	var bodyStr string
-	backend := newTursoTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		b, _ := io.ReadAll(r.Body)
-		bodyStr = string(b)
+	b := newTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		raw, _ := io.ReadAll(r.Body)
+		bodyStr = string(raw)
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(bytes.NewReader(hranaOKBody(4))),
 			Header:     make(http.Header),
 		}, nil
 	}))
-	_, err := backend.PushMutations([]MutationEntry{
+	_, err := b.PushMutations([]cloudsync.MutationEntry{
 		{LocalSeq: 4, Entity: "prompt", EntityKey: "pr-1", Op: "upsert",
 			Payload: json.RawMessage(`{"sync_id":"pr-1","session_id":"sess-1","content":"Hello world"}`)},
 	})
@@ -241,11 +237,10 @@ func TestTursoBackendPushPromptMutationUsesInsertOrReplace(t *testing.T) {
 	}
 }
 
-func TestTursoBackendPullBuildsCursorQueryWithClientExclusion(t *testing.T) {
+func TestBackendPullBuildsCursorQueryWithClientExclusion(t *testing.T) {
 	var capturedSQL string
-	backend := newTursoTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		// Parse the Hrana pipeline request to extract decoded SQL (avoids JSON > escaping).
-		b, _ := io.ReadAll(r.Body)
+	b := newTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		raw, _ := io.ReadAll(r.Body)
 		var req struct {
 			Requests []struct {
 				Stmt *struct {
@@ -253,7 +248,7 @@ func TestTursoBackendPullBuildsCursorQueryWithClientExclusion(t *testing.T) {
 				} `json:"stmt"`
 			} `json:"requests"`
 		}
-		if err := json.Unmarshal(b, &req); err == nil {
+		if err := json.Unmarshal(raw, &req); err == nil {
 			for _, rq := range req.Requests {
 				if rq.Stmt != nil && strings.Contains(rq.Stmt.SQL, "SELECT") {
 					capturedSQL = rq.Stmt.SQL
@@ -266,7 +261,7 @@ func TestTursoBackendPullBuildsCursorQueryWithClientExclusion(t *testing.T) {
 			Header:     make(http.Header),
 		}, nil
 	}))
-	res, err := backend.PullMutations(10, 50)
+	res, err := b.PullMutations(10, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,23 +275,23 @@ func TestTursoBackendPullBuildsCursorQueryWithClientExclusion(t *testing.T) {
 	}
 }
 
-func TestTursoBackendPullReturnsRowsFromResponse(t *testing.T) {
+func TestBackendPullReturnsRowsFromResponse(t *testing.T) {
 	rows := [][]hranaValue{
 		{
 			intVal(12), textVal("client-b"), intVal(3), textVal("brain"),
 			textVal("session"), textVal("s1"), textVal("upsert"),
 			textVal(`{"id":"s1","project":"brain","directory":"/home"}`),
-			textVal("2026-09-01T10:00:00Z"),
+			textVal("2026-09-02T10:00:00Z"),
 		},
 	}
-	backend := newTursoTestBackend(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
+	b := newTestBackend(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Body:       io.NopCloser(bytes.NewReader(hranaRowsBody(rows))),
 			Header:     make(http.Header),
 		}, nil
 	}))
-	res, err := backend.PullMutations(5, 50)
+	res, err := b.PullMutations(5, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,15 +307,15 @@ func TestTursoBackendPullReturnsRowsFromResponse(t *testing.T) {
 	}
 }
 
-func TestTursoBackendReportsHTTPError(t *testing.T) {
-	backend := newTursoTestBackend(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
+func TestBackendReportsHTTPError(t *testing.T) {
+	b := newTestBackend(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusUnauthorized,
 			Body:       io.NopCloser(strings.NewReader(`{"message":"bad token"}`)),
 			Header:     make(http.Header),
 		}, nil
 	}))
-	_, err := backend.PullMutations(0, 1)
+	_, err := b.PullMutations(0, 1)
 	if err == nil {
 		t.Fatal("expected error for 401 response")
 	}
@@ -332,13 +327,13 @@ func TestTursoBackendReportsHTTPError(t *testing.T) {
 	}
 }
 
-func TestTursoBackendPushUnknownEntityReturnsError(t *testing.T) {
+func TestBackendPushUnknownEntityReturnsError(t *testing.T) {
 	httpCalled := false
-	backend := newTursoTestBackend(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
+	b := newTestBackend(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
 		httpCalled = true
 		return nil, nil
 	}))
-	_, err := backend.PushMutations([]MutationEntry{
+	_, err := b.PushMutations([]cloudsync.MutationEntry{
 		{LocalSeq: 1, Entity: "unknown-entity", EntityKey: "k", Op: "upsert",
 			Payload: json.RawMessage(`{}`)},
 	})
