@@ -1,56 +1,68 @@
 -- name: GetObservation :one
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at, provenance_id
-FROM observations WHERE id = ?;
+SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.id = ?;
 
 -- name: GetLiveObservation :one
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at, provenance_id
-FROM observations WHERE id = ? AND deleted_at IS NULL;
+SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.id = ? AND o.deleted_at IS NULL;
 
 -- name: GetLiveObservationBySyncID :one
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at, provenance_id
-FROM observations WHERE sync_id = ? AND deleted_at IS NULL
-ORDER BY id DESC LIMIT 1;
+SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.sync_id = ? AND o.deleted_at IS NULL
+ORDER BY o.id DESC LIMIT 1;
 
 -- name: GetObservationBySyncIDIncludingDeleted :one
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at, provenance_id
-FROM observations WHERE sync_id = ?
-ORDER BY id DESC LIMIT 1;
+SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.sync_id = ?
+ORDER BY o.id DESC LIMIT 1;
 
 -- name: FindObservationByTopic :one
-SELECT id FROM observations
-WHERE topic_key = sqlc.arg('topic_key')
-  AND ifnull(project, '') = ifnull(sqlc.narg('project'), '')
-  AND scope = sqlc.arg('scope')
-  AND deleted_at IS NULL
-ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC
+SELECT o.id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.topic_key = sqlc.arg('topic_key')
+  AND s.project = sqlc.arg('project')
+  AND o.scope = sqlc.arg('scope')
+  AND o.deleted_at IS NULL
+ORDER BY datetime(o.updated_at) DESC, datetime(o.created_at) DESC
 LIMIT 1;
 
 -- name: FindDuplicateObservation :one
-SELECT id FROM observations
-WHERE normalized_hash = sqlc.arg('normalized_hash')
-  AND ifnull(project, '') = ifnull(sqlc.narg('project'), '')
-  AND scope = sqlc.arg('scope')
-  AND type = sqlc.arg('type')
-  AND title = sqlc.arg('title')
-  AND deleted_at IS NULL
-  AND datetime(created_at) >= datetime('now', sqlc.arg('window'))
-ORDER BY id DESC LIMIT 1;
+SELECT o.id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.normalized_hash = sqlc.arg('normalized_hash')
+  AND s.project = sqlc.arg('project')
+  AND o.scope = sqlc.arg('scope')
+  AND o.type = sqlc.arg('type')
+  AND o.title = sqlc.arg('title')
+  AND o.deleted_at IS NULL
+  AND datetime(o.created_at) >= datetime('now', sqlc.arg('window'))
+ORDER BY o.id DESC LIMIT 1;
 
 -- name: InsertObservation :one
 INSERT INTO observations (
-  sync_id, session_id, type, title, content, tool_name, project, scope,
+  sync_id, session_id, type, title, content, tool_name, scope,
   topic_key, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at, provenance_id
 ) VALUES (
   sqlc.arg('sync_id'), sqlc.arg('session_id'), sqlc.arg('type'), sqlc.arg('title'),
-  sqlc.arg('content'), sqlc.narg('tool_name'), sqlc.narg('project'), sqlc.arg('scope'),
+  sqlc.arg('content'), sqlc.narg('tool_name'), sqlc.arg('scope'),
   sqlc.narg('topic_key'), sqlc.arg('normalized_hash'), 1, 1, datetime('now'), datetime('now'),
   sqlc.narg('provenance_id')
 )
@@ -75,7 +87,6 @@ UPDATE observations SET
   type = sqlc.arg('type'),
   title = sqlc.arg('title'),
   content = sqlc.arg('content'),
-  project = sqlc.narg('project'),
   scope = sqlc.arg('scope'),
   topic_key = sqlc.narg('topic_key'),
   normalized_hash = sqlc.arg('normalized_hash'),
@@ -121,8 +132,10 @@ SELECT COUNT(*) FROM observations
 WHERE normalized_hash = ? AND deleted_at IS NULL;
 
 -- name: FindObservationByHashAndProject :one
-SELECT id FROM observations
-WHERE normalized_hash = sqlc.narg('normalized_hash')
-  AND ifnull(project, '') = ifnull(sqlc.narg('project'), '')
-  AND deleted_at IS NULL
+SELECT o.id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.normalized_hash = sqlc.narg('normalized_hash')
+  AND s.project = sqlc.arg('project')
+  AND o.deleted_at IS NULL
 LIMIT 1;

@@ -230,12 +230,12 @@ func (b *Backend) mutationToSQL(e cloudsync.MutationEntry) ([]hranaStmt, error) 
 		}
 		stmts := []hranaStmt{{
 			SQL: `INSERT OR REPLACE INTO observations
-				(sync_id, session_id, type, title, content, tool_name, project, scope, topic_key)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				(sync_id, session_id, type, title, content, tool_name, scope, topic_key)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			Args: []hranaValue{
 				textVal(p.SyncID), textVal(p.SessionID), textVal(p.Type),
 				textVal(p.Title), textVal(p.Content), maybeTextVal(p.ToolName),
-				maybeTextVal(p.Project), textVal(scope), maybeTextVal(p.TopicKey),
+				textVal(scope), maybeTextVal(p.TopicKey),
 			},
 		}}
 		if p.Tags != nil {
@@ -254,8 +254,8 @@ func (b *Backend) mutationToSQL(e cloudsync.MutationEntry) ([]hranaStmt, error) 
 			return nil, fmt.Errorf("decode prompt payload seq=%d: %w", e.LocalSeq, err)
 		}
 		return []hranaStmt{{
-			SQL:  `INSERT OR REPLACE INTO user_prompts (sync_id, session_id, content, project) VALUES (?, ?, ?, ?)`,
-			Args: []hranaValue{textVal(p.SyncID), textVal(p.SessionID), textVal(p.Content), maybeTextVal(p.Project)},
+			SQL:  `INSERT OR REPLACE INTO user_prompts (sync_id, session_id, content) VALUES (?, ?, ?)`,
+			Args: []hranaValue{textVal(p.SyncID), textVal(p.SessionID), textVal(p.Content)},
 		}}, nil
 
 	default:

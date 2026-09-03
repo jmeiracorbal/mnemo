@@ -105,7 +105,7 @@ func (s *Store) BuildProjectMergePlan(from, to string) (*ProjectMergePlan, error
 
 	q := s.q
 	ctx := context.Background()
-	observations, err := q.CountObservationProjectRows(ctx, sqlNullString(from))
+	observations, err := q.CountObservationProjectRows(ctx, from)
 	if err != nil {
 		return nil, fmt.Errorf("count source observations: %w", err)
 	}
@@ -113,7 +113,7 @@ func (s *Store) BuildProjectMergePlan(from, to string) (*ProjectMergePlan, error
 	if err != nil {
 		return nil, fmt.Errorf("count source sessions: %w", err)
 	}
-	prompts, err := q.CountPromptProjectRows(ctx, sqlNullString(from))
+	prompts, err := q.CountPromptProjectRows(ctx, from)
 	if err != nil {
 		return nil, fmt.Errorf("count source prompts: %w", err)
 	}
@@ -164,30 +164,16 @@ func (s *Store) MergeProjects(from, to string) (*ProjectMergeResult, error) {
 	err = s.withTx(func(tx *sql.Tx) error {
 		q := s.q.WithTx(tx)
 		ctx := context.Background()
-		params := dbgen.RenameObservationProjectParams{
-			NewName: sqlNullString(plan.To.ID),
-			OldName: sqlNullString(plan.From.ID),
-		}
-		n, err := q.RenameObservationProject(ctx, params)
-		if err != nil {
-			return fmt.Errorf("merge observations: %w", err)
-		}
-		result.ObservationsUpdated = n
+		result.ObservationsUpdated = plan.Observations
+		result.PromptsUpdated = plan.Prompts
 
+		var err error
 		result.SessionsUpdated, err = q.RenameSessionProject(ctx, dbgen.RenameSessionProjectParams{
 			NewName: plan.To.ID,
 			OldName: plan.From.ID,
 		})
 		if err != nil {
 			return fmt.Errorf("merge sessions: %w", err)
-		}
-
-		result.PromptsUpdated, err = q.RenamePromptProject(ctx, dbgen.RenamePromptProjectParams{
-			NewName: sqlNullString(plan.To.ID),
-			OldName: sqlNullString(plan.From.ID),
-		})
-		if err != nil {
-			return fmt.Errorf("merge prompts: %w", err)
 		}
 
 		result.SyncMutationsUpdated, err = q.RenameMutationProject(ctx, dbgen.RenameMutationProjectParams{
@@ -316,7 +302,7 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 		return &MigrateResult{}, nil
 	}
 
-	exists, err := s.q.ProjectExists(context.Background(), sqlNullString(oldName))
+	exists, err := s.q.ProjectExists(context.Background(), oldName)
 	if err != nil {
 		return nil, fmt.Errorf("check old project: %w", err)
 	}
@@ -331,25 +317,21 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 			return fmt.Errorf("ensure destination project: %w", err)
 		}
 		q := s.q.WithTx(tx)
-		params := dbgen.RenameObservationProjectParams{NewName: sqlNullString(newName), OldName: sqlNullString(oldName)}
-		n, err := q.RenameObservationProject(context.Background(), params)
+		var err error
+		result.ObservationsUpdated, err = q.CountObservationProjectRows(context.Background(), oldName)
 		if err != nil {
-			return fmt.Errorf("migrate observations: %w", err)
+			return fmt.Errorf("count observations: %w", err)
 		}
-		result.ObservationsUpdated = n
+		result.PromptsUpdated, err = q.CountPromptProjectRows(context.Background(), oldName)
+		if err != nil {
+			return fmt.Errorf("count prompts: %w", err)
+		}
 
 		result.SessionsUpdated, err = q.RenameSessionProject(context.Background(), dbgen.RenameSessionProjectParams{
 			NewName: newName, OldName: oldName,
 		})
 		if err != nil {
 			return fmt.Errorf("migrate sessions: %w", err)
-		}
-
-		result.PromptsUpdated, err = q.RenamePromptProject(context.Background(), dbgen.RenamePromptProjectParams{
-			NewName: sqlNullString(newName), OldName: sqlNullString(oldName),
-		})
-		if err != nil {
-			return fmt.Errorf("migrate prompts: %w", err)
 		}
 
 		result.SyncMutationsUpdated, err = q.RenameMutationProject(context.Background(), dbgen.RenameMutationProjectParams{
@@ -366,6 +348,9 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 		}
 		if err = q.DeleteProjectEnrollment(context.Background(), oldName); err != nil {
 			return fmt.Errorf("migrate sync_enrolled_projects delete: %w", err)
+		}
+		if _, err = q.DeleteProjectByID(context.Background(), oldName); err != nil {
+			return fmt.Errorf("migrate project metadata: %w", err)
 		}
 
 		return nil

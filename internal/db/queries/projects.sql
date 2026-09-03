@@ -24,11 +24,14 @@ WITH project_ids AS (
 ), activity AS (
     SELECT project, started_at AS seen_at FROM sessions WHERE project != ''
     UNION ALL
-    SELECT project, COALESCE(NULLIF(last_seen_at, ''), NULLIF(updated_at, ''), created_at) AS seen_at
-    FROM observations
-    WHERE project IS NOT NULL AND project != '' AND deleted_at IS NULL
+    SELECT s.project, COALESCE(NULLIF(o.last_seen_at, ''), NULLIF(o.updated_at, ''), o.created_at) AS seen_at
+    FROM observations o
+    JOIN sessions s ON s.id = o.session_id
+    WHERE o.deleted_at IS NULL
     UNION ALL
-    SELECT project, created_at AS seen_at FROM user_prompts WHERE project IS NOT NULL AND project != ''
+    SELECT s.project, up.created_at AS seen_at
+    FROM user_prompts up
+    JOIN sessions s ON s.id = up.session_id
 )
 SELECT
     p.project AS id,
@@ -36,8 +39,8 @@ SELECT
     COALESCE(pr.created_at, '') AS created_at,
     CAST(COALESCE((SELECT s.directory FROM sessions s WHERE s.project = p.project AND s.directory != '' ORDER BY s.started_at DESC LIMIT 1), '') AS TEXT) AS directory,
     (SELECT COUNT(*) FROM sessions s WHERE s.project = p.project) AS session_count,
-    (SELECT COUNT(*) FROM observations o WHERE o.project = p.project AND o.deleted_at IS NULL) AS observation_count,
-    (SELECT COUNT(*) FROM user_prompts up WHERE up.project = p.project) AS prompt_count,
+    (SELECT COUNT(*) FROM observations o JOIN sessions s ON s.id = o.session_id WHERE s.project = p.project AND o.deleted_at IS NULL) AS observation_count,
+    (SELECT COUNT(*) FROM user_prompts up JOIN sessions s ON s.id = up.session_id WHERE s.project = p.project) AS prompt_count,
     CAST(COALESCE(MAX(activity.seen_at), '') AS TEXT) AS last_seen_at
 FROM project_ids p
 JOIN projects pr ON pr.id = p.project

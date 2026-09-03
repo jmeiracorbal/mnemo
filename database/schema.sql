@@ -75,7 +75,6 @@ CREATE TABLE observations (
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     tool_name TEXT,
-    project TEXT REFERENCES projects(id),
     scope TEXT NOT NULL DEFAULT 'project',
     topic_key TEXT,
     normalized_hash TEXT,
@@ -94,7 +93,6 @@ CREATE TABLE user_prompts (
     sync_id TEXT,
     session_id TEXT NOT NULL,
     content TEXT NOT NULL,
-    project TEXT REFERENCES projects(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     provenance_id INTEGER REFERENCES provenance_contexts(id),
     FOREIGN KEY (session_id) REFERENCES sessions(id)
@@ -164,31 +162,27 @@ CREATE VIRTUAL TABLE observations_fts USING fts5(
     content,
     tool_name,
     type,
-    project,
     content='observations',
     content_rowid='id'
 );
 
 CREATE VIRTUAL TABLE user_prompts_fts USING fts5(
     content,
-    project,
     content='user_prompts',
     content_rowid='id'
 );
 
 CREATE INDEX idx_obs_session ON observations(session_id);
 CREATE INDEX idx_obs_type ON observations(type);
-CREATE INDEX idx_obs_project ON observations(project);
 CREATE INDEX idx_obs_created ON observations(created_at DESC);
 CREATE INDEX idx_obs_scope ON observations(scope);
 CREATE INDEX idx_obs_sync_id ON observations(sync_id);
 CREATE UNIQUE INDEX ux_observations_sync_id ON observations(sync_id) WHERE sync_id IS NOT NULL AND sync_id <> '';
-CREATE INDEX idx_obs_topic ON observations(topic_key, project, scope, updated_at DESC);
+CREATE INDEX idx_obs_topic ON observations(topic_key, scope, updated_at DESC);
 CREATE INDEX idx_obs_deleted ON observations(deleted_at);
-CREATE INDEX idx_obs_dedupe ON observations(normalized_hash, project, scope, type, title, created_at DESC);
+CREATE INDEX idx_obs_dedupe ON observations(normalized_hash, scope, type, title, created_at DESC);
 CREATE INDEX idx_obs_provenance ON observations(provenance_id);
 CREATE INDEX idx_prompts_session ON user_prompts(session_id);
-CREATE INDEX idx_prompts_project ON user_prompts(project);
 CREATE INDEX idx_prompts_created ON user_prompts(created_at DESC);
 CREATE INDEX idx_prompts_sync_id ON user_prompts(sync_id);
 CREATE UNIQUE INDEX ux_user_prompts_sync_id ON user_prompts(sync_id) WHERE sync_id IS NOT NULL AND sync_id <> '';
@@ -209,35 +203,35 @@ CREATE INDEX idx_obs_tags_tag ON observation_tags(tag);
 CREATE INDEX idx_ses_tags_ses ON session_tags(session_id);
 
 CREATE TRIGGER obs_fts_insert AFTER INSERT ON observations BEGIN
-    INSERT INTO observations_fts(rowid, title, content, tool_name, type, project)
-    VALUES (new.id, new.title, new.content, new.tool_name, new.type, new.project);
+    INSERT INTO observations_fts(rowid, title, content, tool_name, type)
+    VALUES (new.id, new.title, new.content, new.tool_name, new.type);
 END;
 
 CREATE TRIGGER obs_fts_delete AFTER DELETE ON observations BEGIN
-    INSERT INTO observations_fts(observations_fts, rowid, title, content, tool_name, type, project)
-    VALUES ('delete', old.id, old.title, old.content, old.tool_name, old.type, old.project);
+    INSERT INTO observations_fts(observations_fts, rowid, title, content, tool_name, type)
+    VALUES ('delete', old.id, old.title, old.content, old.tool_name, old.type);
 END;
 
 CREATE TRIGGER obs_fts_update AFTER UPDATE ON observations BEGIN
-    INSERT INTO observations_fts(observations_fts, rowid, title, content, tool_name, type, project)
-    VALUES ('delete', old.id, old.title, old.content, old.tool_name, old.type, old.project);
-    INSERT INTO observations_fts(rowid, title, content, tool_name, type, project)
-    VALUES (new.id, new.title, new.content, new.tool_name, new.type, new.project);
+    INSERT INTO observations_fts(observations_fts, rowid, title, content, tool_name, type)
+    VALUES ('delete', old.id, old.title, old.content, old.tool_name, old.type);
+    INSERT INTO observations_fts(rowid, title, content, tool_name, type)
+    VALUES (new.id, new.title, new.content, new.tool_name, new.type);
 END;
 
 CREATE TRIGGER user_prompt_fts_insert AFTER INSERT ON user_prompts BEGIN
-    INSERT INTO user_prompts_fts(rowid, content, project)
-    VALUES (new.id, new.content, new.project);
+    INSERT INTO user_prompts_fts(rowid, content)
+    VALUES (new.id, new.content);
 END;
 
 CREATE TRIGGER user_prompt_fts_delete AFTER DELETE ON user_prompts BEGIN
-    INSERT INTO user_prompts_fts(user_prompts_fts, rowid, content, project)
-    VALUES ('delete', old.id, old.content, old.project);
+    INSERT INTO user_prompts_fts(user_prompts_fts, rowid, content)
+    VALUES ('delete', old.id, old.content);
 END;
 
 CREATE TRIGGER user_prompt_fts_update AFTER UPDATE ON user_prompts BEGIN
-    INSERT INTO user_prompts_fts(user_prompts_fts, rowid, content, project)
-    VALUES ('delete', old.id, old.content, old.project);
-    INSERT INTO user_prompts_fts(rowid, content, project)
-    VALUES (new.id, new.content, new.project);
+    INSERT INTO user_prompts_fts(user_prompts_fts, rowid, content)
+    VALUES ('delete', old.id, old.content);
+    INSERT INTO user_prompts_fts(rowid, content)
+    VALUES (new.id, new.content);
 END;

@@ -349,7 +349,7 @@ func (s *Store) backfillSessionSyncMutationsTx(tx *sql.Tx, project string) error
 func (s *Store) backfillObservationSyncMutationsTx(tx *sql.Tx, project string) error {
 	q := s.q.WithTx(tx)
 	rows, err := q.ListObservationsMissingSyncMutation(context.Background(), dbgen.ListObservationsMissingSyncMutationParams{
-		ProjectName: sqlNullString(project), TargetKey: DefaultSyncTargetKey,
+		ProjectName: project, TargetKey: DefaultSyncTargetKey,
 		Entity: SyncEntityObservation, Source: SyncSourceLocal,
 	})
 	if err != nil {
@@ -360,7 +360,7 @@ func (s *Store) backfillObservationSyncMutationsTx(tx *sql.Tx, project string) e
 		payload := syncObservationPayload{
 			SyncID: dbString(row.SyncID), SessionID: row.SessionID, Type: row.Type,
 			Title: row.Title, Content: row.Content, ToolName: nullablePtr(row.ToolName),
-			Project: nullablePtr(row.Project), Scope: row.Scope, TopicKey: nullablePtr(row.TopicKey),
+			Project: nullablePtr(sqlNullString(row.Project)), Scope: row.Scope, TopicKey: nullablePtr(row.TopicKey),
 			Provenance: provenanceInputForID(q, row.ProvenanceID),
 		}
 		var o Observation
@@ -383,14 +383,14 @@ func (s *Store) backfillObservationSyncMutationsTx(tx *sql.Tx, project string) e
 func (s *Store) backfillPromptSyncMutationsTx(tx *sql.Tx, project string) error {
 	q := s.q.WithTx(tx)
 	rows, err := q.ListPromptsMissingSyncMutation(context.Background(), dbgen.ListPromptsMissingSyncMutationParams{
-		ProjectName: sqlNullString(project), TargetKey: DefaultSyncTargetKey,
+		ProjectName: project, TargetKey: DefaultSyncTargetKey,
 		Entity: SyncEntityPrompt, Source: SyncSourceLocal,
 	})
 	if err != nil {
 		return err
 	}
 	for _, row := range rows {
-		proj := nullablePtr(row.Project)
+		proj := nullablePtr(sqlNullString(row.Project))
 		payload := syncPromptPayload{
 			SyncID: dbString(row.SyncID), SessionID: row.SessionID, Content: row.Content, Project: proj,
 			Provenance: provenanceInputForID(q, row.ProvenanceID),
@@ -473,15 +473,17 @@ func (s *Store) applyObservationUpsertTx(tx *sql.Tx, payload syncObservationPayl
 		if err != nil {
 			return err
 		}
-		if payload.Project != nil {
-			if err := s.ensureProjectTx(tx, *payload.Project); err != nil {
-				return err
-			}
+		sessionProject, err := s.sessionProjectTx(tx, payload.SessionID)
+		if err != nil {
+			return err
+		}
+		if err := validateSessionProjectPtrMatch(sessionProject, payload.Project); err != nil {
+			return err
 		}
 		newID, err := q.InsertPulledObservation(context.Background(), dbgen.InsertPulledObservationParams{
 			SyncID: sqlNullString(payload.SyncID), SessionID: payload.SessionID, Type: payload.Type,
 			Title: payload.Title, Content: payload.Content, ToolName: sqlNullStringPtr(payload.ToolName),
-			Project: sqlNullStringPtr(payload.Project), Scope: normalizeScope(payload.Scope),
+			Scope:    normalizeScope(payload.Scope),
 			TopicKey: sqlNullStringPtr(payload.TopicKey), NormalizedHash: sqlNullString(hashNormalized(payload.Content)),
 			ProvenanceID: provenanceID,
 		})
@@ -502,15 +504,17 @@ func (s *Store) applyObservationUpsertTx(tx *sql.Tx, payload syncObservationPayl
 	if err != nil {
 		return err
 	}
-	if payload.Project != nil {
-		if err := s.ensureProjectTx(tx, *payload.Project); err != nil {
-			return err
-		}
+	sessionProject, err := s.sessionProjectTx(tx, payload.SessionID)
+	if err != nil {
+		return err
+	}
+	if err := validateSessionProjectPtrMatch(sessionProject, payload.Project); err != nil {
+		return err
 	}
 	err = q.UpdatePulledObservation(context.Background(), dbgen.UpdatePulledObservationParams{
 		SessionID: payload.SessionID, Type: payload.Type, Title: payload.Title, Content: payload.Content,
-		ToolName: sqlNullStringPtr(payload.ToolName), Project: sqlNullStringPtr(payload.Project),
-		Scope: normalizeScope(payload.Scope), TopicKey: sqlNullStringPtr(payload.TopicKey),
+		ToolName: sqlNullStringPtr(payload.ToolName),
+		Scope:    normalizeScope(payload.Scope), TopicKey: sqlNullStringPtr(payload.TopicKey),
 		NormalizedHash: sqlNullString(hashNormalized(payload.Content)), ProvenanceID: provenanceID, ID: existing.ID,
 	})
 	if err != nil {
@@ -557,14 +561,16 @@ func (s *Store) applyPromptUpsertTx(tx *sql.Tx, payload syncPromptPayload) error
 		if err != nil {
 			return err
 		}
-		if payload.Project != nil {
-			if err := s.ensureProjectTx(tx, *payload.Project); err != nil {
-				return err
-			}
+		sessionProject, err := s.sessionProjectTx(tx, payload.SessionID)
+		if err != nil {
+			return err
+		}
+		if err := validateSessionProjectPtrMatch(sessionProject, payload.Project); err != nil {
+			return err
 		}
 		_, err = q.InsertPrompt(context.Background(), dbgen.InsertPromptParams{
 			SyncID: sqlNullString(payload.SyncID), SessionID: payload.SessionID,
-			Content: payload.Content, Project: sqlNullStringPtr(payload.Project), ProvenanceID: provenanceID,
+			Content: payload.Content, ProvenanceID: provenanceID,
 		})
 		return err
 	}
@@ -575,14 +581,16 @@ func (s *Store) applyPromptUpsertTx(tx *sql.Tx, payload syncPromptPayload) error
 	if err != nil {
 		return err
 	}
-	if payload.Project != nil {
-		if err := s.ensureProjectTx(tx, *payload.Project); err != nil {
-			return err
-		}
+	sessionProject, err := s.sessionProjectTx(tx, payload.SessionID)
+	if err != nil {
+		return err
+	}
+	if err := validateSessionProjectPtrMatch(sessionProject, payload.Project); err != nil {
+		return err
 	}
 	return q.UpdatePrompt(context.Background(), dbgen.UpdatePromptParams{
 		SessionID: payload.SessionID, Content: payload.Content,
-		Project: sqlNullStringPtr(payload.Project), ProvenanceID: provenanceID, ID: existingID,
+		ProvenanceID: provenanceID, ID: existingID,
 	})
 }
 
@@ -592,11 +600,7 @@ func (s *Store) applyPromptUpsertTx(tx *sql.Tx, payload syncPromptPayload) error
 func (s *Store) BackfillAllSyncMutations() error {
 	return s.withTx(func(tx *sql.Tx) error {
 		rows, err := s.queryItHook(tx, `
-			SELECT DISTINCT project FROM (
-				SELECT project FROM sessions
-				UNION SELECT ifnull(project, '') AS project FROM observations
-				UNION SELECT ifnull(project, '') AS project FROM user_prompts
-			) ORDER BY project ASC`)
+			SELECT DISTINCT project FROM sessions ORDER BY project ASC`)
 		if err != nil {
 			return err
 		}

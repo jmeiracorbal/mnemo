@@ -18,13 +18,13 @@ type Querier interface {
 	CopyProjectEnrollment(ctx context.Context, arg CopyProjectEnrollmentParams) error
 	CopySessionTag(ctx context.Context, arg CopySessionTagParams) error
 	CountLiveObservations(ctx context.Context) (int64, error)
-	CountObservationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error)
+	CountObservationProjectRows(ctx context.Context, projectName string) (int64, error)
 	CountObservationsByAgent(ctx context.Context) ([]CountObservationsByAgentRow, error)
 	CountObservationsByHash(ctx context.Context, normalizedHash sql.NullString) (int64, error)
 	CountObservationsForSessionProject(ctx context.Context, sessionID string) (int64, error)
 	CountPendingMutations(ctx context.Context, targetKey string) (int64, error)
 	CountProjectRows(ctx context.Context, id string) (int64, error)
-	CountPromptProjectRows(ctx context.Context, projectName sql.NullString) (int64, error)
+	CountPromptProjectRows(ctx context.Context, projectName string) (int64, error)
 	CountPrompts(ctx context.Context) (int64, error)
 	CountSessionObservations(ctx context.Context, sessionID string) (int64, error)
 	CountSessionObservationsByScope(ctx context.Context, arg CountSessionObservationsByScopeParams) (int64, error)
@@ -76,7 +76,7 @@ type Querier interface {
 	ListEnrolledProjects(ctx context.Context) ([]SyncEnrolledProject, error)
 	ListMemoryReviewCandidates(ctx context.Context, arg ListMemoryReviewCandidatesParams) ([]ListMemoryReviewCandidatesRow, error)
 	ListObservationIDsByTopic(ctx context.Context, arg ListObservationIDsByTopicParams) ([]int64, error)
-	ListObservationProjects(ctx context.Context) ([]sql.NullString, error)
+	ListObservationProjects(ctx context.Context) ([]string, error)
 	ListObservationTags(ctx context.Context, observationID int64) ([]string, error)
 	ListObservations(ctx context.Context, arg ListObservationsParams) ([]ListObservationsRow, error)
 	ListObservationsAffectedByTag(ctx context.Context, tag string) ([]ListObservationsAffectedByTagRow, error)
@@ -101,11 +101,9 @@ type Querier interface {
 	ListTimelineBefore(ctx context.Context, arg ListTimelineBeforeParams) ([]ListTimelineBeforeRow, error)
 	MarkSyncFailure(ctx context.Context, arg MarkSyncFailureParams) error
 	MarkSyncHealthy(ctx context.Context, arg MarkSyncHealthyParams) error
-	ProjectExists(ctx context.Context, projectName sql.NullString) (bool, error)
+	ProjectExists(ctx context.Context, projectName string) (bool, error)
 	ReleaseSyncLease(ctx context.Context, arg ReleaseSyncLeaseParams) error
 	RenameMutationProject(ctx context.Context, arg RenameMutationProjectParams) (int64, error)
-	RenameObservationProject(ctx context.Context, arg RenameObservationProjectParams) (int64, error)
-	RenamePromptProject(ctx context.Context, arg RenamePromptProjectParams) (int64, error)
 	RenameSessionProject(ctx context.Context, arg RenameSessionProjectParams) (int64, error)
 	SearchObservationsByFilter(ctx context.Context, arg SearchObservationsByFilterParams) ([]SearchObservationsByFilterRow, error)
 	SearchObservationsFTS(ctx context.Context, arg SearchObservationsFTSParams) ([]SearchObservationsFTSRow, error)

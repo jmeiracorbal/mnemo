@@ -279,7 +279,7 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 				payload: syncObservationPayload{
 					SyncID: dbString(row.SyncID), SessionID: row.SessionID, Type: row.Type,
 					Title: row.Title, Content: row.Content, ToolName: nullablePtr(row.ToolName),
-					Project: nullablePtr(row.Project), Scope: row.Scope, TopicKey: nullablePtr(row.TopicKey),
+					Project: nullablePtr(sqlNullString(row.Project)), Scope: row.Scope, TopicKey: nullablePtr(row.TopicKey),
 					Provenance: provenanceInputForID(q, row.ProvenanceID),
 				},
 			})

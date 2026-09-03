@@ -56,13 +56,13 @@ func (q *Queries) DeleteObservationByID(ctx context.Context, id int64) error {
 
 const insertPulledObservation = `-- name: InsertPulledObservation :one
 INSERT INTO observations (
-  sync_id, session_id, type, title, content, tool_name, project, scope, topic_key,
+  sync_id, session_id, type, title, content, tool_name, scope, topic_key,
   normalized_hash, revision_count, duplicate_count, updated_at, deleted_at, provenance_id
 ) VALUES (
   ?1, ?2, ?3, ?4,
-  ?5, ?6, ?7, ?8,
-  ?9, ?10, 1, 1, datetime('now'), NULL,
-  ?11
+  ?5, ?6, ?7,
+  ?8, ?9, 1, 1, datetime('now'), NULL,
+  ?10
 )
 RETURNING id
 `
@@ -74,7 +74,6 @@ type InsertPulledObservationParams struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	NormalizedHash sql.NullString `json:"normalized_hash"`
@@ -89,7 +88,6 @@ func (q *Queries) InsertPulledObservation(ctx context.Context, arg InsertPulledO
 		arg.Title,
 		arg.Content,
 		arg.ToolName,
-		arg.Project,
 		arg.Scope,
 		arg.TopicKey,
 		arg.NormalizedHash,
@@ -101,26 +99,27 @@ func (q *Queries) InsertPulledObservation(ctx context.Context, arg InsertPulledO
 }
 
 const listObservationsMissingSyncMutation = `-- name: ListObservationsMissingSyncMutation :many
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key, provenance_id
-FROM observations
-WHERE ifnull(observations.project, '') = ?1
-  AND deleted_at IS NULL
+SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.provenance_id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE s.project = ?1
+  AND o.deleted_at IS NULL
   AND NOT EXISTS (
     SELECT 1 FROM sync_mutations sm
     WHERE sm.target_key = ?2
       AND sm.entity = ?3
-      AND sm.entity_key = ifnull(observations.sync_id, '')
+      AND sm.entity_key = ifnull(o.sync_id, '')
       AND sm.source = ?4
   )
-ORDER BY id ASC
+ORDER BY o.id ASC
 `
 
 type ListObservationsMissingSyncMutationParams struct {
-	ProjectName sql.NullString `json:"project_name"`
-	TargetKey   string         `json:"target_key"`
-	Entity      string         `json:"entity"`
-	Source      string         `json:"source"`
+	ProjectName string `json:"project_name"`
+	TargetKey   string `json:"target_key"`
+	Entity      string `json:"entity"`
+	Source      string `json:"source"`
 }
 
 type ListObservationsMissingSyncMutationRow struct {
@@ -131,7 +130,7 @@ type ListObservationsMissingSyncMutationRow struct {
 	Title        string         `json:"title"`
 	Content      string         `json:"content"`
 	ToolName     sql.NullString `json:"tool_name"`
-	Project      sql.NullString `json:"project"`
+	Project      string         `json:"project"`
 	Scope        string         `json:"scope"`
 	TopicKey     sql.NullString `json:"topic_key"`
 	ProvenanceID sql.NullInt64  `json:"provenance_id"`
@@ -178,32 +177,33 @@ func (q *Queries) ListObservationsMissingSyncMutation(ctx context.Context, arg L
 }
 
 const listPromptsMissingSyncMutation = `-- name: ListPromptsMissingSyncMutation :many
-SELECT ifnull(sync_id, '') AS sync_id, session_id, content, project, provenance_id
-FROM user_prompts
-WHERE ifnull(user_prompts.project, '') = ?1
+SELECT ifnull(p.sync_id, '') AS sync_id, p.session_id, p.content, s.project AS project, p.provenance_id
+FROM user_prompts p
+JOIN sessions s ON s.id = p.session_id
+WHERE s.project = ?1
   AND NOT EXISTS (
     SELECT 1 FROM sync_mutations sm
     WHERE sm.target_key = ?2
       AND sm.entity = ?3
-      AND sm.entity_key = ifnull(user_prompts.sync_id, '')
+      AND sm.entity_key = ifnull(p.sync_id, '')
       AND sm.source = ?4
   )
-ORDER BY id ASC
+ORDER BY p.id ASC
 `
 
 type ListPromptsMissingSyncMutationParams struct {
-	ProjectName sql.NullString `json:"project_name"`
-	TargetKey   string         `json:"target_key"`
-	Entity      string         `json:"entity"`
-	Source      string         `json:"source"`
+	ProjectName string `json:"project_name"`
+	TargetKey   string `json:"target_key"`
+	Entity      string `json:"entity"`
+	Source      string `json:"source"`
 }
 
 type ListPromptsMissingSyncMutationRow struct {
-	SyncID       interface{}    `json:"sync_id"`
-	SessionID    string         `json:"session_id"`
-	Content      string         `json:"content"`
-	Project      sql.NullString `json:"project"`
-	ProvenanceID sql.NullInt64  `json:"provenance_id"`
+	SyncID       interface{}   `json:"sync_id"`
+	SessionID    string        `json:"session_id"`
+	Content      string        `json:"content"`
+	Project      string        `json:"project"`
+	ProvenanceID sql.NullInt64 `json:"provenance_id"`
 }
 
 func (q *Queries) ListPromptsMissingSyncMutation(ctx context.Context, arg ListPromptsMissingSyncMutationParams) ([]ListPromptsMissingSyncMutationRow, error) {
@@ -328,15 +328,14 @@ UPDATE observations SET
   title = ?3,
   content = ?4,
   tool_name = ?5,
-  project = ?6,
-  scope = ?7,
-  topic_key = ?8,
-  normalized_hash = ?9,
-  provenance_id = COALESCE(?10, provenance_id),
+  scope = ?6,
+  topic_key = ?7,
+  normalized_hash = ?8,
+  provenance_id = COALESCE(?9, provenance_id),
   revision_count = revision_count + 1,
   updated_at = datetime('now'),
   deleted_at = NULL
-WHERE id = ?11
+WHERE id = ?10
 `
 
 type UpdatePulledObservationParams struct {
@@ -345,7 +344,6 @@ type UpdatePulledObservationParams struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	NormalizedHash sql.NullString `json:"normalized_hash"`
@@ -360,7 +358,6 @@ func (q *Queries) UpdatePulledObservation(ctx context.Context, arg UpdatePulledO
 		arg.Title,
 		arg.Content,
 		arg.ToolName,
-		arg.Project,
 		arg.Scope,
 		arg.TopicKey,
 		arg.NormalizedHash,

@@ -75,8 +75,8 @@ func TestApplyDataDirCreatesCurrentSchemaAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
-	if first.LatestVersion != "0022" {
-		t.Fatalf("latest version = %q, want 0022", first.LatestVersion)
+	if first.LatestVersion != "0023" {
+		t.Fatalf("latest version = %q, want 0023", first.LatestVersion)
 	}
 	second, err := ApplyDataDir(dataDir)
 	if err != nil {
@@ -106,8 +106,6 @@ func TestProjectColumnsReferenceProjects(t *testing.T) {
 		from  string
 	}{
 		{table: "sessions", from: "project"},
-		{table: "observations", from: "project"},
-		{table: "user_prompts", from: "project"},
 		{table: "sync_mutations", from: "project"},
 		{table: "sync_enrolled_projects", from: "project"},
 	} {
@@ -120,6 +118,31 @@ func TestProjectColumnsReferenceProjects(t *testing.T) {
 			}
 			t.Fatalf("%s.%s does not reference projects(id): %+v", tc.table, tc.from, fks)
 		})
+	}
+}
+
+func TestMemoryProjectColumnsAreDerivedFromSessions(t *testing.T) {
+	dataDir := t.TempDir()
+	if _, err := ApplyDataDir(dataDir); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+	db := openTestDB(t, filepath.Join(dataDir, "memory.db"))
+	t.Cleanup(func() { _ = db.Close() })
+
+	for _, table := range []string{"observations", "user_prompts"} {
+		for _, col := range columnList(t, db, table) {
+			if col == "project" {
+				t.Fatalf("%s.project should not be stored; project is derived from sessions.project", table)
+			}
+		}
+	}
+
+	for _, table := range []string{"observations_fts", "user_prompts_fts"} {
+		for _, col := range columnList(t, db, table) {
+			if col == "project" {
+				t.Fatalf("%s.project should not be indexed in FTS; project filtering joins sessions", table)
+			}
+		}
 	}
 }
 

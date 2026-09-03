@@ -30,10 +30,10 @@ func TestListProjectSummariesIncludesRegisteredAndActivityProjects(t *testing.T)
 	if _, err := s.db.Exec(`UPDATE sessions SET started_at = '2026-01-01 10:00:00' WHERE id = 's-alpha'`); err != nil {
 		t.Fatalf("update alpha session: %v", err)
 	}
-	if _, err := s.db.Exec(`UPDATE observations SET created_at = '2026-01-02 10:00:00', updated_at = '2026-01-02 10:00:00', last_seen_at = '2026-01-02 10:00:00' WHERE project = 'alpha'`); err != nil {
+	if _, err := s.db.Exec(`UPDATE observations SET created_at = '2026-01-02 10:00:00', updated_at = '2026-01-02 10:00:00', last_seen_at = '2026-01-02 10:00:00' WHERE session_id = 's-alpha'`); err != nil {
 		t.Fatalf("update alpha observation: %v", err)
 	}
-	if _, err := s.db.Exec(`UPDATE user_prompts SET created_at = '2026-01-03 10:00:00' WHERE project = 'alpha'`); err != nil {
+	if _, err := s.db.Exec(`UPDATE user_prompts SET created_at = '2026-01-03 10:00:00' WHERE session_id = 's-alpha'`); err != nil {
 		t.Fatalf("update alpha prompt: %v", err)
 	}
 

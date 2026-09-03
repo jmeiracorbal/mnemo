@@ -169,11 +169,7 @@ func (s *Store) Stats() (*Stats, error) {
 		stats.TotalPrompts = int(value)
 	}
 	if projects, err := s.q.ListObservationProjects(ctx); err == nil {
-		for _, project := range projects {
-			if project.Valid {
-				stats.Projects = append(stats.Projects, project.String)
-			}
-		}
+		stats.Projects = append(stats.Projects, projects...)
 	}
 	return stats, nil
 }

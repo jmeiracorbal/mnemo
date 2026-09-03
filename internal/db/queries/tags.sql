@@ -2,8 +2,9 @@
 SELECT ot.tag, COUNT(*) AS count, MAX(datetime(o.created_at)) AS last_used_at
 FROM observation_tags ot
 JOIN observations o ON o.id = ot.observation_id
+JOIN sessions s ON s.id = o.session_id
 WHERE o.deleted_at IS NULL
-  AND (sqlc.arg('project') = '' OR o.project = sqlc.arg('project'))
+  AND (sqlc.arg('project') = '' OR s.project = sqlc.arg('project'))
 GROUP BY ot.tag
 ORDER BY count DESC, ot.tag ASC;
 
@@ -13,9 +14,10 @@ FROM observation_tags ot1
 JOIN observation_tags ot2
   ON ot1.observation_id = ot2.observation_id AND ot2.tag != ot1.tag
 JOIN observations o ON o.id = ot1.observation_id
+JOIN sessions s ON s.id = o.session_id
 WHERE ot1.tag = sqlc.arg('tag')
   AND o.deleted_at IS NULL
-  AND (sqlc.arg('project') = '' OR o.project = sqlc.arg('project'))
+  AND (sqlc.arg('project') = '' OR s.project = sqlc.arg('project'))
   AND (sqlc.arg('since') = '' OR o.created_at >= datetime(sqlc.arg('since')))
 GROUP BY ot2.tag;
 
@@ -32,8 +34,9 @@ GROUP BY st2.tag;
 
 -- name: ListObservationsAffectedByTag :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title,
-       o.content, o.tool_name, o.project, o.scope, o.topic_key, o.provenance_id
+       o.content, o.tool_name, s.project AS project, o.scope, o.topic_key, o.provenance_id
 FROM observations o
+JOIN sessions s ON s.id = o.session_id
 JOIN observation_tags ot ON ot.observation_id = o.id
 WHERE ot.tag = ? AND o.deleted_at IS NULL;
 

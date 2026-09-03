@@ -38,7 +38,6 @@ type Observation struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	NormalizedHash sql.NullString `json:"normalized_hash"`
@@ -70,7 +69,6 @@ type ObservationsFt struct {
 	Content  string `json:"content"`
 	ToolName string `json:"tool_name"`
 	Type     string `json:"type"`
-	Project  string `json:"project"`
 }
 
 type Project struct {
@@ -166,12 +164,10 @@ type UserPrompt struct {
 	SyncID       sql.NullString `json:"sync_id"`
 	SessionID    string         `json:"session_id"`
 	Content      string         `json:"content"`
-	Project      sql.NullString `json:"project"`
 	CreatedAt    string         `json:"created_at"`
 	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
 type UserPromptsFt struct {
 	Content string `json:"content"`
-	Project string `json:"project"`
 }

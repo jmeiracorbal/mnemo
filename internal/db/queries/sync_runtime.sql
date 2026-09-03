@@ -91,33 +91,32 @@ WHERE target_key = sqlc.arg('target_key');
 
 -- name: ProjectExists :one
 SELECT EXISTS(
-  SELECT 1 FROM observations o WHERE o.project = sqlc.arg('project_name')
+  SELECT 1 FROM projects pr WHERE pr.id = sqlc.arg('project_name')
   UNION SELECT 1 FROM sessions s WHERE s.project = sqlc.arg('project_name')
-  UNION SELECT 1 FROM user_prompts p WHERE p.project = sqlc.arg('project_name')
   UNION SELECT 1 FROM sync_mutations m WHERE m.project = sqlc.arg('project_name')
   UNION SELECT 1 FROM sync_enrolled_projects e WHERE e.project = sqlc.arg('project_name')
 );
 
 -- name: CountObservationProjectRows :one
-SELECT COUNT(*) FROM observations WHERE project = sqlc.arg('project_name');
+SELECT COUNT(*)
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE s.project = sqlc.arg('project_name');
 
 -- name: CountSessionProjectRows :one
 SELECT COUNT(*) FROM sessions WHERE project = sqlc.arg('project_name');
 
 -- name: CountPromptProjectRows :one
-SELECT COUNT(*) FROM user_prompts WHERE project = sqlc.arg('project_name');
+SELECT COUNT(*)
+FROM user_prompts p
+JOIN sessions s ON s.id = p.session_id
+WHERE s.project = sqlc.arg('project_name');
 
 -- name: CountSyncMutationProjectRows :one
 SELECT COUNT(*) FROM sync_mutations WHERE project = sqlc.arg('project_name');
 
--- name: RenameObservationProject :execrows
-UPDATE observations SET project = sqlc.arg('new_name') WHERE project = sqlc.arg('old_name');
-
 -- name: RenameSessionProject :execrows
 UPDATE sessions SET project = sqlc.arg('new_name') WHERE project = sqlc.arg('old_name');
-
--- name: RenamePromptProject :execrows
-UPDATE user_prompts SET project = sqlc.arg('new_name') WHERE project = sqlc.arg('old_name');
 
 -- name: RenameMutationProject :execrows
 UPDATE sync_mutations

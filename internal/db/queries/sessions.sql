@@ -29,8 +29,9 @@ WHERE o.session_id = sqlc.arg('session_id')
 -- name: CountObservationsForSessionProject :one
 SELECT COUNT(*)
 FROM observations o
+JOIN sessions os ON os.id = o.session_id
 JOIN sessions ss ON ss.id = sqlc.arg('session_id')
-WHERE o.project = ss.project
+WHERE os.project = ss.project
   AND o.created_at >= ss.started_at
   AND o.deleted_at IS NULL;
 

@@ -927,8 +927,11 @@ func TestTopicKeyUpsertIsScopedByProjectAndScope(t *testing.T) {
 		t.Fatalf("add personal scoped observation: %v", err)
 	}
 
+	if err := s.CreateSession("s-other", "another-project", "/tmp/other"); err != nil {
+		t.Fatalf("create other session: %v", err)
+	}
 	otherProjectID, err := s.AddObservation(AddObservationParams{
-		SessionID: "s1",
+		SessionID: "s-other",
 		Type:      "architecture",
 		Title:     "Auth model",
 		Content:   "Other project",
@@ -954,7 +957,7 @@ func TestPromptProjectNullScan(t *testing.T) {
 
 	// Manually insert a prompt with NULL project to simulate legacy data or external changes
 	_, err := s.db.Exec(
-		"INSERT INTO user_prompts (session_id, content, project) VALUES (?, ?, NULL)",
+		"INSERT INTO user_prompts (session_id, content) VALUES (?, ?)",
 		"s1", "prompt with null project",
 	)
 	if err != nil {
@@ -966,8 +969,8 @@ func TestPromptProjectNullScan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RecentPrompts failed with null project: %v", err)
 	}
-	if len(prompts) != 1 || prompts[0].Project != "" {
-		t.Errorf("expected empty string for null project, got %q", prompts[0].Project)
+	if len(prompts) != 1 || prompts[0].Project != "mnemo" {
+		t.Errorf("expected derived session project, got %q", prompts[0].Project)
 	}
 
 	// 2. Test SearchPrompts
@@ -975,8 +978,8 @@ func TestPromptProjectNullScan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SearchPrompts failed with null project: %v", err)
 	}
-	if len(searchResult) != 1 || searchResult[0].Project != "" {
-		t.Errorf("expected empty string for null project in search, got %q", searchResult[0].Project)
+	if len(searchResult) != 1 || searchResult[0].Project != "mnemo" {
+		t.Errorf("expected derived session project in search, got %q", searchResult[0].Project)
 	}
 
 	// 3. Test Export
@@ -988,8 +991,8 @@ func TestPromptProjectNullScan(t *testing.T) {
 	for _, p := range data.Prompts {
 		if p.Content == "prompt with null project" {
 			found = true
-			if p.Project != "" {
-				t.Errorf("expected empty string for null project in export, got %q", p.Project)
+			if p.Project != "mnemo" {
+				t.Errorf("expected derived session project in export, got %q", p.Project)
 			}
 		}
 	}
@@ -1263,25 +1266,19 @@ func TestPassiveCaptureReturnsErrorWhenSessionDoesNotExist(t *testing.T) {
 func TestStatsProjectsOrderedByMostRecentObservation(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
+	if err := s.CreateSession("s1", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("create session s1: %v", err)
 	}
-	if err := s.CreateSession("s2", "mnemo", "/tmp/mnemo"); err != nil {
+	if err := s.CreateSession("s2", "beta", "/tmp/beta"); err != nil {
 		t.Fatalf("create session s2: %v", err)
-	}
-	if err := s.EnsureProject("alpha", "alpha"); err != nil {
-		t.Fatalf("ensure alpha project: %v", err)
-	}
-	if err := s.EnsureProject("beta", "beta"); err != nil {
-		t.Fatalf("ensure beta project: %v", err)
 	}
 
 	_, err := s.db.Exec(
-		`INSERT INTO observations (session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?),
-		        (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`,
-		"s1", "note", "older", "older alpha", "alpha", "project", hashNormalized("older alpha"), "2026-02-01 10:00:00", "2026-02-01 10:00:00",
-		"s2", "note", "newer", "newer beta", "beta", "project", hashNormalized("newer beta"), "2026-02-02 10:00:00", "2026-02-02 10:00:00",
+		`INSERT INTO observations (session_id, type, title, content, scope, normalized_hash, revision_count, duplicate_count, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?),
+		        (?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`,
+		"s1", "note", "older", "older alpha", "project", hashNormalized("older alpha"), "2026-02-01 10:00:00", "2026-02-01 10:00:00",
+		"s2", "note", "newer", "newer beta", "project", hashNormalized("newer beta"), "2026-02-02 10:00:00", "2026-02-02 10:00:00",
 	)
 	if err != nil {
 		t.Fatalf("insert observations: %v", err)
@@ -1318,9 +1315,9 @@ func TestSessionsOrderedByMostRecentActivity(t *testing.T) {
 	}
 
 	_, err = s.db.Exec(
-		`INSERT INTO observations (session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`,
-		"s-older", "note", "latest", "session old got new activity", "mnemo", "project", hashNormalized("session old got new activity"), "2026-02-03 09:00:00", "2026-02-03 09:00:00",
+		`INSERT INTO observations (session_id, type, title, content, scope, normalized_hash, revision_count, duplicate_count, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`,
+		"s-older", "note", "latest", "session old got new activity", "project", hashNormalized("session old got new activity"), "2026-02-03 09:00:00", "2026-02-03 09:00:00",
 	)
 	if err != nil {
 		t.Fatalf("insert latest observation: %v", err)
@@ -1994,17 +1991,23 @@ func TestStoreAdditionalQueryAndMutationBranches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update observation: %v", err)
 	}
-	if updated.Project != nil {
-		t.Fatalf("expected nil project after empty update")
+	if updated.Project == nil || *updated.Project != "mnemo" {
+		t.Fatalf("expected derived session project after empty update, got %v", updated.Project)
 	}
 	if updated.TopicKey != nil {
 		t.Fatalf("expected nil topic key after empty update")
 	}
 
-	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-q", Content: "alpha prompt", Project: "alpha"}); err != nil {
+	if err := s.CreateSession("s-alpha", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("create alpha session: %v", err)
+	}
+	if err := s.CreateSession("s-beta", "beta", "/tmp/beta"); err != nil {
+		t.Fatalf("create beta session: %v", err)
+	}
+	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-alpha", Content: "alpha prompt", Project: "alpha"}); err != nil {
 		t.Fatalf("add alpha prompt: %v", err)
 	}
-	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-q", Content: "beta prompt", Project: "beta"}); err != nil {
+	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-beta", Content: "beta prompt", Project: "beta"}); err != nil {
 		t.Fatalf("add beta prompt: %v", err)
 	}
 
@@ -2109,9 +2112,9 @@ func TestTimelineHandlesMissingSessionRecord(t *testing.T) {
 	}()
 
 	res, err := s.db.Exec(
-		`INSERT INTO observations (session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
-		"manual-save", "manual", "orphan", "orphan content", "mnemo", "project", hashNormalized("orphan content"),
+		`INSERT INTO observations (session_id, type, title, content, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
+		"manual-save", "manual", "orphan", "orphan content", "project", hashNormalized("orphan content"),
 	)
 	if err != nil {
 		t.Fatalf("insert orphan observation: %v", err)
@@ -2121,15 +2124,8 @@ func TestTimelineHandlesMissingSessionRecord(t *testing.T) {
 		t.Fatalf("last insert id: %v", err)
 	}
 
-	timeline, err := s.Timeline(obsID, 1, 1)
-	if err != nil {
-		t.Fatalf("timeline: %v", err)
-	}
-	if timeline.SessionInfo != nil {
-		t.Fatalf("expected nil session info for missing session, got %+v", timeline.SessionInfo)
-	}
-	if timeline.TotalInRange != 1 {
-		t.Fatalf("expected total in range=1, got %d", timeline.TotalInRange)
+	if _, err := s.Timeline(obsID, 1, 1); err == nil {
+		t.Fatalf("expected orphan observation to be invisible without a session")
 	}
 }
 
@@ -3026,16 +3022,16 @@ func TestEnrollProjectBackfillsHistoricalMutations(t *testing.T) {
 	}
 
 	if _, err := s.db.Exec(
-		`INSERT INTO observations (sync_id, session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
-		"obs-legacy", "legacy-session", "decision", "Legacy obs", "Historical content", "legacy-proj", "project", hashNormalized("Historical content"),
+		`INSERT INTO observations (sync_id, session_id, type, title, content, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
+		"obs-legacy", "legacy-session", "decision", "Legacy obs", "Historical content", "project", hashNormalized("Historical content"),
 	); err != nil {
 		t.Fatalf("insert observation: %v", err)
 	}
 
 	if _, err := s.db.Exec(
-		`INSERT INTO user_prompts (sync_id, session_id, content, project) VALUES (?, ?, ?, ?)`,
-		"prompt-legacy", "legacy-session", "What happened before enterprise?", "legacy-proj",
+		`INSERT INTO user_prompts (sync_id, session_id, content) VALUES (?, ?, ?)`,
+		"prompt-legacy", "legacy-session", "What happened before enterprise?",
 	); err != nil {
 		t.Fatalf("insert prompt: %v", err)
 	}
@@ -3100,16 +3096,16 @@ func TestEnrollProjectBackfillIsIdempotentAndSkipsExistingMutations(t *testing.T
 	}
 
 	if _, err := s.db.Exec(
-		`INSERT INTO observations (sync_id, session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
-		"obs-legacy", "legacy-session", "decision", "Legacy obs", "Historical content", "legacy-proj", "project", hashNormalized("Historical content"),
+		`INSERT INTO observations (sync_id, session_id, type, title, content, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
+		"obs-legacy", "legacy-session", "decision", "Legacy obs", "Historical content", "project", hashNormalized("Historical content"),
 	); err != nil {
 		t.Fatalf("insert observation: %v", err)
 	}
 
 	if _, err := s.db.Exec(
-		`INSERT INTO user_prompts (sync_id, session_id, content, project) VALUES (?, ?, ?, ?)`,
-		"prompt-legacy", "legacy-session", "Historical prompt", "legacy-proj",
+		`INSERT INTO user_prompts (sync_id, session_id, content) VALUES (?, ?, ?)`,
+		"prompt-legacy", "legacy-session", "Historical prompt",
 	); err != nil {
 		t.Fatalf("insert prompt: %v", err)
 	}

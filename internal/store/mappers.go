@@ -134,26 +134,26 @@ func observationFromDB(
 
 func observationFromListRow(r dbgen.ListObservationsRow) Observation {
 	return observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-		r.ToolName, r.Project, r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
+		r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
 		r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
 }
 
 func observationFromRecentRow(r dbgen.ListRecentObservationsRow) Observation {
 	return observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-		r.ToolName, r.Project, r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
+		r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
 		r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
 }
 
 func observationFromSessionRow(r dbgen.ListSessionObservationsRow) Observation {
 	return observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-		r.ToolName, r.Project, r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
+		r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
 		r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
 }
 
 func searchResultFromFilterRow(r dbgen.SearchObservationsByFilterRow) SearchResult {
 	return SearchResult{
 		Observation: observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-			r.ToolName, r.Project, r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
+			r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
 			r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.DeletedAt),
 		Rank: r.Relevance,
 	}
@@ -162,7 +162,7 @@ func searchResultFromFilterRow(r dbgen.SearchObservationsByFilterRow) SearchResu
 func searchResultFromFTSRow(r dbgen.SearchObservationsFTSRow) SearchResult {
 	return SearchResult{
 		Observation: observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-			r.ToolName, r.Project, r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
+			r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
 			r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.DeletedAt),
 		Rank: r.Relevance,
 	}

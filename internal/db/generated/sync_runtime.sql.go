@@ -100,10 +100,13 @@ func (q *Queries) CopyProjectEnrollment(ctx context.Context, arg CopyProjectEnro
 }
 
 const countObservationProjectRows = `-- name: CountObservationProjectRows :one
-SELECT COUNT(*) FROM observations WHERE project = ?1
+SELECT COUNT(*)
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE s.project = ?1
 `
 
-func (q *Queries) CountObservationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error) {
+func (q *Queries) CountObservationProjectRows(ctx context.Context, projectName string) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countObservationProjectRows, projectName)
 	var count int64
 	err := row.Scan(&count)
@@ -123,10 +126,13 @@ func (q *Queries) CountPendingMutations(ctx context.Context, targetKey string) (
 }
 
 const countPromptProjectRows = `-- name: CountPromptProjectRows :one
-SELECT COUNT(*) FROM user_prompts WHERE project = ?1
+SELECT COUNT(*)
+FROM user_prompts p
+JOIN sessions s ON s.id = p.session_id
+WHERE s.project = ?1
 `
 
-func (q *Queries) CountPromptProjectRows(ctx context.Context, projectName sql.NullString) (int64, error) {
+func (q *Queries) CountPromptProjectRows(ctx context.Context, projectName string) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPromptProjectRows, projectName)
 	var count int64
 	err := row.Scan(&count)
@@ -276,15 +282,14 @@ func (q *Queries) MarkSyncHealthy(ctx context.Context, arg MarkSyncHealthyParams
 
 const projectExists = `-- name: ProjectExists :one
 SELECT EXISTS(
-  SELECT 1 FROM observations o WHERE o.project = ?1
+  SELECT 1 FROM projects pr WHERE pr.id = ?1
   UNION SELECT 1 FROM sessions s WHERE s.project = ?1
-  UNION SELECT 1 FROM user_prompts p WHERE p.project = ?1
   UNION SELECT 1 FROM sync_mutations m WHERE m.project = ?1
   UNION SELECT 1 FROM sync_enrolled_projects e WHERE e.project = ?1
 )
 `
 
-func (q *Queries) ProjectExists(ctx context.Context, projectName sql.NullString) (bool, error) {
+func (q *Queries) ProjectExists(ctx context.Context, projectName string) (bool, error) {
 	row := q.db.QueryRowContext(ctx, projectExists, projectName)
 	var exists bool
 	err := row.Scan(&exists)
@@ -322,40 +327,6 @@ type RenameMutationProjectParams struct {
 
 func (q *Queries) RenameMutationProject(ctx context.Context, arg RenameMutationProjectParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, renameMutationProject, arg.NewName, arg.OldName)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const renameObservationProject = `-- name: RenameObservationProject :execrows
-UPDATE observations SET project = ?1 WHERE project = ?2
-`
-
-type RenameObservationProjectParams struct {
-	NewName sql.NullString `json:"new_name"`
-	OldName sql.NullString `json:"old_name"`
-}
-
-func (q *Queries) RenameObservationProject(ctx context.Context, arg RenameObservationProjectParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, renameObservationProject, arg.NewName, arg.OldName)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const renamePromptProject = `-- name: RenamePromptProject :execrows
-UPDATE user_prompts SET project = ?1 WHERE project = ?2
-`
-
-type RenamePromptProjectParams struct {
-	NewName sql.NullString `json:"new_name"`
-	OldName sql.NullString `json:"old_name"`
-}
-
-func (q *Queries) RenamePromptProject(ctx context.Context, arg RenamePromptProjectParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, renamePromptProject, arg.NewName, arg.OldName)
 	if err != nil {
 		return 0, err
 	}
