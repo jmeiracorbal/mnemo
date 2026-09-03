@@ -230,6 +230,7 @@ type Provenance struct {
 
 const (
 	DefaultSyncTargetKey = "cloud"
+	DefaultSyncTypeID    = "cloud"
 
 	SyncLifecycleIdle     = "idle"
 	SyncLifecyclePending  = "pending"
@@ -250,6 +251,7 @@ const (
 
 type SyncState struct {
 	TargetKey           string  `json:"target_key"`
+	SyncTypeID          string  `json:"sync_type_id"`
 	Lifecycle           string  `json:"lifecycle"`
 	LastEnqueuedSeq     int64   `json:"last_enqueued_seq"`
 	LastAckedSeq        int64   `json:"last_acked_seq"`

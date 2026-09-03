@@ -42,6 +42,7 @@ type Querier interface {
 	EnrollProject(ctx context.Context, project string) (int64, error)
 	EnsureProject(ctx context.Context, arg EnsureProjectParams) error
 	EnsureSyncState(ctx context.Context, arg EnsureSyncStateParams) error
+	EnsureSyncType(ctx context.Context, arg EnsureSyncTypeParams) error
 	ExportObservations(ctx context.Context) ([]ExportObservationsRow, error)
 	ExportPrompts(ctx context.Context) ([]ExportPromptsRow, error)
 	ExportSessions(ctx context.Context) ([]Session, error)

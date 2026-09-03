@@ -1,9 +1,12 @@
+-- name: EnsureSyncType :exec
+INSERT OR IGNORE INTO sync_types (id, display_name) VALUES (?, ?);
+
 -- name: EnsureSyncState :exec
-INSERT OR IGNORE INTO sync_state (target_key, lifecycle, updated_at)
-VALUES (?, ?, datetime('now'));
+INSERT OR IGNORE INTO sync_state (target_key, sync_type_id, lifecycle, updated_at)
+VALUES (?, ?, ?, datetime('now'));
 
 -- name: GetSyncState :one
-SELECT target_key, lifecycle, last_enqueued_seq, last_acked_seq, last_pulled_seq,
+SELECT target_key, sync_type_id, lifecycle, last_enqueued_seq, last_acked_seq, last_pulled_seq,
        consecutive_failures, backoff_until, lease_owner, lease_until, last_error, updated_at
 FROM sync_state WHERE target_key = ?;
 

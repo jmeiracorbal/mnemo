@@ -141,6 +141,7 @@ type SyncMutation struct {
 
 type SyncState struct {
 	TargetKey           string         `json:"target_key"`
+	SyncTypeID          string         `json:"sync_type_id"`
 	Lifecycle           string         `json:"lifecycle"`
 	LastEnqueuedSeq     int64          `json:"last_enqueued_seq"`
 	LastAckedSeq        int64          `json:"last_acked_seq"`
@@ -151,6 +152,11 @@ type SyncState struct {
 	LeaseUntil          sql.NullString `json:"lease_until"`
 	LastError           sql.NullString `json:"last_error"`
 	UpdatedAt           string         `json:"updated_at"`
+}
+
+type SyncType struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
 }
 
 type Tool struct {

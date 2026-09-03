@@ -23,22 +23,37 @@ func (q *Queries) EnrollProject(ctx context.Context, project string) (int64, err
 }
 
 const ensureSyncState = `-- name: EnsureSyncState :exec
-INSERT OR IGNORE INTO sync_state (target_key, lifecycle, updated_at)
-VALUES (?, ?, datetime('now'))
+INSERT OR IGNORE INTO sync_state (target_key, sync_type_id, lifecycle, updated_at)
+VALUES (?, ?, ?, datetime('now'))
 `
 
 type EnsureSyncStateParams struct {
-	TargetKey string `json:"target_key"`
-	Lifecycle string `json:"lifecycle"`
+	TargetKey  string `json:"target_key"`
+	SyncTypeID string `json:"sync_type_id"`
+	Lifecycle  string `json:"lifecycle"`
 }
 
 func (q *Queries) EnsureSyncState(ctx context.Context, arg EnsureSyncStateParams) error {
-	_, err := q.db.ExecContext(ctx, ensureSyncState, arg.TargetKey, arg.Lifecycle)
+	_, err := q.db.ExecContext(ctx, ensureSyncState, arg.TargetKey, arg.SyncTypeID, arg.Lifecycle)
+	return err
+}
+
+const ensureSyncType = `-- name: EnsureSyncType :exec
+INSERT OR IGNORE INTO sync_types (id, display_name) VALUES (?, ?)
+`
+
+type EnsureSyncTypeParams struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+}
+
+func (q *Queries) EnsureSyncType(ctx context.Context, arg EnsureSyncTypeParams) error {
+	_, err := q.db.ExecContext(ctx, ensureSyncType, arg.ID, arg.DisplayName)
 	return err
 }
 
 const getSyncState = `-- name: GetSyncState :one
-SELECT target_key, lifecycle, last_enqueued_seq, last_acked_seq, last_pulled_seq,
+SELECT target_key, sync_type_id, lifecycle, last_enqueued_seq, last_acked_seq, last_pulled_seq,
        consecutive_failures, backoff_until, lease_owner, lease_until, last_error, updated_at
 FROM sync_state WHERE target_key = ?
 `
@@ -48,6 +63,7 @@ func (q *Queries) GetSyncState(ctx context.Context, targetKey string) (SyncState
 	var i SyncState
 	err := row.Scan(
 		&i.TargetKey,
+		&i.SyncTypeID,
 		&i.Lifecycle,
 		&i.LastEnqueuedSeq,
 		&i.LastAckedSeq,

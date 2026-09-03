@@ -263,8 +263,13 @@ func extractProjectFromRawPayload(payload string) string {
 }
 
 func (s *Store) ensureSyncState(targetKey string) error {
+	if err := s.q.EnsureSyncType(context.Background(), dbgen.EnsureSyncTypeParams{
+		ID: DefaultSyncTypeID, DisplayName: "Cloud synchronization",
+	}); err != nil {
+		return err
+	}
 	return s.q.EnsureSyncState(context.Background(), dbgen.EnsureSyncStateParams{
-		TargetKey: targetKey, Lifecycle: SyncLifecycleIdle,
+		TargetKey: targetKey, SyncTypeID: DefaultSyncTypeID, Lifecycle: SyncLifecycleIdle,
 	})
 }
 
@@ -278,8 +283,13 @@ func (s *Store) getSyncState(targetKey string) (*SyncState, error) {
 
 func (s *Store) getSyncStateTx(tx *sql.Tx, targetKey string) (*SyncState, error) {
 	q := s.q.WithTx(tx)
+	if err := q.EnsureSyncType(context.Background(), dbgen.EnsureSyncTypeParams{
+		ID: DefaultSyncTypeID, DisplayName: "Cloud synchronization",
+	}); err != nil {
+		return nil, err
+	}
 	if err := q.EnsureSyncState(context.Background(), dbgen.EnsureSyncStateParams{
-		TargetKey: targetKey, Lifecycle: SyncLifecycleIdle,
+		TargetKey: targetKey, SyncTypeID: DefaultSyncTypeID, Lifecycle: SyncLifecycleIdle,
 	}); err != nil {
 		return nil, err
 	}

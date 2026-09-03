@@ -98,6 +98,11 @@ CREATE TABLE user_prompts (
     FOREIGN KEY (session_id) REFERENCES sessions(id)
 );
 
+CREATE TABLE sync_types (
+    id TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL UNIQUE
+);
+
 CREATE TABLE sync_chunks (
     chunk_id TEXT PRIMARY KEY,
     imported_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -105,6 +110,7 @@ CREATE TABLE sync_chunks (
 
 CREATE TABLE sync_state (
     target_key TEXT PRIMARY KEY,
+    sync_type_id TEXT NOT NULL REFERENCES sync_types(id),
     lifecycle TEXT NOT NULL DEFAULT 'idle',
     last_enqueued_seq INTEGER NOT NULL DEFAULT 0,
     last_acked_seq INTEGER NOT NULL DEFAULT 0,

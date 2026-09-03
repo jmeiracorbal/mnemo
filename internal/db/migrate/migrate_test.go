@@ -75,8 +75,8 @@ func TestApplyDataDirCreatesCurrentSchemaAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
-	if first.LatestVersion != "0023" {
-		t.Fatalf("latest version = %q, want 0023", first.LatestVersion)
+	if first.LatestVersion != "0024" {
+		t.Fatalf("latest version = %q, want 0024", first.LatestVersion)
 	}
 	second, err := ApplyDataDir(dataDir)
 	if err != nil {

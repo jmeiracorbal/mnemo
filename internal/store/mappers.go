@@ -170,7 +170,7 @@ func searchResultFromFTSRow(r dbgen.SearchObservationsFTSRow) SearchResult {
 
 func syncStateFromDB(row dbgen.SyncState) *SyncState {
 	return &SyncState{
-		TargetKey: row.TargetKey, Lifecycle: row.Lifecycle,
+		TargetKey: row.TargetKey, SyncTypeID: row.SyncTypeID, Lifecycle: row.Lifecycle,
 		LastEnqueuedSeq: row.LastEnqueuedSeq, LastAckedSeq: row.LastAckedSeq,
 		LastPulledSeq: row.LastPulledSeq, ConsecutiveFailures: int(row.ConsecutiveFailures),
 		BackoffUntil: nullablePtr(row.BackoffUntil), LeaseOwner: nullablePtr(row.LeaseOwner),
