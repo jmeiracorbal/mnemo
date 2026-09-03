@@ -148,7 +148,7 @@ const countSyncMutationProjectRows = `-- name: CountSyncMutationProjectRows :one
 SELECT COUNT(*) FROM sync_mutations WHERE project = ?1
 `
 
-func (q *Queries) CountSyncMutationProjectRows(ctx context.Context, projectName string) (int64, error) {
+func (q *Queries) CountSyncMutationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countSyncMutationProjectRows, projectName)
 	var count int64
 	err := row.Scan(&count)
@@ -165,12 +165,12 @@ func (q *Queries) DeleteProjectEnrollment(ctx context.Context, project string) e
 }
 
 const listPendingSyncMutations = `-- name: ListPendingSyncMutations :many
-SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source, sm.project,
+SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source, CAST(ifnull(sm.project, '') AS TEXT) AS project,
        sm.occurred_at, sm.acked_at
 FROM sync_mutations sm
 LEFT JOIN sync_enrolled_projects sep ON sm.project = sep.project
 WHERE sm.target_key = ?1 AND sm.acked_at IS NULL
-  AND (sm.project = '' OR sep.project IS NOT NULL)
+  AND (sm.project IS NULL OR sm.project = '' OR sep.project IS NOT NULL)
 ORDER BY sm.seq ASC
 LIMIT ?2
 `
@@ -180,15 +180,28 @@ type ListPendingSyncMutationsParams struct {
 	ResultLimit int64  `json:"result_limit"`
 }
 
-func (q *Queries) ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]SyncMutation, error) {
+type ListPendingSyncMutationsRow struct {
+	Seq        int64          `json:"seq"`
+	TargetKey  string         `json:"target_key"`
+	Entity     string         `json:"entity"`
+	EntityKey  string         `json:"entity_key"`
+	Op         string         `json:"op"`
+	Payload    string         `json:"payload"`
+	Source     string         `json:"source"`
+	Project    string         `json:"project"`
+	OccurredAt string         `json:"occurred_at"`
+	AckedAt    sql.NullString `json:"acked_at"`
+}
+
+func (q *Queries) ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]ListPendingSyncMutationsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPendingSyncMutations, arg.TargetKey, arg.ResultLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []SyncMutation{}
+	items := []ListPendingSyncMutationsRow{}
 	for rows.Next() {
-		var i SyncMutation
+		var i ListPendingSyncMutationsRow
 		if err := rows.Scan(
 			&i.Seq,
 			&i.TargetKey,
@@ -303,8 +316,8 @@ WHERE project = ?2
 `
 
 type RenameMutationProjectParams struct {
-	NewName string `json:"new_name"`
-	OldName string `json:"old_name"`
+	NewName sql.NullString `json:"new_name"`
+	OldName sql.NullString `json:"old_name"`
 }
 
 func (q *Queries) RenameMutationProject(ctx context.Context, arg RenameMutationProjectParams) (int64, error) {
@@ -371,6 +384,7 @@ UPDATE sync_mutations
 SET acked_at = datetime('now')
 WHERE target_key = ?1
   AND acked_at IS NULL
+  AND project IS NOT NULL
   AND project != ''
   AND project NOT IN (SELECT project FROM sync_enrolled_projects)
 `

@@ -75,8 +75,8 @@ func TestApplyDataDirCreatesCurrentSchemaAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
-	if first.LatestVersion != "0021" {
-		t.Fatalf("latest version = %q, want 0021", first.LatestVersion)
+	if first.LatestVersion != "0022" {
+		t.Fatalf("latest version = %q, want 0022", first.LatestVersion)
 	}
 	second, err := ApplyDataDir(dataDir)
 	if err != nil {
@@ -90,6 +90,36 @@ func TestApplyDataDirCreatesCurrentSchemaAndIsIdempotent(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	if err := ValidateCurrent(db); err != nil {
 		t.Fatalf("validate current schema: %v", err)
+	}
+}
+
+func TestProjectColumnsReferenceProjects(t *testing.T) {
+	dataDir := t.TempDir()
+	if _, err := ApplyDataDir(dataDir); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
+	db := openTestDB(t, filepath.Join(dataDir, "memory.db"))
+	t.Cleanup(func() { _ = db.Close() })
+
+	for _, tc := range []struct {
+		table string
+		from  string
+	}{
+		{table: "sessions", from: "project"},
+		{table: "observations", from: "project"},
+		{table: "user_prompts", from: "project"},
+		{table: "sync_mutations", from: "project"},
+		{table: "sync_enrolled_projects", from: "project"},
+	} {
+		t.Run(tc.table, func(t *testing.T) {
+			fks := foreignKeys(t, db, tc.table)
+			for _, fk := range fks {
+				if fk.From == tc.from && fk.Table == "projects" && fk.To == "id" {
+					return
+				}
+			}
+			t.Fatalf("%s.%s does not reference projects(id): %+v", tc.table, tc.from, fks)
+		})
 	}
 }
 
@@ -145,6 +175,13 @@ func TestApplyDataDirUpgradesPartialLegacyDB(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	if err := ValidateCurrent(db); err != nil {
 		t.Fatalf("validate migrated legacy schema: %v", err)
+	}
+	var projectRows int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM projects WHERE id = 'legacy'`).Scan(&projectRows); err != nil {
+		t.Fatalf("query migrated project root: %v", err)
+	}
+	if projectRows != 1 {
+		t.Fatalf("legacy project root rows = %d, want 1", projectRows)
 	}
 	var pk int
 	if err := db.QueryRow(`SELECT pk FROM pragma_table_info('observations') WHERE name = 'id'`).Scan(&pk); err != nil {
@@ -289,6 +326,33 @@ func columnList(t *testing.T, db *sql.DB, table string) []string {
 		t.Fatalf("column rows for %s: %v", table, err)
 	}
 	sort.Strings(out)
+	return out
+}
+
+type foreignKey struct {
+	Table string
+	From  string
+	To    string
+}
+
+func foreignKeys(t *testing.T, db *sql.DB, table string) []foreignKey {
+	t.Helper()
+	rows, err := db.Query(`SELECT "table", "from", "to" FROM pragma_foreign_key_list(?) ORDER BY id, seq`, table)
+	if err != nil {
+		t.Fatalf("query foreign keys for %s: %v", table, err)
+	}
+	defer rows.Close()
+	var out []foreignKey
+	for rows.Next() {
+		var fk foreignKey
+		if err := rows.Scan(&fk.Table, &fk.From, &fk.To); err != nil {
+			t.Fatalf("scan foreign key for %s: %v", table, err)
+		}
+		out = append(out, fk)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("foreign key rows for %s: %v", table, err)
+	}
 	return out
 }
 
