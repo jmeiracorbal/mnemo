@@ -1,10 +1,10 @@
 -- name: ListPendingSyncMutations :many
-SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source, sm.project,
+SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source, CAST(ifnull(sm.project, '') AS TEXT) AS project,
        sm.occurred_at, sm.acked_at
 FROM sync_mutations sm
 LEFT JOIN sync_enrolled_projects sep ON sm.project = sep.project
 WHERE sm.target_key = sqlc.arg('target_key') AND sm.acked_at IS NULL
-  AND (sm.project = '' OR sep.project IS NOT NULL)
+  AND (sm.project IS NULL OR sm.project = '' OR sep.project IS NOT NULL)
 ORDER BY sm.seq ASC
 LIMIT sqlc.arg('result_limit');
 
@@ -13,6 +13,7 @@ UPDATE sync_mutations
 SET acked_at = datetime('now')
 WHERE target_key = sqlc.arg('target_key')
   AND acked_at IS NULL
+  AND project IS NOT NULL
   AND project != ''
   AND project NOT IN (SELECT project FROM sync_enrolled_projects);
 

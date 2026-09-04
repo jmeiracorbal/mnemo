@@ -11,7 +11,23 @@ import (
 )
 
 func (s *Store) EnsureProject(id, name string) error {
+	id = strings.TrimSpace(id)
+	name = strings.TrimSpace(name)
+	if id == "" {
+		return fmt.Errorf("project id must not be empty")
+	}
+	if name == "" {
+		name = id
+	}
 	return s.q.EnsureProject(context.Background(), dbgen.EnsureProjectParams{ID: id, Name: name})
+}
+
+func (s *Store) ensureProjectTx(tx *sql.Tx, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	return s.q.WithTx(tx).EnsureProject(context.Background(), dbgen.EnsureProjectParams{ID: id, Name: id})
 }
 
 func (s *Store) GetProjectByID(id string) (*Project, error) {
@@ -101,7 +117,7 @@ func (s *Store) BuildProjectMergePlan(from, to string) (*ProjectMergePlan, error
 	if err != nil {
 		return nil, fmt.Errorf("count source prompts: %w", err)
 	}
-	syncMutations, err := q.CountSyncMutationProjectRows(ctx, from)
+	syncMutations, err := q.CountSyncMutationProjectRows(ctx, sqlNullString(from))
 	if err != nil {
 		return nil, fmt.Errorf("count source sync mutations: %w", err)
 	}
@@ -175,8 +191,8 @@ func (s *Store) MergeProjects(from, to string) (*ProjectMergeResult, error) {
 		}
 
 		result.SyncMutationsUpdated, err = q.RenameMutationProject(ctx, dbgen.RenameMutationProjectParams{
-			NewName: plan.To.ID,
-			OldName: plan.From.ID,
+			NewName: sqlNullString(plan.To.ID),
+			OldName: sqlNullString(plan.From.ID),
 		})
 		if err != nil {
 			return fmt.Errorf("merge sync_mutations: %w", err)
@@ -311,6 +327,9 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 	result := &MigrateResult{Migrated: true}
 
 	err = s.withTx(func(tx *sql.Tx) error {
+		if err := s.ensureProjectTx(tx, newName); err != nil {
+			return fmt.Errorf("ensure destination project: %w", err)
+		}
 		q := s.q.WithTx(tx)
 		params := dbgen.RenameObservationProjectParams{NewName: sqlNullString(newName), OldName: sqlNullString(oldName)}
 		n, err := q.RenameObservationProject(context.Background(), params)
@@ -334,7 +353,7 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 		}
 
 		result.SyncMutationsUpdated, err = q.RenameMutationProject(context.Background(), dbgen.RenameMutationProjectParams{
-			NewName: newName, OldName: oldName,
+			NewName: sqlNullString(newName), OldName: sqlNullString(oldName),
 		})
 		if err != nil {
 			return fmt.Errorf("migrate sync_mutations: %w", err)
@@ -363,6 +382,9 @@ func (s *Store) EnrollProject(project string) error {
 		return fmt.Errorf("project name must not be empty")
 	}
 	return s.withTx(func(tx *sql.Tx) error {
+		if err := s.ensureProjectTx(tx, project); err != nil {
+			return err
+		}
 		rowsAffected, err := s.q.WithTx(tx).EnrollProject(context.Background(), project)
 		if err != nil {
 			return err

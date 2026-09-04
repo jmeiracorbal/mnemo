@@ -60,12 +60,6 @@ func (q *Queries) GetProjectByID(ctx context.Context, id string) (Project, error
 const listProjectSummaries = `-- name: ListProjectSummaries :many
 WITH project_ids AS (
     SELECT id AS project FROM projects
-    UNION
-    SELECT project FROM sessions WHERE project != ''
-    UNION
-    SELECT project FROM observations WHERE project IS NOT NULL AND project != '' AND deleted_at IS NULL
-    UNION
-    SELECT project FROM user_prompts WHERE project IS NOT NULL AND project != ''
 ), activity AS (
     SELECT project, started_at AS seen_at FROM sessions WHERE project != ''
     UNION ALL
@@ -85,7 +79,7 @@ SELECT
     (SELECT COUNT(*) FROM user_prompts up WHERE up.project = p.project) AS prompt_count,
     CAST(COALESCE(MAX(activity.seen_at), '') AS TEXT) AS last_seen_at
 FROM project_ids p
-LEFT JOIN projects pr ON pr.id = p.project
+JOIN projects pr ON pr.id = p.project
 LEFT JOIN activity ON activity.project = p.project
 GROUP BY p.project, pr.name, pr.created_at
 ORDER BY p.project ASC

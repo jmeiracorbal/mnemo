@@ -136,7 +136,7 @@ type SyncMutation struct {
 	Op         string         `json:"op"`
 	Payload    string         `json:"payload"`
 	Source     string         `json:"source"`
-	Project    string         `json:"project"`
+	Project    sql.NullString `json:"project"`
 	OccurredAt string         `json:"occurred_at"`
 	AckedAt    sql.NullString `json:"acked_at"`
 }

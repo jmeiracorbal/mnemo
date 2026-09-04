@@ -50,6 +50,9 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 
 	var observationID int64
 	err := s.withTx(func(tx *sql.Tx) error {
+		if err := s.ensureProjectTx(tx, p.Project); err != nil {
+			return err
+		}
 		q := s.q.WithTx(tx)
 		provenanceID, err := s.optionalProvenanceTx(tx, p.Provenance)
 		if err != nil {
@@ -452,6 +455,9 @@ func (s *Store) AddPrompt(p AddPromptParams) (int64, error) {
 
 	var promptID int64
 	err := s.withTx(func(tx *sql.Tx) error {
+		if err := s.ensureProjectTx(tx, p.Project); err != nil {
+			return err
+		}
 		syncID := newSyncID("prompt")
 		provenanceID, err := s.optionalProvenanceTx(tx, p.Provenance)
 		if err != nil {

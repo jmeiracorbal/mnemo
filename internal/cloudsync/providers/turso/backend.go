@@ -102,7 +102,11 @@ func (b *Backend) migrate(migrations fs.FS) error {
 			return fmt.Errorf("migration %s guard: %w", version, err)
 		}
 
-		batch := []hranaStmt{{SQL: "BEGIN"}}
+		batch := make([]hranaStmt, 0)
+		if migrationNeedsForeignKeysOff(string(sqlBytes)) {
+			batch = append(batch, hranaStmt{SQL: "PRAGMA foreign_keys = OFF"})
+		}
+		batch = append(batch, hranaStmt{SQL: "BEGIN"})
 		if shouldRun {
 			for _, stmt := range splitSQL(string(sqlBytes)) {
 				batch = append(batch, hranaStmt{SQL: stmt})
@@ -115,6 +119,9 @@ func (b *Backend) migrate(migrations fs.FS) error {
 			},
 			hranaStmt{SQL: "COMMIT"},
 		)
+		if migrationNeedsForeignKeysOff(string(sqlBytes)) {
+			batch = append(batch, hranaStmt{SQL: "PRAGMA foreign_keys = ON"})
+		}
 		if _, err := b.pipeline(batch); err != nil {
 			return fmt.Errorf("migration %s: %w", version, err)
 		}
@@ -435,6 +442,15 @@ func (b *Backend) pipeline(stmts []hranaStmt) ([]hranaExecResult, error) {
 	return out, nil
 }
 
+func migrationNeedsForeignKeysOff(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == "-- mnemo:foreign-keys-off" {
+			return true
+		}
+	}
+	return false
+}
+
 func (b *Backend) migrateGuardsPass(content string) (bool, error) {
 	shouldRun := true
 	for _, line := range strings.Split(content, "\n") {
@@ -504,9 +520,9 @@ func (b *Backend) addColumnIfMissing(table, colName, colDef string) {
 // Hrana value helpers
 // ---------------------------------------------------------------------------
 
-func textVal(s string) hranaValue       { return hranaValue{Type: "text", Value: s} }
-func intVal(n int64) hranaValue         { return hranaValue{Type: "integer", Value: strconv.FormatInt(n, 10)} }
-func nullVal() hranaValue               { return hranaValue{Type: "null"} }
+func textVal(s string) hranaValue { return hranaValue{Type: "text", Value: s} }
+func intVal(n int64) hranaValue   { return hranaValue{Type: "integer", Value: strconv.FormatInt(n, 10)} }
+func nullVal() hranaValue         { return hranaValue{Type: "null"} }
 func maybeTextVal(s *string) hranaValue {
 	if s == nil {
 		return nullVal()

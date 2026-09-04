@@ -51,9 +51,15 @@ CREATE TABLE provenance_contexts (
     UNIQUE(agent_id, source_kind_id, tool_id, model_id, mcp_client_id)
 );
 
+CREATE TABLE projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE sessions (
     id TEXT PRIMARY KEY,
-    project TEXT NOT NULL,
+    project TEXT NOT NULL REFERENCES projects(id),
     directory TEXT NOT NULL,
     started_at TEXT NOT NULL DEFAULT (datetime('now')),
     ended_at TEXT,
@@ -69,7 +75,7 @@ CREATE TABLE observations (
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     tool_name TEXT,
-    project TEXT,
+    project TEXT REFERENCES projects(id),
     scope TEXT NOT NULL DEFAULT 'project',
     topic_key TEXT,
     normalized_hash TEXT,
@@ -88,7 +94,7 @@ CREATE TABLE user_prompts (
     sync_id TEXT,
     session_id TEXT NOT NULL,
     content TEXT NOT NULL,
-    project TEXT,
+    project TEXT REFERENCES projects(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     provenance_id INTEGER REFERENCES provenance_contexts(id),
     FOREIGN KEY (session_id) REFERENCES sessions(id)
@@ -121,14 +127,14 @@ CREATE TABLE sync_mutations (
     op TEXT NOT NULL,
     payload TEXT NOT NULL,
     source TEXT NOT NULL DEFAULT 'local',
-    project TEXT NOT NULL DEFAULT '',
+    project TEXT REFERENCES projects(id),
     occurred_at TEXT NOT NULL DEFAULT (datetime('now')),
     acked_at TEXT,
     FOREIGN KEY (target_key) REFERENCES sync_state(target_key)
 );
 
 CREATE TABLE sync_enrolled_projects (
-    project TEXT PRIMARY KEY,
+    project TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
     enrolled_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -142,12 +148,6 @@ CREATE TABLE session_tags (
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     tag TEXT NOT NULL,
     PRIMARY KEY (session_id, tag)
-);
-
-CREATE TABLE projects (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE observation_reviews (

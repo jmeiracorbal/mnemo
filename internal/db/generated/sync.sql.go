@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 const enrollProject = `-- name: EnrollProject :execrows
@@ -63,18 +64,18 @@ func (q *Queries) GetSyncState(ctx context.Context, targetKey string) (SyncState
 
 const insertSyncMutation = `-- name: InsertSyncMutation :one
 INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?7)
 RETURNING seq
 `
 
 type InsertSyncMutationParams struct {
-	TargetKey string `json:"target_key"`
-	Entity    string `json:"entity"`
-	EntityKey string `json:"entity_key"`
-	Op        string `json:"op"`
-	Payload   string `json:"payload"`
-	Source    string `json:"source"`
-	Project   string `json:"project"`
+	TargetKey string         `json:"target_key"`
+	Entity    string         `json:"entity"`
+	EntityKey string         `json:"entity_key"`
+	Op        string         `json:"op"`
+	Payload   string         `json:"payload"`
+	Source    string         `json:"source"`
+	Project   sql.NullString `json:"project"`
 }
 
 func (q *Queries) InsertSyncMutation(ctx context.Context, arg InsertSyncMutationParams) (int64, error) {

@@ -88,6 +88,9 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 	q := s.q.WithTx(tx)
 
 	for _, sess := range data.Sessions {
+		if err := s.ensureProjectTx(tx, sess.Project); err != nil {
+			return nil, fmt.Errorf("import session %s project: %w", sess.ID, err)
+		}
 		provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromStored(
 			sess.Provenance,
 			ProvenanceInput{AgentID: AgentCLI, SourceKindID: SourceImport, ToolID: ToolMnemoImport},
@@ -128,6 +131,11 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 				continue
 			}
 		}
+		if obs.Project != nil {
+			if err := s.ensureProjectTx(tx, *obs.Project); err != nil {
+				return nil, fmt.Errorf("import observation %d project: %w", obs.ID, err)
+			}
+		}
 		hash := hashNormalized(obs.Content)
 		provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromStored(
 			obs.Provenance,
@@ -158,6 +166,9 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 	}
 
 	for _, p := range data.Prompts {
+		if err := s.ensureProjectTx(tx, p.Project); err != nil {
+			return nil, fmt.Errorf("import prompt %d project: %w", p.ID, err)
+		}
 		provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromStored(
 			p.Provenance,
 			ProvenanceInput{AgentID: AgentCLI, SourceKindID: SourceImport, ToolID: ToolMnemoImport},

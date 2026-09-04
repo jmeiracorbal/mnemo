@@ -1269,6 +1269,12 @@ func TestStatsProjectsOrderedByMostRecentObservation(t *testing.T) {
 	if err := s.CreateSession("s2", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session s2: %v", err)
 	}
+	if err := s.EnsureProject("alpha", "alpha"); err != nil {
+		t.Fatalf("ensure alpha project: %v", err)
+	}
+	if err := s.EnsureProject("beta", "beta"); err != nil {
+		t.Fatalf("ensure beta project: %v", err)
+	}
 
 	_, err := s.db.Exec(
 		`INSERT INTO observations (session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, created_at, updated_at)
@@ -1296,6 +1302,9 @@ func TestStatsProjectsOrderedByMostRecentObservation(t *testing.T) {
 
 func TestSessionsOrderedByMostRecentActivity(t *testing.T) {
 	s := newTestStore(t)
+	if err := s.EnsureProject("mnemo", "mnemo"); err != nil {
+		t.Fatalf("ensure project: %v", err)
+	}
 
 	_, err := s.db.Exec(
 		`INSERT INTO sessions (id, project, directory, started_at) VALUES
@@ -2849,28 +2858,11 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 
 // ─── Issue #25: Session collision regression tests ──────────────────────────
 
-func TestCreateSessionUpsertsEmptyProjectAndDirectory(t *testing.T) {
+func TestCreateSessionRejectsEmptyProject(t *testing.T) {
 	s := newTestStore(t)
 
-	// Create session with empty project/directory (simulates first MCP call without context)
-	if err := s.CreateSession("sess-upsert", "", ""); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-
-	// Second call with real project/directory should fill in the blanks
-	if err := s.CreateSession("sess-upsert", "projectA", "/tmp/a"); err != nil {
-		t.Fatalf("upsert session: %v", err)
-	}
-
-	sess, err := s.GetSession("sess-upsert")
-	if err != nil {
-		t.Fatalf("get session: %v", err)
-	}
-	if sess.Project != "projectA" {
-		t.Fatalf("expected project=projectA after upsert, got %q", sess.Project)
-	}
-	if sess.Directory != "/tmp/a" {
-		t.Fatalf("expected directory=/tmp/a after upsert, got %q", sess.Directory)
+	if err := s.CreateSession("sess-upsert", "", ""); err == nil {
+		t.Fatal("expected empty project to be rejected")
 	}
 }
 
@@ -2922,42 +2914,20 @@ func TestCreateSessionPartialUpsert(t *testing.T) {
 		}
 	})
 
-	t.Run("fills project when directory already set", func(t *testing.T) {
+	t.Run("rejects empty project when directory already set", func(t *testing.T) {
 		if err := s.CreateSession("sess-partial-2", "", "/existing/dir"); err != nil {
-			t.Fatalf("create: %v", err)
+			t.Logf("got expected error: %v", err)
+			return
 		}
-		if err := s.CreateSession("sess-partial-2", "newproject", ""); err != nil {
-			t.Fatalf("upsert: %v", err)
-		}
-		sess, err := s.GetSession("sess-partial-2")
-		if err != nil {
-			t.Fatalf("get: %v", err)
-		}
-		if sess.Project != "newproject" {
-			t.Fatalf("project should be filled, got %q", sess.Project)
-		}
-		if sess.Directory != "/existing/dir" {
-			t.Fatalf("directory should be preserved, got %q", sess.Directory)
-		}
+		t.Fatal("expected empty project to be rejected")
 	})
 
-	t.Run("both empty stays empty", func(t *testing.T) {
+	t.Run("both empty is rejected", func(t *testing.T) {
 		if err := s.CreateSession("sess-partial-3", "", ""); err != nil {
-			t.Fatalf("create: %v", err)
+			t.Logf("got expected error: %v", err)
+			return
 		}
-		if err := s.CreateSession("sess-partial-3", "", ""); err != nil {
-			t.Fatalf("upsert: %v", err)
-		}
-		sess, err := s.GetSession("sess-partial-3")
-		if err != nil {
-			t.Fatalf("get: %v", err)
-		}
-		if sess.Project != "" {
-			t.Fatalf("project should stay empty, got %q", sess.Project)
-		}
-		if sess.Directory != "" {
-			t.Fatalf("directory should stay empty, got %q", sess.Directory)
-		}
+		t.Fatal("expected empty project to be rejected")
 	})
 }
 
@@ -3044,6 +3014,9 @@ func TestEnrollProjectIdempotent(t *testing.T) {
 
 func TestEnrollProjectBackfillsHistoricalMutations(t *testing.T) {
 	s := newTestStore(t)
+	if err := s.EnsureProject("legacy-proj", "legacy-proj"); err != nil {
+		t.Fatalf("ensure legacy project: %v", err)
+	}
 
 	if _, err := s.db.Exec(
 		`INSERT INTO sessions (id, project, directory, ended_at, summary) VALUES (?, ?, ?, datetime('now'), ?)`,
@@ -3115,6 +3088,9 @@ func TestEnrollProjectBackfillsHistoricalMutations(t *testing.T) {
 
 func TestEnrollProjectBackfillIsIdempotentAndSkipsExistingMutations(t *testing.T) {
 	s := newTestStore(t)
+	if err := s.EnsureProject("legacy-proj", "legacy-proj"); err != nil {
+		t.Fatalf("ensure legacy project: %v", err)
+	}
 
 	if _, err := s.db.Exec(
 		`INSERT INTO sessions (id, project, directory) VALUES (?, ?, ?)`,
@@ -3425,6 +3401,9 @@ func TestListEnrolledProjectsAlphabeticalOrder(t *testing.T) {
 
 func TestSyncMutationProjectColumnExists(t *testing.T) {
 	s := newTestStore(t)
+	if err := s.EnsureProject("myproj", "myproj"); err != nil {
+		t.Fatalf("ensure project: %v", err)
+	}
 
 	// Verify the project column exists on sync_mutations by inserting a row.
 	_, err := s.db.Exec(
@@ -3448,14 +3427,17 @@ func TestSyncMutationProjectColumnExists(t *testing.T) {
 
 func TestSyncMutationProjectBackfill(t *testing.T) {
 	s := newTestStore(t)
+	if err := s.EnsureProject("backfilled", "backfilled"); err != nil {
+		t.Fatalf("ensure backfilled project: %v", err)
+	}
 
-	// Insert a mutation that simulates a pre-migration row (project is empty, but payload has it).
+	// Insert a mutation that simulates a pre-migration row (project is null, but payload has it).
 	// The backfill runs during schema init, so we test it by inserting directly then re-running.
 	// Since the store already ran migrations, let's verify backfill logic by inserting a new row
 	// with empty project and manually running the backfill.
 	_, err := s.db.Exec(
 		`INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
-		 VALUES (?, ?, ?, ?, ?, ?, '')`,
+		 VALUES (?, ?, ?, ?, ?, ?, NULL)`,
 		DefaultSyncTargetKey, "observation", "backfill-key", SyncOpUpsert, `{"project":"backfilled"}`, SyncSourceLocal,
 	)
 	if err != nil {
@@ -3465,8 +3447,8 @@ func TestSyncMutationProjectBackfill(t *testing.T) {
 	// Run the backfill manually.
 	_, err = s.db.Exec(`
 		UPDATE sync_mutations
-		SET project = COALESCE(json_extract(payload, '$.project'), '')
-		WHERE project = '' AND payload != ''
+		SET project = json_extract(payload, '$.project')
+		WHERE project IS NULL AND payload != ''
 	`)
 	if err != nil {
 		t.Fatalf("backfill: %v", err)
@@ -3804,17 +3786,20 @@ func TestSkipAckPreservesEnrolledProjectMutations(t *testing.T) {
 	}
 }
 
-// ─── Phase 5: Empty/global project always syncs ──────────────────────────────
+// ─── Phase 5: Projectless mutations always sync ─────────────────────────────
 
-func TestEmptyProjectMutationsAlwaysSync(t *testing.T) {
+func TestProjectlessMutationsAlwaysSync(t *testing.T) {
 	s := newTestStore(t)
 
-	// Create a session with empty project (global).
-	if err := s.CreateSession("global-session", "", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
+	if _, err := s.db.Exec(
+		`INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
+		 VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+		DefaultSyncTargetKey, SyncEntityObservation, "global-observation", SyncOpUpsert, `{}`, SyncSourceLocal,
+	); err != nil {
+		t.Fatalf("insert projectless mutation: %v", err)
 	}
 
-	// No projects enrolled, but empty-project mutations should still appear.
+	// No projects enrolled, but projectless mutations should still appear.
 	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 100)
 	if err != nil {
 		t.Fatalf("list pending: %v", err)
@@ -3824,7 +3809,7 @@ func TestEmptyProjectMutationsAlwaysSync(t *testing.T) {
 		t.Fatal("expected empty-project mutations to always sync regardless of enrollment")
 	}
 
-	// Verify they have project = ''.
+	// Verify they are returned as project = ''.
 	for _, m := range mutations {
 		if m.Project != "" {
 			t.Fatalf("expected empty project, got %q", m.Project)
@@ -3832,12 +3817,15 @@ func TestEmptyProjectMutationsAlwaysSync(t *testing.T) {
 	}
 }
 
-func TestSkipAckDoesNotAffectEmptyProjectMutations(t *testing.T) {
+func TestSkipAckDoesNotAffectProjectlessMutations(t *testing.T) {
 	s := newTestStore(t)
 
-	// Create a session with empty project (global).
-	if err := s.CreateSession("global-session-2", "", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
+	if _, err := s.db.Exec(
+		`INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
+		 VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+		DefaultSyncTargetKey, SyncEntityObservation, "global-observation-2", SyncOpUpsert, `{}`, SyncSourceLocal,
+	); err != nil {
+		t.Fatalf("insert projectless mutation: %v", err)
 	}
 
 	// Count pending before skip-ack.
@@ -3853,7 +3841,7 @@ func TestSkipAckDoesNotAffectEmptyProjectMutations(t *testing.T) {
 		t.Fatalf("skip-ack: %v", err)
 	}
 	if skipped != 0 {
-		t.Fatalf("expected 0 mutations to be skip-acked (all empty project), got %d", skipped)
+		t.Fatalf("expected 0 mutations to be skip-acked (all projectless), got %d", skipped)
 	}
 
 	// Verify count unchanged.
@@ -3866,7 +3854,7 @@ func TestSkipAckDoesNotAffectEmptyProjectMutations(t *testing.T) {
 	}
 }
 
-func TestMixedEnrolledAndEmptyProjectMutations(t *testing.T) {
+func TestMixedEnrolledAndProjectlessMutations(t *testing.T) {
 	s := newTestStore(t)
 
 	if err := s.EnrollProject("enrolled-mix"); err != nil {
@@ -3877,8 +3865,12 @@ func TestMixedEnrolledAndEmptyProjectMutations(t *testing.T) {
 	if err := s.CreateSession("mix-enrolled", "enrolled-mix", "/tmp"); err != nil {
 		t.Fatalf("create enrolled session: %v", err)
 	}
-	if err := s.CreateSession("mix-global", "", "/tmp"); err != nil {
-		t.Fatalf("create global session: %v", err)
+	if _, err := s.db.Exec(
+		`INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
+		 VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+		DefaultSyncTargetKey, SyncEntityObservation, "mix-global", SyncOpUpsert, `{}`, SyncSourceLocal,
+	); err != nil {
+		t.Fatalf("insert projectless mutation: %v", err)
 	}
 	if err := s.CreateSession("mix-unenrolled", "unenrolled-mix", "/tmp"); err != nil {
 		t.Fatalf("create unenrolled session: %v", err)
@@ -3889,7 +3881,7 @@ func TestMixedEnrolledAndEmptyProjectMutations(t *testing.T) {
 		t.Fatalf("list pending: %v", err)
 	}
 
-	// Should have enrolled-mix and empty-project mutations, but NOT unenrolled-mix.
+	// Should have enrolled-mix and projectless mutations, but NOT unenrolled-mix.
 	var hasEnrolled, hasGlobal bool
 	for _, m := range mutations {
 		if m.Project == "unenrolled-mix" {

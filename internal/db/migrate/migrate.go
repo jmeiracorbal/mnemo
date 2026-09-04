@@ -225,6 +225,12 @@ func applyMigration(db *sql.DB, migration Migration) error {
 		return fmt.Errorf("mark migration %s dirty: %w", migration.Version, err)
 	}
 	if shouldRun && strings.TrimSpace(content) != "" {
+		if migrationNeedsForeignKeysOff(content) {
+			if _, err := db.Exec("PRAGMA foreign_keys = OFF"); err != nil {
+				return fmt.Errorf("disable foreign keys for migration %s: %w", migration.Version, err)
+			}
+			defer func() { _, _ = db.Exec("PRAGMA foreign_keys = ON") }()
+		}
 		tx, err := db.Begin()
 		if err != nil {
 			return fmt.Errorf("begin migration %s: %w", migration.Version, err)
@@ -236,11 +242,36 @@ func applyMigration(db *sql.DB, migration Migration) error {
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("commit migration %s: %w", migration.Version, err)
 		}
+		if migrationNeedsForeignKeysOff(content) {
+			if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+				return fmt.Errorf("restore foreign keys for migration %s: %w", migration.Version, err)
+			}
+			if err := checkForeignKeys(db); err != nil {
+				return fmt.Errorf("foreign key check after migration %s: %w", migration.Version, err)
+			}
+		}
 	}
 	if _, err := db.Exec(`UPDATE schema_migrations SET dirty = 0, applied_at = datetime('now') WHERE version = ?`, migration.Version); err != nil {
 		return fmt.Errorf("mark migration %s applied: %w", migration.Version, err)
 	}
 	return nil
+}
+
+func checkForeignKeys(db *sql.DB) error {
+	rows, err := db.Query("PRAGMA foreign_key_check")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var table string
+		var rowID, parent, fkID any
+		if err := rows.Scan(&table, &rowID, &parent, &fkID); err != nil {
+			return err
+		}
+		return fmt.Errorf("violation in table %s row %v referencing %v", table, rowID, parent)
+	}
+	return rows.Err()
 }
 
 func checkAgainstMigrations(db *sql.DB, migrations []Migration) (Status, error) {
@@ -386,6 +417,15 @@ func migrationSQL(migration Migration) (string, error) {
 		return "", fmt.Errorf("read migration %s: %w", path, err)
 	}
 	return string(content), nil
+}
+
+func migrationNeedsForeignKeysOff(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == "-- mnemo:foreign-keys-off" {
+			return true
+		}
+	}
+	return false
 }
 
 func migrationGuardsPass(db *sql.DB, content string) (bool, error) {

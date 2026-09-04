@@ -241,6 +241,12 @@ func (s *Store) FormatContextOpts(project, scope string, opts ContextOptions) (s
 }
 
 func (s *Store) createSessionTx(tx *sql.Tx, id, project, directory string, provenance ProvenanceInput) error {
+	if strings.TrimSpace(project) == "" {
+		return fmt.Errorf("project id must not be empty")
+	}
+	if err := s.ensureProjectTx(tx, project); err != nil {
+		return err
+	}
 	provenanceID, err := s.optionalProvenanceTx(tx, provenance)
 	if err != nil {
 		return err

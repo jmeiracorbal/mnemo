@@ -9,7 +9,7 @@ FROM sync_state WHERE target_key = ?;
 
 -- name: InsertSyncMutation :one
 INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, sqlc.narg('project'))
 RETURNING seq;
 
 -- name: UpdateLastEnqueuedSeq :exec
