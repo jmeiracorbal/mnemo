@@ -492,10 +492,10 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 	}
 
 	if err := s.DeleteObservation(lastID); err != nil {
-		t.Fatalf("hard delete: %v", err)
+		t.Fatalf("soft delete: %v", err)
 	}
 	if _, err := s.GetObservation(lastID); err == nil {
-		t.Fatalf("expected hard-deleted observation to be missing")
+		t.Fatalf("expected soft-deleted observation to be hidden")
 	}
 }
 
