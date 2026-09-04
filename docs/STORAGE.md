@@ -24,6 +24,19 @@ Important concepts:
 | `observation_reviews` | Tracks reviewed/stale/superseded memory conflict states. |
 | FTS tables | Provide local full-text search; FTS table names follow their owning domain tables, e.g. `observations_fts` and `user_prompts_fts`. |
 
+## Canonical synchronization
+
+The canonical domain tables are the source of truth for synchronization. Each
+row in a synchronizable table produces an independent `sync_mutations` entry;
+relationships are synchronized by their own table rows rather than by nested
+aggregate payloads. Soft deletion is represented by `is_deleted = 1` and is
+replicated as a normal upsert, never as a physical delete.
+
+`sync_state`, `sync_types`, and `sync_mutations` are local synchronization
+metadata. FTS tables and their shadow tables are derived indexes and are not
+replicated. If the queue is lost or needs to be reset, it can be rebuilt from
+all canonical rows, including soft-deleted rows.
+
 ## Database migrations
 
 mnemo applies safe pending migrations automatically when the store opens. If a database is inconsistent, dirty, or ahead of the bundled migrations, mnemo blocks with a clear error instead of trying an unsafe repair. Use the explicit database command for CI, troubleshooting, or manual repair checks:
