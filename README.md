@@ -91,6 +91,7 @@ mnemo search "SQLite" --project myapp
 | **Agent provenance** | Records SQL-queryable agent, source, tool, model and MCP client metadata for writes that provide it. |
 | **Diagnostics** | `mnemo doctor` checks project activation, global setup, MCP, hooks, competing memory surfaces and database migration health. |
 | **Database safety** | Safe schema migrations run automatically; `mnemo db migrate --check` validates the local store for CI or troubleshooting. |
+| **Canonical synchronization queue** | Synchronizable rows are queued independently, with soft deletes replicated as row state; FTS indexes and local sync metadata remain local and are rebuilt when needed. |
 | **Self-update** | Released binaries check for newer releases on interactive CLI use and can confirm, download and install with `mnemo update`. |
 | **Programmable CLI** | Cobra-generated help keeps the command menu and nested subcommands aligned with the executable. |
 | **Project maintenance** | `mnemo projects list`, `mnemo projects merge` and `mnemo projects rename` help curate duplicate or unclear project identities. |
