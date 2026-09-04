@@ -30,7 +30,7 @@ type Querier interface {
 	CountSessionObservationsByScope(ctx context.Context, arg CountSessionObservationsByScopeParams) (int64, error)
 	CountSessionProjectRows(ctx context.Context, projectName string) (int64, error)
 	CountSessions(ctx context.Context) (int64, error)
-	CountSyncMutationProjectRows(ctx context.Context, projectName string) (int64, error)
+	CountSyncMutationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error)
 	DeleteObservationByID(ctx context.Context, id int64) error
 	DeleteObservationTagByName(ctx context.Context, tag string) error
 	DeleteObservationTags(ctx context.Context, observationID int64) error
@@ -81,7 +81,7 @@ type Querier interface {
 	ListObservations(ctx context.Context, arg ListObservationsParams) ([]ListObservationsRow, error)
 	ListObservationsAffectedByTag(ctx context.Context, tag string) ([]ListObservationsAffectedByTagRow, error)
 	ListObservationsMissingSyncMutation(ctx context.Context, arg ListObservationsMissingSyncMutationParams) ([]ListObservationsMissingSyncMutationRow, error)
-	ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]SyncMutation, error)
+	ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]ListPendingSyncMutationsRow, error)
 	ListProjectSummaries(ctx context.Context) ([]ListProjectSummariesRow, error)
 	ListProjects(ctx context.Context) ([]Project, error)
 	ListPromptsMissingSyncMutation(ctx context.Context, arg ListPromptsMissingSyncMutationParams) ([]ListPromptsMissingSyncMutationRow, error)

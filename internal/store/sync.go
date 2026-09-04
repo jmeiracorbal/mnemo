@@ -228,6 +228,9 @@ func (s *Store) recordAppliedRemoteMutationTx(tx *sql.Tx, targetKey string, muta
 	if project == "" {
 		project = extractProjectFromRawPayload(mutation.Payload)
 	}
+	if err := s.ensureProjectTx(tx, project); err != nil {
+		return err
+	}
 	res, err := s.execHook(tx, `
 		INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project, occurred_at, acked_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
@@ -405,6 +408,9 @@ func (s *Store) enqueueSyncMutationTx(tx *sql.Tx, entity, entityKey, op string, 
 		return err
 	}
 	project := extractProjectFromPayload(payload)
+	if err := s.ensureProjectTx(tx, project); err != nil {
+		return err
+	}
 	q := s.q.WithTx(tx)
 	if err := q.EnsureSyncState(context.Background(), dbgen.EnsureSyncStateParams{
 		TargetKey: DefaultSyncTargetKey, Lifecycle: SyncLifecycleIdle,
@@ -413,7 +419,7 @@ func (s *Store) enqueueSyncMutationTx(tx *sql.Tx, entity, entityKey, op string, 
 	}
 	seq, err := q.InsertSyncMutation(context.Background(), dbgen.InsertSyncMutationParams{
 		TargetKey: DefaultSyncTargetKey, Entity: entity, EntityKey: entityKey, Op: op,
-		Payload: string(encoded), Source: SyncSourceLocal, Project: project,
+		Payload: string(encoded), Source: SyncSourceLocal, Project: sqlNullString(project),
 	})
 	if err != nil {
 		return err
@@ -435,6 +441,9 @@ func (s *Store) applySessionPayloadTx(tx *sql.Tx, payload syncSessionPayload) er
 	}
 	provenanceID, err := s.optionalProvenanceTx(tx, provenanceInput)
 	if err != nil {
+		return err
+	}
+	if err := s.ensureProjectTx(tx, payload.Project); err != nil {
 		return err
 	}
 	if err := q.ApplySessionPayload(context.Background(), dbgen.ApplySessionPayloadParams{
@@ -464,6 +473,11 @@ func (s *Store) applyObservationUpsertTx(tx *sql.Tx, payload syncObservationPayl
 		if err != nil {
 			return err
 		}
+		if payload.Project != nil {
+			if err := s.ensureProjectTx(tx, *payload.Project); err != nil {
+				return err
+			}
+		}
 		newID, err := q.InsertPulledObservation(context.Background(), dbgen.InsertPulledObservationParams{
 			SyncID: sqlNullString(payload.SyncID), SessionID: payload.SessionID, Type: payload.Type,
 			Title: payload.Title, Content: payload.Content, ToolName: sqlNullStringPtr(payload.ToolName),
@@ -487,6 +501,11 @@ func (s *Store) applyObservationUpsertTx(tx *sql.Tx, payload syncObservationPayl
 	provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromPtr(payload.Provenance))
 	if err != nil {
 		return err
+	}
+	if payload.Project != nil {
+		if err := s.ensureProjectTx(tx, *payload.Project); err != nil {
+			return err
+		}
 	}
 	err = q.UpdatePulledObservation(context.Background(), dbgen.UpdatePulledObservationParams{
 		SessionID: payload.SessionID, Type: payload.Type, Title: payload.Title, Content: payload.Content,
@@ -538,6 +557,11 @@ func (s *Store) applyPromptUpsertTx(tx *sql.Tx, payload syncPromptPayload) error
 		if err != nil {
 			return err
 		}
+		if payload.Project != nil {
+			if err := s.ensureProjectTx(tx, *payload.Project); err != nil {
+				return err
+			}
+		}
 		_, err = q.InsertPrompt(context.Background(), dbgen.InsertPromptParams{
 			SyncID: sqlNullString(payload.SyncID), SessionID: payload.SessionID,
 			Content: payload.Content, Project: sqlNullStringPtr(payload.Project), ProvenanceID: provenanceID,
@@ -550,6 +574,11 @@ func (s *Store) applyPromptUpsertTx(tx *sql.Tx, payload syncPromptPayload) error
 	provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromPtr(payload.Provenance))
 	if err != nil {
 		return err
+	}
+	if payload.Project != nil {
+		if err := s.ensureProjectTx(tx, *payload.Project); err != nil {
+			return err
+		}
 	}
 	return q.UpdatePrompt(context.Background(), dbgen.UpdatePromptParams{
 		SessionID: payload.SessionID, Content: payload.Content,
