@@ -16,6 +16,7 @@ import (
 
 	dbfiles "github.com/jmeiracorbal/mnemo/database"
 	"github.com/jmeiracorbal/mnemo/internal/cloudsync"
+	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
 )
 
 // Backend implements cloudsync.CloudBackend against a Turso/libSQL database
@@ -80,7 +81,13 @@ func (b *Backend) migrate(migrations fs.FS) error {
 	if err != nil {
 		return fmt.Errorf("read migrations dir: %w", err)
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	sort.Slice(entries, func(i, j int) bool {
+		left := strings.TrimSuffix(entries[i].Name(), ".sql")
+		right := strings.TrimSuffix(entries[j].Name(), ".sql")
+		leftVersion := strings.SplitN(left, "-", 2)[0]
+		rightVersion := strings.SplitN(right, "-", 2)[0]
+		return dbmigrate.CompareMigrationVersions(leftVersion, rightVersion) < 0
+	})
 
 	for _, entry := range entries {
 		if !strings.HasSuffix(entry.Name(), ".sql") {

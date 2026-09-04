@@ -703,10 +703,14 @@ func TestNewMigratesLegacyObservationIDSchema(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
-	// Observation ID schema migration (NULL ids, duplicates) runs automatically
-	// in New(). Legacy data stays under the old project key "mnemo" until the
-	// user runs explicit migration.
-	obs, err := s.AllObservations("mnemo", "", 20)
+	// Observation ID schema migration and orphan project repair run automatically
+	// in New(). The legacy project key is replaced by a UUID aggregate root.
+	session, err := s.GetSession("s1")
+	if err != nil {
+		t.Fatalf("get migrated session: %v", err)
+	}
+	projectID := session.Project
+	obs, err := s.AllObservations(projectID, "", 20)
 	if err != nil {
 		t.Fatalf("all observations after open: %v", err)
 	}
@@ -725,9 +729,9 @@ func TestNewMigratesLegacyObservationIDSchema(t *testing.T) {
 		seen[o.ID] = true
 	}
 
-	// Explicit migration: rekey legacy "mnemo" data to a UUID.
+	// Explicit migration remains idempotent for an already repaired project.
 	newUUID := "11111111-2222-3333-4444-555555555555"
-	result, err := s.MigrateProject("mnemo", newUUID)
+	result, err := s.MigrateProject(projectID, newUUID)
 	if err != nil {
 		t.Fatalf("MigrateProject: %v", err)
 	}

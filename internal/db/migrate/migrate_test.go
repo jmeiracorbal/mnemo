@@ -41,6 +41,86 @@ func TestMigratedSchemaMatchesCanonicalSchemaStructure(t *testing.T) {
 	}
 }
 
+func TestMigrationVersionsSupportOrderedRepairSegments(t *testing.T) {
+	if CompareMigrationVersions("0022.0", "0022") >= 0 {
+		t.Fatal("0022.0 must run before the historical 0022 migration")
+	}
+	if CompareMigrationVersions("0022", "0022.1") >= 0 {
+		t.Fatal("the historical 0022 migration must run before 0022.1")
+	}
+	migrations, err := LoadMigrations()
+	if err != nil {
+		t.Fatalf("load migrations: %v", err)
+	}
+	var previous string
+	for _, migration := range migrations {
+		if previous != "" && CompareMigrationVersions(previous, migration.Version) >= 0 {
+			t.Fatalf("migrations are not strictly ordered: %s before %s", previous, migration.Version)
+		}
+		previous = migration.Version
+	}
+}
+
+func TestRepairMigrationRewritesOrphanedProjectReferences(t *testing.T) {
+	dataDir := t.TempDir()
+	db := openTestDB(t, filepath.Join(dataDir, "memory.db"))
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec(metadataDDL); err != nil {
+		t.Fatalf("create migration metadata: %v", err)
+	}
+	migrations, err := LoadMigrations()
+	if err != nil {
+		t.Fatalf("load migrations: %v", err)
+	}
+	for _, migration := range migrations {
+		if CompareMigrationVersions(migration.Version, "0022.0") >= 0 {
+			break
+		}
+		if err := applyMigration(db, migration); err != nil {
+			t.Fatalf("apply migration %s: %v", migration.Version, err)
+		}
+	}
+	if _, err := db.Exec(`
+		INSERT INTO sessions (id, project, directory) VALUES ('orphan-session', 'manual-save', '/tmp/manual-save');
+		INSERT INTO observations (session_id, type, title, content, project) VALUES ('orphan-session', 'note', 'title', 'content', 'manual-save');
+		INSERT INTO user_prompts (session_id, content, project) VALUES ('orphan-session', 'prompt', 'manual-save');
+		INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, project) VALUES ('cloud', 'session', 'orphan-session', 'upsert', '{}', 'manual-save');
+		INSERT INTO sync_enrolled_projects (project) VALUES ('manual-save');
+	`); err != nil {
+		t.Fatalf("seed orphaned references: %v", err)
+	}
+	if _, err := Apply(db); err != nil {
+		t.Fatalf("apply repaired migrations: %v", err)
+	}
+	if err := checkForeignKeys(db); err != nil {
+		t.Fatalf("foreign key check: %v", err)
+	}
+	var projectID string
+	if err := db.QueryRow(`SELECT project FROM sessions WHERE id = 'orphan-session'`).Scan(&projectID); err != nil {
+		t.Fatalf("read repaired session: %v", err)
+	}
+	if projectID == "manual-save" || len(projectID) != 36 {
+		t.Fatalf("repaired project id = %q, want UUID-shaped replacement", projectID)
+	}
+	var references int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM projects WHERE id = ? AND name = 'manual-save'`, projectID).Scan(&references); err != nil {
+		t.Fatalf("read repaired project: %v", err)
+	}
+	if references != 1 {
+		t.Fatalf("repaired project rows = %d, want 1", references)
+	}
+	for _, table := range []string{"observations", "user_prompts"} {
+		var got string
+		query := "SELECT s.project FROM " + table + " JOIN sessions s ON s.id = " + table + ".session_id LIMIT 1"
+		if err := db.QueryRow(query).Scan(&got); err != nil {
+			t.Fatalf("read repaired %s: %v", table, err)
+		}
+		if got != projectID {
+			t.Fatalf("repaired %s project = %q, want %q", table, got, projectID)
+		}
+	}
+}
+
 func TestColumnAlterMigrationsHaveIdempotenceGuards(t *testing.T) {
 	for _, migration := range []string{
 		"0002-add-observations-sync-id.sql",
@@ -206,8 +286,12 @@ func TestApplyDataDirUpgradesPartialLegacyDB(t *testing.T) {
 	if err := ValidateCurrent(db); err != nil {
 		t.Fatalf("validate migrated legacy schema: %v", err)
 	}
+	var projectID string
+	if err := db.QueryRow(`SELECT project FROM sessions WHERE id = 's1'`).Scan(&projectID); err != nil {
+		t.Fatalf("query migrated session project: %v", err)
+	}
 	var projectRows int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM projects WHERE id = 'legacy'`).Scan(&projectRows); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM projects WHERE id = ? AND name = 'legacy'`, projectID).Scan(&projectRows); err != nil {
 		t.Fatalf("query migrated project root: %v", err)
 	}
 	if projectRows != 1 {
