@@ -221,10 +221,13 @@ func (s *Store) setMemoryReviewState(id int64, state, reason string, supersededB
 		SupersededBy:  sqlNullInt64Ptr(supersededBy),
 		ReviewedAt:    reviewedAt,
 	}
-	if err := s.q.UpsertMemoryReviewState(context.Background(), params); err != nil {
-		return fmt.Errorf("set memory review state: %w", err)
-	}
-	return nil
+	return s.withTx(func(tx *sql.Tx) error {
+		q := s.q.WithTx(tx)
+		if err := q.UpsertMemoryReviewState(context.Background(), params); err != nil {
+			return fmt.Errorf("set memory review state: %w", err)
+		}
+		return s.backfillCanonicalTableTx(tx, "observation_reviews")
+	})
 }
 
 func (s *Store) listObservationIDsByTopic(topic, project, scope string) ([]int64, error) {

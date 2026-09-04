@@ -627,16 +627,15 @@ func printProjectsMergePlans(out io.Writer, plans []store.ProjectMergePlan) {
 		return
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "From\tTo\tObservations\tSessions\tPrompts\tSync\tEnrollment")
+	_, _ = fmt.Fprintln(w, "From\tTo\tObservations\tSessions\tPrompts\tSync")
 	for _, plan := range plans {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%d\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%d\n",
 			projectsTableCell(plan.From.ID),
 			projectsTableCell(plan.To.ID),
 			plan.Observations,
 			plan.Sessions,
 			plan.Prompts,
 			plan.SyncMutations,
-			projectMergeEnrollmentCell(plan),
 		)
 	}
 	_, _ = fmt.Fprintln(w, "\nDry run only. Re-run with --yes to apply.")
@@ -689,17 +688,6 @@ func printProjectsMergeResults(out io.Writer, results []store.ProjectMergeResult
 		)
 	}
 	_ = w.Flush()
-}
-
-func projectMergeEnrollmentCell(plan store.ProjectMergePlan) string {
-	switch {
-	case plan.WillCopyEnrollment:
-		return "copy"
-	case plan.SourceEnrolled:
-		return "already"
-	default:
-		return "-"
-	}
 }
 
 func projectMergeDeletedCell(deleted bool) string {

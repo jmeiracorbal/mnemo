@@ -11,40 +11,35 @@ import (
 
 type Querier interface {
 	AckMutationSeq(ctx context.Context, arg AckMutationSeqParams) error
-	AckMutationsThrough(ctx context.Context, arg AckMutationsThroughParams) error
 	AcquireSyncLease(ctx context.Context, arg AcquireSyncLeaseParams) (int64, error)
 	ApplySessionPayload(ctx context.Context, arg ApplySessionPayloadParams) error
 	CopyObservationTag(ctx context.Context, arg CopyObservationTagParams) error
-	CopyProjectEnrollment(ctx context.Context, arg CopyProjectEnrollmentParams) error
 	CopySessionTag(ctx context.Context, arg CopySessionTagParams) error
 	CountLiveObservations(ctx context.Context) (int64, error)
-	CountObservationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error)
+	CountObservationProjectRows(ctx context.Context, projectName string) (int64, error)
 	CountObservationsByAgent(ctx context.Context) ([]CountObservationsByAgentRow, error)
 	CountObservationsByHash(ctx context.Context, normalizedHash sql.NullString) (int64, error)
 	CountObservationsForSessionProject(ctx context.Context, sessionID string) (int64, error)
 	CountPendingMutations(ctx context.Context, targetKey string) (int64, error)
 	CountProjectRows(ctx context.Context, id string) (int64, error)
-	CountPromptProjectRows(ctx context.Context, projectName sql.NullString) (int64, error)
+	CountPromptProjectRows(ctx context.Context, projectName string) (int64, error)
 	CountPrompts(ctx context.Context) (int64, error)
 	CountSessionObservations(ctx context.Context, sessionID string) (int64, error)
 	CountSessionObservationsByScope(ctx context.Context, arg CountSessionObservationsByScopeParams) (int64, error)
 	CountSessionProjectRows(ctx context.Context, projectName string) (int64, error)
 	CountSessions(ctx context.Context) (int64, error)
-	CountSyncMutationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error)
-	DeleteObservationByID(ctx context.Context, id int64) error
 	DeleteObservationTagByName(ctx context.Context, tag string) error
 	DeleteObservationTags(ctx context.Context, observationID int64) error
 	DeleteProjectByID(ctx context.Context, id string) (int64, error)
-	DeleteProjectEnrollment(ctx context.Context, project string) error
 	DeleteSessionTagByName(ctx context.Context, tag string) error
 	DeleteSessionTags(ctx context.Context, sessionID string) error
 	EndSession(ctx context.Context, arg EndSessionParams) error
-	EnrollProject(ctx context.Context, project string) (int64, error)
 	EnsureProject(ctx context.Context, arg EnsureProjectParams) error
 	EnsureSyncState(ctx context.Context, arg EnsureSyncStateParams) error
+	EnsureSyncType(ctx context.Context, arg EnsureSyncTypeParams) error
 	ExportObservations(ctx context.Context) ([]ExportObservationsRow, error)
 	ExportPrompts(ctx context.Context) ([]ExportPromptsRow, error)
-	ExportSessions(ctx context.Context) ([]Session, error)
+	ExportSessions(ctx context.Context) ([]ExportSessionsRow, error)
 	FindDuplicateObservation(ctx context.Context, arg FindDuplicateObservationParams) (int64, error)
 	FindObservationByHashAndProject(ctx context.Context, arg FindObservationByHashAndProjectParams) (int64, error)
 	FindObservationByTopic(ctx context.Context, arg FindObservationByTopicParams) (int64, error)
@@ -53,14 +48,12 @@ type Querier interface {
 	GetLiveObservationBySyncID(ctx context.Context, syncID sql.NullString) (GetLiveObservationBySyncIDRow, error)
 	GetObservation(ctx context.Context, id int64) (GetObservationRow, error)
 	GetObservationBySyncIDIncludingDeleted(ctx context.Context, syncID sql.NullString) (GetObservationBySyncIDIncludingDeletedRow, error)
-	GetObservationDeletedAt(ctx context.Context, id int64) (sql.NullString, error)
 	GetProjectByID(ctx context.Context, id string) (Project, error)
 	GetProvenanceContext(ctx context.Context, id int64) (GetProvenanceContextRow, error)
 	GetProvenanceContextID(ctx context.Context, arg GetProvenanceContextIDParams) (int64, error)
-	GetSession(ctx context.Context, id string) (Session, error)
+	GetSession(ctx context.Context, id string) (GetSessionRow, error)
 	GetSessionPayload(ctx context.Context, id string) (GetSessionPayloadRow, error)
 	GetSyncState(ctx context.Context, targetKey string) (SyncState, error)
-	HardDeleteObservation(ctx context.Context, id int64) error
 	ImportObservation(ctx context.Context, arg ImportObservationParams) (int64, error)
 	ImportPrompt(ctx context.Context, arg ImportPromptParams) error
 	ImportSession(ctx context.Context, arg ImportSessionParams) (int64, error)
@@ -71,20 +64,14 @@ type Querier interface {
 	InsertPulledObservation(ctx context.Context, arg InsertPulledObservationParams) (int64, error)
 	InsertSessionTag(ctx context.Context, arg InsertSessionTagParams) error
 	InsertSyncMutation(ctx context.Context, arg InsertSyncMutationParams) (int64, error)
-	InsertSyncedChunk(ctx context.Context, chunkID string) error
-	IsProjectEnrolled(ctx context.Context, project string) (bool, error)
-	ListEnrolledProjects(ctx context.Context) ([]SyncEnrolledProject, error)
 	ListMemoryReviewCandidates(ctx context.Context, arg ListMemoryReviewCandidatesParams) ([]ListMemoryReviewCandidatesRow, error)
 	ListObservationIDsByTopic(ctx context.Context, arg ListObservationIDsByTopicParams) ([]int64, error)
-	ListObservationProjects(ctx context.Context) ([]sql.NullString, error)
+	ListObservationProjects(ctx context.Context) ([]string, error)
 	ListObservationTags(ctx context.Context, observationID int64) ([]string, error)
 	ListObservations(ctx context.Context, arg ListObservationsParams) ([]ListObservationsRow, error)
 	ListObservationsAffectedByTag(ctx context.Context, tag string) ([]ListObservationsAffectedByTagRow, error)
-	ListObservationsMissingSyncMutation(ctx context.Context, arg ListObservationsMissingSyncMutationParams) ([]ListObservationsMissingSyncMutationRow, error)
-	ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]ListPendingSyncMutationsRow, error)
 	ListProjectSummaries(ctx context.Context) ([]ListProjectSummariesRow, error)
 	ListProjects(ctx context.Context) ([]Project, error)
-	ListPromptsMissingSyncMutation(ctx context.Context, arg ListPromptsMissingSyncMutationParams) ([]ListPromptsMissingSyncMutationRow, error)
 	ListRecentObservations(ctx context.Context, arg ListRecentObservationsParams) ([]ListRecentObservationsRow, error)
 	ListRecentPrompts(ctx context.Context, arg ListRecentPromptsParams) ([]ListRecentPromptsRow, error)
 	ListRelatedObservationTags(ctx context.Context, arg ListRelatedObservationTagsParams) ([]ListRelatedObservationTagsRow, error)
@@ -93,28 +80,20 @@ type Querier interface {
 	ListSessionTags(ctx context.Context, sessionID string) ([]string, error)
 	ListSessions(ctx context.Context, arg ListSessionsParams) ([]ListSessionsRow, error)
 	ListSessionsAffectedByTag(ctx context.Context, tag string) ([]ListSessionsAffectedByTagRow, error)
-	ListSessionsMissingSyncMutation(ctx context.Context, arg ListSessionsMissingSyncMutationParams) ([]ListSessionsMissingSyncMutationRow, error)
-	ListSyncedChunks(ctx context.Context) ([]string, error)
 	ListTagAggregates(ctx context.Context, project interface{}) ([]ListTagAggregatesRow, error)
-	ListTagsForObservationIDs(ctx context.Context, observationIds []int64) ([]ObservationTag, error)
+	ListTagsForObservationIDs(ctx context.Context, observationIds []int64) ([]ListTagsForObservationIDsRow, error)
 	ListTimelineAfter(ctx context.Context, arg ListTimelineAfterParams) ([]ListTimelineAfterRow, error)
 	ListTimelineBefore(ctx context.Context, arg ListTimelineBeforeParams) ([]ListTimelineBeforeRow, error)
 	MarkSyncFailure(ctx context.Context, arg MarkSyncFailureParams) error
 	MarkSyncHealthy(ctx context.Context, arg MarkSyncHealthyParams) error
-	ProjectExists(ctx context.Context, projectName sql.NullString) (bool, error)
+	ProjectExists(ctx context.Context, projectName string) (bool, error)
 	ReleaseSyncLease(ctx context.Context, arg ReleaseSyncLeaseParams) error
-	RenameMutationProject(ctx context.Context, arg RenameMutationProjectParams) (int64, error)
-	RenameObservationProject(ctx context.Context, arg RenameObservationProjectParams) (int64, error)
-	RenamePromptProject(ctx context.Context, arg RenamePromptProjectParams) (int64, error)
 	RenameSessionProject(ctx context.Context, arg RenameSessionProjectParams) (int64, error)
 	SearchObservationsByFilter(ctx context.Context, arg SearchObservationsByFilterParams) ([]SearchObservationsByFilterRow, error)
 	SearchObservationsFTS(ctx context.Context, arg SearchObservationsFTSParams) ([]SearchObservationsFTSRow, error)
 	SearchPromptsFTS(ctx context.Context, arg SearchPromptsFTSParams) ([]SearchPromptsFTSRow, error)
-	SetObservationDeletedAt(ctx context.Context, arg SetObservationDeletedAtParams) error
-	SkipNonEnrolledMutations(ctx context.Context, targetKey string) (int64, error)
 	SoftDeleteObservation(ctx context.Context, id int64) error
 	TouchDuplicateObservation(ctx context.Context, id int64) error
-	UnenrollProject(ctx context.Context, project string) error
 	UpdateLastEnqueuedSeq(ctx context.Context, arg UpdateLastEnqueuedSeqParams) error
 	UpdateLastPulledSeq(ctx context.Context, arg UpdateLastPulledSeqParams) error
 	UpdateObservationByTopic(ctx context.Context, arg UpdateObservationByTopicParams) error

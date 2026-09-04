@@ -3,26 +3,30 @@ INSERT INTO agents (id, display_name, kind)
 VALUES (sqlc.arg('id'), sqlc.arg('display_name'), sqlc.arg('kind'))
 ON CONFLICT(id) DO UPDATE SET
   display_name = excluded.display_name,
-  kind = excluded.kind;
+  kind = excluded.kind,
+  is_deleted = 0;
 
 -- name: UpsertSourceKind :exec
 INSERT INTO source_kinds (id, display_name)
 VALUES (sqlc.arg('id'), sqlc.arg('display_name'))
 ON CONFLICT(id) DO UPDATE SET
-  display_name = excluded.display_name;
+  display_name = excluded.display_name,
+  is_deleted = 0;
 
 -- name: UpsertTool :exec
 INSERT INTO tools (id, display_name)
 VALUES (sqlc.arg('id'), sqlc.arg('display_name'))
 ON CONFLICT(id) DO UPDATE SET
-  display_name = excluded.display_name;
+  display_name = excluded.display_name,
+  is_deleted = 0;
 
 -- name: UpsertModel :exec
 INSERT INTO models (id, provider, display_name)
 VALUES (sqlc.arg('id'), sqlc.arg('provider'), sqlc.arg('display_name'))
 ON CONFLICT(id) DO UPDATE SET
   provider = excluded.provider,
-  display_name = excluded.display_name;
+  display_name = excluded.display_name,
+  is_deleted = 0;
 
 -- name: UpsertMCPClient :exec
 INSERT INTO mcp_clients (id, name, version, transport)
@@ -30,7 +34,8 @@ VALUES (sqlc.arg('id'), sqlc.arg('name'), sqlc.arg('version'), sqlc.arg('transpo
 ON CONFLICT(id) DO UPDATE SET
   name = excluded.name,
   version = excluded.version,
-  transport = excluded.transport;
+  transport = excluded.transport,
+  is_deleted = 0;
 
 -- name: InsertProvenanceContext :one
 INSERT OR IGNORE INTO provenance_contexts (
@@ -81,6 +86,6 @@ WHERE p.id = ?;
 SELECT COALESCE(p.agent_id, 'unknown') AS agent_id, COUNT(o.id) AS observation_count
 FROM observations o
 LEFT JOIN provenance_contexts p ON p.id = o.provenance_id
-WHERE o.deleted_at IS NULL
+WHERE o.is_deleted = 0
 GROUP BY COALESCE(p.agent_id, 'unknown')
 ORDER BY observation_count DESC, agent_id ASC;

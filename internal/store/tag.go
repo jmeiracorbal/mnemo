@@ -279,7 +279,7 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 				payload: syncObservationPayload{
 					SyncID: dbString(row.SyncID), SessionID: row.SessionID, Type: row.Type,
 					Title: row.Title, Content: row.Content, ToolName: nullablePtr(row.ToolName),
-					Project: nullablePtr(row.Project), Scope: row.Scope, TopicKey: nullablePtr(row.TopicKey),
+					Scope: row.Scope, TopicKey: nullablePtr(row.TopicKey),
 					Provenance: provenanceInputForID(q, row.ProvenanceID),
 				},
 			})
@@ -321,36 +321,11 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 		}
 		sessCount = len(sessList)
 
-		for _, r := range obsList {
-			var o Observation
-			o.ID = r.id
-			if err := s.loadTagsForObservationTx(tx, &o); err != nil {
-				return fmt.Errorf("merge: load observation tags: %w", err)
-			}
-			tags := o.Tags
-			if tags == nil {
-				tags = []string{}
-			}
-			r.payload.Tags = &tags
-			if err := s.enqueueSyncMutationTx(tx, SyncEntityObservation, r.payload.SyncID, SyncOpUpsert, r.payload); err != nil {
-				return fmt.Errorf("merge: enqueue observation sync: %w", err)
-			}
+		if err := s.backfillCanonicalTableTx(tx, "observation_tags"); err != nil {
+			return err
 		}
-
-		for _, r := range sessList {
-			var sess Session
-			sess.ID = r.payload.ID
-			if err := s.loadTagsForSessionTx(tx, &sess); err != nil {
-				return fmt.Errorf("merge: load session tags: %w", err)
-			}
-			tags := sess.Tags
-			if tags == nil {
-				tags = []string{}
-			}
-			r.payload.Tags = &tags
-			if err := s.enqueueSyncMutationTx(tx, SyncEntitySession, r.payload.ID, SyncOpUpsert, r.payload); err != nil {
-				return fmt.Errorf("merge: enqueue session sync: %w", err)
-			}
+		if err := s.backfillCanonicalTableTx(tx, "session_tags"); err != nil {
+			return err
 		}
 
 		return nil
@@ -363,29 +338,7 @@ func (s *Store) SetSessionTags(id string, tags []string) error {
 		if err := s.setTagsForSessionTx(tx, id, tags); err != nil {
 			return err
 		}
-		q := s.q.WithTx(tx)
-		row, err := q.GetSessionPayload(context.Background(), id)
-		if err != nil {
-			return err
-		}
-		var sess Session
-		sess.ID = id
-		if err := s.loadTagsForSessionTx(tx, &sess); err != nil {
-			return err
-		}
-		storedTags := sess.Tags
-		if storedTags == nil {
-			storedTags = []string{}
-		}
-		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
-			ID:         id,
-			Project:    row.Project,
-			Directory:  row.Directory,
-			EndedAt:    nullablePtr(row.EndedAt),
-			Summary:    nullablePtr(row.Summary),
-			Tags:       &storedTags,
-			Provenance: provenanceInputForID(q, row.ProvenanceID),
-		})
+		return s.backfillCanonicalTableTx(tx, "session_tags")
 	})
 }
 
@@ -412,7 +365,7 @@ func (s *Store) setTagsForObservationTx(tx *sql.Tx, obsID int64, tags []string) 
 			return err
 		}
 	}
-	return nil
+	return s.backfillCanonicalTableTx(tx, "observation_tags")
 }
 
 func (s *Store) loadTagsForObservations(obs []Observation) error {
@@ -480,20 +433,11 @@ func (s *Store) setTagsForSessionTx(tx *sql.Tx, sessionID string, tags []string)
 			return err
 		}
 	}
-	return nil
+	return s.backfillCanonicalTableTx(tx, "session_tags")
 }
 
 func (s *Store) loadTagsForSession(sess *Session) error {
 	rows, err := s.q.ListSessionTags(context.Background(), sess.ID)
-	if err != nil {
-		return fmt.Errorf("load session tags: %w", err)
-	}
-	sess.Tags = append(sess.Tags, rows...)
-	return nil
-}
-
-func (s *Store) loadTagsForSessionTx(tx *sql.Tx, sess *Session) error {
-	rows, err := s.q.WithTx(tx).ListSessionTags(context.Background(), sess.ID)
 	if err != nil {
 		return fmt.Errorf("load session tags: %w", err)
 	}

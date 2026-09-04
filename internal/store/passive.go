@@ -94,7 +94,7 @@ func (s *Store) PassiveCapture(p PassiveCaptureParams) (*PassiveCaptureResult, e
 	for _, learning := range learnings {
 		normHash := hashNormalized(learning)
 		_, err := s.q.FindObservationByHashAndProject(context.Background(), dbgen.FindObservationByHashAndProjectParams{
-			NormalizedHash: sqlNullString(normHash), Project: sqlNullString(p.Project),
+			NormalizedHash: sqlNullString(normHash), Project: p.Project,
 		})
 
 		if err == nil {

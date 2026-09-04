@@ -134,35 +134,6 @@ func normalizeExistingSyncID(existing, prefix string) string {
 	return newSyncID(prefix)
 }
 
-func extractProjectFromPayload(payload any) string {
-	switch p := payload.(type) {
-	case syncSessionPayload:
-		return p.Project
-	case syncObservationPayload:
-		if p.Project != nil {
-			return *p.Project
-		}
-		return ""
-	case syncPromptPayload:
-		if p.Project != nil {
-			return *p.Project
-		}
-		return ""
-	default:
-		data, err := json.Marshal(payload)
-		if err != nil {
-			return ""
-		}
-		var generic struct {
-			Project *string `json:"project"`
-		}
-		if err := json.Unmarshal(data, &generic); err != nil || generic.Project == nil {
-			return ""
-		}
-		return *generic.Project
-	}
-}
-
 func decodeSyncPayload(payload []byte, dest any) error {
 	trimmed := strings.TrimSpace(string(payload))
 	if trimmed == "" {

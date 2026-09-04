@@ -105,7 +105,7 @@ func (s *Store) BuildProjectMergePlan(from, to string) (*ProjectMergePlan, error
 
 	q := s.q
 	ctx := context.Background()
-	observations, err := q.CountObservationProjectRows(ctx, sqlNullString(from))
+	observations, err := q.CountObservationProjectRows(ctx, from)
 	if err != nil {
 		return nil, fmt.Errorf("count source observations: %w", err)
 	}
@@ -113,25 +113,13 @@ func (s *Store) BuildProjectMergePlan(from, to string) (*ProjectMergePlan, error
 	if err != nil {
 		return nil, fmt.Errorf("count source sessions: %w", err)
 	}
-	prompts, err := q.CountPromptProjectRows(ctx, sqlNullString(from))
+	prompts, err := q.CountPromptProjectRows(ctx, from)
 	if err != nil {
 		return nil, fmt.Errorf("count source prompts: %w", err)
-	}
-	syncMutations, err := q.CountSyncMutationProjectRows(ctx, sqlNullString(from))
-	if err != nil {
-		return nil, fmt.Errorf("count source sync mutations: %w", err)
 	}
 	sourceProjectRows, err := q.CountProjectRows(ctx, from)
 	if err != nil {
 		return nil, fmt.Errorf("count source project metadata: %w", err)
-	}
-	sourceEnrolled, err := q.IsProjectEnrolled(ctx, from)
-	if err != nil {
-		return nil, fmt.Errorf("check source enrollment: %w", err)
-	}
-	destinationEnrolled, err := q.IsProjectEnrolled(ctx, to)
-	if err != nil {
-		return nil, fmt.Errorf("check destination enrollment: %w", err)
 	}
 
 	return &ProjectMergePlan{
@@ -140,11 +128,7 @@ func (s *Store) BuildProjectMergePlan(from, to string) (*ProjectMergePlan, error
 		Observations:            observations,
 		Sessions:                sessions,
 		Prompts:                 prompts,
-		SyncMutations:           syncMutations,
 		SourceProjectRows:       sourceProjectRows,
-		SourceEnrolled:          sourceEnrolled,
-		DestinationEnrolled:     destinationEnrolled,
-		WillCopyEnrollment:      sourceEnrolled && !destinationEnrolled,
 		WillDeleteSourceProject: sourceProjectRows > 0,
 	}, nil
 }
@@ -156,56 +140,23 @@ func (s *Store) MergeProjects(from, to string) (*ProjectMergeResult, error) {
 	}
 
 	result := &ProjectMergeResult{
-		Plan:                  *plan,
-		Merged:                true,
-		EnrollmentTransferred: plan.WillCopyEnrollment,
+		Plan:   *plan,
+		Merged: true,
 	}
 
 	err = s.withTx(func(tx *sql.Tx) error {
 		q := s.q.WithTx(tx)
 		ctx := context.Background()
-		params := dbgen.RenameObservationProjectParams{
-			NewName: sqlNullString(plan.To.ID),
-			OldName: sqlNullString(plan.From.ID),
-		}
-		n, err := q.RenameObservationProject(ctx, params)
-		if err != nil {
-			return fmt.Errorf("merge observations: %w", err)
-		}
-		result.ObservationsUpdated = n
+		result.ObservationsUpdated = plan.Observations
+		result.PromptsUpdated = plan.Prompts
 
+		var err error
 		result.SessionsUpdated, err = q.RenameSessionProject(ctx, dbgen.RenameSessionProjectParams{
 			NewName: plan.To.ID,
 			OldName: plan.From.ID,
 		})
 		if err != nil {
 			return fmt.Errorf("merge sessions: %w", err)
-		}
-
-		result.PromptsUpdated, err = q.RenamePromptProject(ctx, dbgen.RenamePromptProjectParams{
-			NewName: sqlNullString(plan.To.ID),
-			OldName: sqlNullString(plan.From.ID),
-		})
-		if err != nil {
-			return fmt.Errorf("merge prompts: %w", err)
-		}
-
-		result.SyncMutationsUpdated, err = q.RenameMutationProject(ctx, dbgen.RenameMutationProjectParams{
-			NewName: sqlNullString(plan.To.ID),
-			OldName: sqlNullString(plan.From.ID),
-		})
-		if err != nil {
-			return fmt.Errorf("merge sync_mutations: %w", err)
-		}
-
-		if err = q.CopyProjectEnrollment(ctx, dbgen.CopyProjectEnrollmentParams{
-			NewName: plan.To.ID,
-			OldName: plan.From.ID,
-		}); err != nil {
-			return fmt.Errorf("merge sync_enrolled_projects insert: %w", err)
-		}
-		if err = q.DeleteProjectEnrollment(ctx, plan.From.ID); err != nil {
-			return fmt.Errorf("merge sync_enrolled_projects delete: %w", err)
 		}
 
 		deleted, err := q.DeleteProjectByID(ctx, plan.From.ID)
@@ -316,7 +267,7 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 		return &MigrateResult{}, nil
 	}
 
-	exists, err := s.q.ProjectExists(context.Background(), sqlNullString(oldName))
+	exists, err := s.q.ProjectExists(context.Background(), oldName)
 	if err != nil {
 		return nil, fmt.Errorf("check old project: %w", err)
 	}
@@ -331,12 +282,15 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 			return fmt.Errorf("ensure destination project: %w", err)
 		}
 		q := s.q.WithTx(tx)
-		params := dbgen.RenameObservationProjectParams{NewName: sqlNullString(newName), OldName: sqlNullString(oldName)}
-		n, err := q.RenameObservationProject(context.Background(), params)
+		var err error
+		result.ObservationsUpdated, err = q.CountObservationProjectRows(context.Background(), oldName)
 		if err != nil {
-			return fmt.Errorf("migrate observations: %w", err)
+			return fmt.Errorf("count observations: %w", err)
 		}
-		result.ObservationsUpdated = n
+		result.PromptsUpdated, err = q.CountPromptProjectRows(context.Background(), oldName)
+		if err != nil {
+			return fmt.Errorf("count prompts: %w", err)
+		}
 
 		result.SessionsUpdated, err = q.RenameSessionProject(context.Background(), dbgen.RenameSessionProjectParams{
 			NewName: newName, OldName: oldName,
@@ -345,27 +299,8 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 			return fmt.Errorf("migrate sessions: %w", err)
 		}
 
-		result.PromptsUpdated, err = q.RenamePromptProject(context.Background(), dbgen.RenamePromptProjectParams{
-			NewName: sqlNullString(newName), OldName: sqlNullString(oldName),
-		})
-		if err != nil {
-			return fmt.Errorf("migrate prompts: %w", err)
-		}
-
-		result.SyncMutationsUpdated, err = q.RenameMutationProject(context.Background(), dbgen.RenameMutationProjectParams{
-			NewName: sqlNullString(newName), OldName: sqlNullString(oldName),
-		})
-		if err != nil {
-			return fmt.Errorf("migrate sync_mutations: %w", err)
-		}
-
-		if err = q.CopyProjectEnrollment(context.Background(), dbgen.CopyProjectEnrollmentParams{
-			NewName: newName, OldName: oldName,
-		}); err != nil {
-			return fmt.Errorf("migrate sync_enrolled_projects insert: %w", err)
-		}
-		if err = q.DeleteProjectEnrollment(context.Background(), oldName); err != nil {
-			return fmt.Errorf("migrate sync_enrolled_projects delete: %w", err)
+		if _, err = q.DeleteProjectByID(context.Background(), oldName); err != nil {
+			return fmt.Errorf("migrate project metadata: %w", err)
 		}
 
 		return nil
@@ -375,49 +310,4 @@ func (s *Store) MigrateProject(oldName, newName string) (*MigrateResult, error) 
 	}
 
 	return result, nil
-}
-
-func (s *Store) EnrollProject(project string) error {
-	if project == "" {
-		return fmt.Errorf("project name must not be empty")
-	}
-	return s.withTx(func(tx *sql.Tx) error {
-		if err := s.ensureProjectTx(tx, project); err != nil {
-			return err
-		}
-		rowsAffected, err := s.q.WithTx(tx).EnrollProject(context.Background(), project)
-		if err != nil {
-			return err
-		}
-		if rowsAffected == 0 {
-			return nil
-		}
-		return s.backfillProjectSyncMutationsTx(tx, project)
-	})
-}
-
-func (s *Store) UnenrollProject(project string) error {
-	if project == "" {
-		return fmt.Errorf("project name must not be empty")
-	}
-	return s.q.UnenrollProject(context.Background(), project)
-}
-
-func (s *Store) ListEnrolledProjects() ([]EnrolledProject, error) {
-	rows, err := s.q.ListEnrolledProjects(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return nil, nil
-	}
-	projects := make([]EnrolledProject, 0, len(rows))
-	for _, row := range rows {
-		projects = append(projects, EnrolledProject{Project: row.Project, EnrolledAt: row.EnrolledAt})
-	}
-	return projects, nil
-}
-
-func (s *Store) IsProjectEnrolled(project string) (bool, error) {
-	return s.q.IsProjectEnrolled(context.Background(), project)
 }

@@ -16,6 +16,14 @@ func nullablePtr(v sql.NullString) *string {
 	return &value
 }
 
+func nullableInt64(v sql.NullInt64) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	value := v.Int64
+	return &value
+}
+
 func sqlNullString(value string) sql.NullString {
 	return sql.NullString{String: value, Valid: value != ""}
 }
@@ -29,6 +37,17 @@ func sqlNullStringPtr(value *string) sql.NullString {
 
 func sqlNullInt64(value int64) sql.NullInt64 {
 	return sql.NullInt64{Int64: value, Valid: value != 0}
+}
+
+func boolToInt64(value bool) int64 {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func int64ToBool(value int64) bool {
+	return value != 0
 }
 
 func dbString(v any) string {
@@ -110,7 +129,7 @@ func observationFromDB(
 	revisionCount, duplicateCount int64,
 	lastSeenAt sql.NullString,
 	createdAt, updatedAt string,
-	deletedAt sql.NullString,
+	isDeleted int64,
 ) Observation {
 	return Observation{
 		ID:             id,
@@ -128,33 +147,33 @@ func observationFromDB(
 		LastSeenAt:     nullablePtr(lastSeenAt),
 		CreatedAt:      createdAt,
 		UpdatedAt:      updatedAt,
-		DeletedAt:      nullablePtr(deletedAt),
+		IsDeleted:      int64ToBool(isDeleted),
 	}
 }
 
 func observationFromListRow(r dbgen.ListObservationsRow) Observation {
 	return observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-		r.ToolName, r.Project, r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
-		r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
+		r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
+		r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.IsDeleted)
 }
 
 func observationFromRecentRow(r dbgen.ListRecentObservationsRow) Observation {
 	return observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-		r.ToolName, r.Project, r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
-		r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
+		r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
+		r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.IsDeleted)
 }
 
 func observationFromSessionRow(r dbgen.ListSessionObservationsRow) Observation {
 	return observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-		r.ToolName, r.Project, r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
-		r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.DeletedAt)
+		r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
+		r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.IsDeleted)
 }
 
 func searchResultFromFilterRow(r dbgen.SearchObservationsByFilterRow) SearchResult {
 	return SearchResult{
 		Observation: observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-			r.ToolName, r.Project, r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
-			r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.DeletedAt),
+			r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
+			r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.IsDeleted),
 		Rank: r.Relevance,
 	}
 }
@@ -162,15 +181,15 @@ func searchResultFromFilterRow(r dbgen.SearchObservationsByFilterRow) SearchResu
 func searchResultFromFTSRow(r dbgen.SearchObservationsFTSRow) SearchResult {
 	return SearchResult{
 		Observation: observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-			r.ToolName, r.Project, r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
-			r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.DeletedAt),
+			r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
+			r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.IsDeleted),
 		Rank: r.Relevance,
 	}
 }
 
 func syncStateFromDB(row dbgen.SyncState) *SyncState {
 	return &SyncState{
-		TargetKey: row.TargetKey, Lifecycle: row.Lifecycle,
+		TargetKey: row.TargetKey, SyncTypeID: row.SyncTypeID, Lifecycle: row.Lifecycle,
 		LastEnqueuedSeq: row.LastEnqueuedSeq, LastAckedSeq: row.LastAckedSeq,
 		LastPulledSeq: row.LastPulledSeq, ConsecutiveFailures: int(row.ConsecutiveFailures),
 		BackoffUntil: nullablePtr(row.BackoffUntil), LeaseOwner: nullablePtr(row.LeaseOwner),
@@ -180,10 +199,6 @@ func syncStateFromDB(row dbgen.SyncState) *SyncState {
 }
 
 func observationPayloadFromObservation(obs *Observation) syncObservationPayload {
-	tags := obs.Tags
-	if tags == nil {
-		tags = []string{}
-	}
 	return syncObservationPayload{
 		SyncID:     obs.SyncID,
 		SessionID:  obs.SessionID,
@@ -191,10 +206,9 @@ func observationPayloadFromObservation(obs *Observation) syncObservationPayload 
 		Title:      obs.Title,
 		Content:    obs.Content,
 		ToolName:   obs.ToolName,
-		Project:    obs.Project,
 		Scope:      obs.Scope,
 		TopicKey:   obs.TopicKey,
-		Tags:       &tags,
+		IsDeleted:  obs.IsDeleted,
 		Provenance: nullableProvenanceInput(provenanceInputFromStored(obs.Provenance, ProvenanceInput{})),
 	}
 }

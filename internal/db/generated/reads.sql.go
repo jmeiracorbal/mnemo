@@ -12,17 +12,18 @@ import (
 
 const listObservations = `-- name: ListObservations :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
-       o.tool_name, o.project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
-       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.is_deleted, o.provenance_id
 FROM observations o
-WHERE o.deleted_at IS NULL
-  AND (?1 = '' OR o.project = ?1)
+JOIN sessions s ON s.id = o.session_id
+WHERE o.is_deleted = 0
+  AND (?1 = '' OR s.project = ?1)
   AND (?2 = '' OR o.scope = ?2)
   AND (
     ?3 = 0 OR o.id IN (
       SELECT ot.observation_id
       FROM observation_tags ot
-      WHERE ot.tag IN (SELECT value FROM json_each(?4))
+      WHERE ot.is_deleted = 0 AND ot.tag IN (SELECT value FROM json_each(?4))
       GROUP BY ot.observation_id
       HAVING COUNT(DISTINCT ot.tag) = ?3
     )
@@ -47,7 +48,7 @@ type ListObservationsRow struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
+	Project        string         `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	RevisionCount  int64          `json:"revision_count"`
@@ -55,7 +56,7 @@ type ListObservationsRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -90,7 +91,7 @@ func (q *Queries) ListObservations(ctx context.Context, arg ListObservationsPara
 			&i.LastSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
+			&i.IsDeleted,
 			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
@@ -108,21 +109,23 @@ func (q *Queries) ListObservations(ctx context.Context, arg ListObservationsPara
 
 const listRecentObservations = `-- name: ListRecentObservations :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
-       o.tool_name, o.project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
-       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.is_deleted, o.provenance_id,
        (CASE WHEN ?1 != '' AND o.topic_key = ?1 THEN 1 ELSE 0 END) +
        (SELECT COUNT(*) FROM observation_tags bt
         WHERE bt.observation_id = o.id
+          AND bt.is_deleted = 0
           AND bt.tag IN (SELECT value FROM json_each(?2))) AS preference_score
 FROM observations o
-WHERE o.deleted_at IS NULL
-  AND (?3 = '' OR o.project = ?3)
+JOIN sessions s ON s.id = o.session_id
+WHERE o.is_deleted = 0
+  AND (?3 = '' OR s.project = ?3)
   AND (?4 = '' OR o.scope = ?4)
   AND (
     ?5 = 0 OR o.id IN (
       SELECT ot.observation_id
       FROM observation_tags ot
-      WHERE ot.tag IN (SELECT value FROM json_each(?6))
+      WHERE ot.is_deleted = 0 AND ot.tag IN (SELECT value FROM json_each(?6))
       GROUP BY ot.observation_id
       HAVING COUNT(DISTINCT ot.tag) = ?5
     )
@@ -149,7 +152,7 @@ type ListRecentObservationsRow struct {
 	Title           string         `json:"title"`
 	Content         string         `json:"content"`
 	ToolName        sql.NullString `json:"tool_name"`
-	Project         sql.NullString `json:"project"`
+	Project         string         `json:"project"`
 	Scope           string         `json:"scope"`
 	TopicKey        sql.NullString `json:"topic_key"`
 	RevisionCount   int64          `json:"revision_count"`
@@ -157,7 +160,7 @@ type ListRecentObservationsRow struct {
 	LastSeenAt      sql.NullString `json:"last_seen_at"`
 	CreatedAt       string         `json:"created_at"`
 	UpdatedAt       string         `json:"updated_at"`
-	DeletedAt       sql.NullString `json:"deleted_at"`
+	IsDeleted       int64          `json:"is_deleted"`
 	ProvenanceID    sql.NullInt64  `json:"provenance_id"`
 	PreferenceScore int64          `json:"preference_score"`
 }
@@ -195,7 +198,7 @@ func (q *Queries) ListRecentObservations(ctx context.Context, arg ListRecentObse
 			&i.LastSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
+			&i.IsDeleted,
 			&i.ProvenanceID,
 			&i.PreferenceScore,
 		); err != nil {
@@ -213,11 +216,13 @@ func (q *Queries) ListRecentObservations(ctx context.Context, arg ListRecentObse
 }
 
 const listRecentPrompts = `-- name: ListRecentPrompts :many
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, content,
-       ifnull(project, '') AS project, created_at, provenance_id
-FROM user_prompts
-WHERE (?1 = '' OR project = ?1)
-ORDER BY created_at DESC
+SELECT p.id, ifnull(p.sync_id, '') AS sync_id, p.session_id, p.content,
+       s.project AS project, p.created_at, p.provenance_id
+FROM user_prompts p
+JOIN sessions s ON s.id = p.session_id
+WHERE p.is_deleted = 0
+  AND (?1 = '' OR s.project = ?1)
+ORDER BY p.created_at DESC
 LIMIT ?2
 `
 
@@ -231,7 +236,7 @@ type ListRecentPromptsRow struct {
 	SyncID       interface{}   `json:"sync_id"`
 	SessionID    string        `json:"session_id"`
 	Content      string        `json:"content"`
-	Project      interface{}   `json:"project"`
+	Project      string        `json:"project"`
 	CreatedAt    string        `json:"created_at"`
 	ProvenanceID sql.NullInt64 `json:"provenance_id"`
 }
@@ -268,12 +273,13 @@ func (q *Queries) ListRecentPrompts(ctx context.Context, arg ListRecentPromptsPa
 }
 
 const listSessionObservations = `-- name: ListSessionObservations :many
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at, provenance_id
-FROM observations
-WHERE session_id = ?1 AND deleted_at IS NULL
-ORDER BY created_at ASC
+SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.is_deleted, o.provenance_id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.session_id = ?1 AND o.is_deleted = 0
+ORDER BY o.created_at ASC
 LIMIT ?2
 `
 
@@ -290,7 +296,7 @@ type ListSessionObservationsRow struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
+	Project        string         `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	RevisionCount  int64          `json:"revision_count"`
@@ -298,7 +304,7 @@ type ListSessionObservationsRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -327,7 +333,7 @@ func (q *Queries) ListSessionObservations(ctx context.Context, arg ListSessionOb
 			&i.LastSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
+			&i.IsDeleted,
 			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
@@ -345,22 +351,24 @@ func (q *Queries) ListSessionObservations(ctx context.Context, arg ListSessionOb
 
 const searchObservationsByFilter = `-- name: SearchObservationsByFilter :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
-       o.tool_name, o.project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
-       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.is_deleted, o.provenance_id,
        CAST((SELECT COUNT(*) FROM observation_tags bt
              WHERE bt.observation_id = o.id
+               AND bt.is_deleted = 0
                AND bt.tag IN (SELECT value FROM json_each(?1))) AS REAL) AS relevance
 FROM observations o
-WHERE o.deleted_at IS NULL
+JOIN sessions s ON s.id = o.session_id
+WHERE o.is_deleted = 0
   AND (?2 = '' OR o.type = ?2)
-  AND (?3 = '' OR o.project = ?3)
+  AND (?3 = '' OR s.project = ?3)
   AND (?4 = '' OR o.scope = ?4)
   AND (?5 = '' OR o.topic_key = ?5)
   AND (
     ?6 = 0 OR o.id IN (
       SELECT ot.observation_id
       FROM observation_tags ot
-      WHERE ot.tag IN (SELECT value FROM json_each(?7))
+      WHERE ot.is_deleted = 0 AND ot.tag IN (SELECT value FROM json_each(?7))
       GROUP BY ot.observation_id
       HAVING COUNT(DISTINCT ot.tag) = ?6
     )
@@ -388,7 +396,7 @@ type SearchObservationsByFilterRow struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
+	Project        string         `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	RevisionCount  int64          `json:"revision_count"`
@@ -396,7 +404,7 @@ type SearchObservationsByFilterRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 	Relevance      float64        `json:"relevance"`
 }
@@ -435,7 +443,7 @@ func (q *Queries) SearchObservationsByFilter(ctx context.Context, arg SearchObse
 			&i.LastSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
+			&i.IsDeleted,
 			&i.ProvenanceID,
 			&i.Relevance,
 		); err != nil {
@@ -454,23 +462,24 @@ func (q *Queries) SearchObservationsByFilter(ctx context.Context, arg SearchObse
 
 const searchObservationsFTS = `-- name: SearchObservationsFTS :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
-       o.tool_name, o.project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
-       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.is_deleted, o.provenance_id,
        CAST(observations_fts.rank - CAST((SELECT COUNT(*) FROM observation_tags bt
                         WHERE bt.observation_id = o.id
                           AND bt.tag IN (SELECT value FROM json_each(?1))) AS REAL) * 0.5 AS REAL) AS relevance
 FROM observations_fts(?2)
 JOIN observations o ON o.id = observations_fts.rowid
-WHERE o.deleted_at IS NULL
+JOIN sessions s ON s.id = o.session_id
+WHERE o.is_deleted = 0
   AND (?3 = '' OR o.type = ?3)
-  AND (?4 = '' OR o.project = ?4)
+  AND (?4 = '' OR s.project = ?4)
   AND (?5 = '' OR o.scope = ?5)
   AND (?6 = '' OR o.topic_key = ?6)
   AND (
     ?7 = 0 OR o.id IN (
       SELECT ot.observation_id
       FROM observation_tags ot
-      WHERE ot.tag IN (SELECT value FROM json_each(?8))
+      WHERE ot.is_deleted = 0 AND ot.tag IN (SELECT value FROM json_each(?8))
       GROUP BY ot.observation_id
       HAVING COUNT(DISTINCT ot.tag) = ?7
     )
@@ -499,7 +508,7 @@ type SearchObservationsFTSRow struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
+	Project        string         `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	RevisionCount  int64          `json:"revision_count"`
@@ -507,7 +516,7 @@ type SearchObservationsFTSRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 	Relevance      float64        `json:"relevance"`
 }
@@ -547,7 +556,7 @@ func (q *Queries) SearchObservationsFTS(ctx context.Context, arg SearchObservati
 			&i.LastSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
+			&i.IsDeleted,
 			&i.ProvenanceID,
 			&i.Relevance,
 		); err != nil {
@@ -566,10 +575,12 @@ func (q *Queries) SearchObservationsFTS(ctx context.Context, arg SearchObservati
 
 const searchPromptsFTS = `-- name: SearchPromptsFTS :many
 SELECT p.id, ifnull(p.sync_id, '') AS sync_id, p.session_id, p.content,
-       ifnull(p.project, '') AS project, p.created_at, p.provenance_id
+       s.project AS project, p.created_at, p.provenance_id
 FROM user_prompts_fts(?1)
 JOIN user_prompts p ON p.id = user_prompts_fts.rowid
-WHERE (?2 = '' OR p.project = ?2)
+JOIN sessions s ON s.id = p.session_id
+WHERE p.is_deleted = 0
+  AND (?2 = '' OR s.project = ?2)
 ORDER BY user_prompts_fts.rank
 LIMIT ?3
 `
@@ -585,7 +596,7 @@ type SearchPromptsFTSRow struct {
 	SyncID       interface{}   `json:"sync_id"`
 	SessionID    string        `json:"session_id"`
 	Content      string        `json:"content"`
-	Project      interface{}   `json:"project"`
+	Project      string        `json:"project"`
 	CreatedAt    string        `json:"created_at"`
 	ProvenanceID sql.NullInt64 `json:"provenance_id"`
 }

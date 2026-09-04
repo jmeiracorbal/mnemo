@@ -30,10 +30,10 @@ func TestListProjectSummariesIncludesRegisteredAndActivityProjects(t *testing.T)
 	if _, err := s.db.Exec(`UPDATE sessions SET started_at = '2026-01-01 10:00:00' WHERE id = 's-alpha'`); err != nil {
 		t.Fatalf("update alpha session: %v", err)
 	}
-	if _, err := s.db.Exec(`UPDATE observations SET created_at = '2026-01-02 10:00:00', updated_at = '2026-01-02 10:00:00', last_seen_at = '2026-01-02 10:00:00' WHERE project = 'alpha'`); err != nil {
+	if _, err := s.db.Exec(`UPDATE observations SET created_at = '2026-01-02 10:00:00', updated_at = '2026-01-02 10:00:00', last_seen_at = '2026-01-02 10:00:00' WHERE session_id = 's-alpha'`); err != nil {
 		t.Fatalf("update alpha observation: %v", err)
 	}
-	if _, err := s.db.Exec(`UPDATE user_prompts SET created_at = '2026-01-03 10:00:00' WHERE project = 'alpha'`); err != nil {
+	if _, err := s.db.Exec(`UPDATE user_prompts SET created_at = '2026-01-03 10:00:00' WHERE session_id = 's-alpha'`); err != nil {
 		t.Fatalf("update alpha prompt: %v", err)
 	}
 
@@ -90,9 +90,6 @@ func TestBuildProjectMergePlan(t *testing.T) {
 	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-alpha-legacy", Content: "Alpha prompt", Project: "alpha-legacy"}); err != nil {
 		t.Fatalf("add source prompt: %v", err)
 	}
-	if err := s.EnrollProject("alpha-legacy"); err != nil {
-		t.Fatalf("enroll source project: %v", err)
-	}
 
 	plan, err := s.BuildProjectMergePlan("alpha-legacy", "11111111-2222-3333-4444-555555555555")
 	if err != nil {
@@ -101,11 +98,8 @@ func TestBuildProjectMergePlan(t *testing.T) {
 	if plan.From.ID != "alpha-legacy" || plan.To.ID != "11111111-2222-3333-4444-555555555555" {
 		t.Fatalf("unexpected plan endpoints: %+v", plan)
 	}
-	if plan.Observations != 1 || plan.Sessions != 1 || plan.Prompts != 1 || plan.SyncMutations != 3 {
+	if plan.Observations != 1 || plan.Sessions != 1 || plan.Prompts != 1 || plan.SyncMutations != 0 {
 		t.Fatalf("unexpected plan counts: %+v", plan)
-	}
-	if !plan.SourceEnrolled || plan.DestinationEnrolled || !plan.WillCopyEnrollment || !plan.WillDeleteSourceProject {
-		t.Fatalf("unexpected plan flags: %+v", plan)
 	}
 }
 
@@ -136,36 +130,19 @@ func TestMergeProjectsConsolidatesProjectData(t *testing.T) {
 	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-alpha-legacy", Content: "Alpha prompt", Project: source}); err != nil {
 		t.Fatalf("add source prompt: %v", err)
 	}
-	if err := s.EnrollProject(source); err != nil {
-		t.Fatalf("enroll source project: %v", err)
-	}
 
 	result, err := s.MergeProjects(source, destination)
 	if err != nil {
 		t.Fatalf("merge projects: %v", err)
 	}
-	if !result.Merged || result.ObservationsUpdated != 1 || result.SessionsUpdated != 1 || result.PromptsUpdated != 1 || result.SyncMutationsUpdated != 3 {
+	if !result.Merged || result.ObservationsUpdated != 1 || result.SessionsUpdated != 1 || result.PromptsUpdated != 1 || result.SyncMutationsUpdated != 0 {
 		t.Fatalf("unexpected merge result: %+v", result)
-	}
-	if !result.SourceProjectDeleted || !result.EnrollmentTransferred {
-		t.Fatalf("expected source metadata deletion and enrollment transfer: %+v", result)
 	}
 
 	if project, err := s.GetProjectByID(source); err != nil {
 		t.Fatalf("get source project: %v", err)
 	} else if project != nil {
 		t.Fatalf("source project metadata still exists: %+v", project)
-	}
-	sourceEnrolled, err := s.IsProjectEnrolled(source)
-	if err != nil {
-		t.Fatalf("check source enrollment: %v", err)
-	}
-	destinationEnrolled, err := s.IsProjectEnrolled(destination)
-	if err != nil {
-		t.Fatalf("check destination enrollment: %v", err)
-	}
-	if sourceEnrolled || !destinationEnrolled {
-		t.Fatalf("unexpected enrollment state: source=%v destination=%v", sourceEnrolled, destinationEnrolled)
 	}
 
 	projects, err := s.ListProjectSummaries()
@@ -198,16 +175,6 @@ func TestMergeProjectsConsolidatesProjectData(t *testing.T) {
 		t.Fatalf("expected no source search results, got %d", len(results))
 	}
 
-	var sourceMutations, destinationMutations int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations WHERE project = ?`, source).Scan(&sourceMutations); err != nil {
-		t.Fatalf("count source sync mutations: %v", err)
-	}
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations WHERE project = ?`, destination).Scan(&destinationMutations); err != nil {
-		t.Fatalf("count destination sync mutations: %v", err)
-	}
-	if sourceMutations != 0 || destinationMutations != 3 {
-		t.Fatalf("unexpected sync mutation counts: source=%d destination=%d", sourceMutations, destinationMutations)
-	}
 }
 
 func TestRenameProjectUpdatesMetadataWithoutChangingActivityProjectID(t *testing.T) {

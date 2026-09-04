@@ -11,7 +11,6 @@ type CloudBackend interface {
 
 type MutationEntry struct {
 	LocalSeq   int64           `json:"-"`
-	Project    string          `json:"project"`
 	Entity     string          `json:"entity"`
 	EntityKey  string          `json:"entity_key"`
 	Op         string          `json:"op"`
@@ -27,7 +26,6 @@ type PulledMutation struct {
 	Seq        int64           `json:"seq"`
 	OriginID   string          `json:"origin_id"`
 	ClientSeq  int64           `json:"client_seq"`
-	Project    string          `json:"project"`
 	Entity     string          `json:"entity"`
 	EntityKey  string          `json:"entity_key"`
 	Op         string          `json:"op"`
