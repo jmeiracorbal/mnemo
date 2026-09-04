@@ -1453,14 +1453,6 @@ func intArg(req mcp.CallToolRequest, key string, defaultVal int) int {
 	return int(v)
 }
 
-func boolArg(req mcp.CallToolRequest, key string, defaultVal bool) bool {
-	v, ok := req.GetArguments()[key].(bool)
-	if !ok {
-		return defaultVal
-	}
-	return v
-}
-
 func truncate(s string, max int) string {
 	runes := []rune(s)
 	if len(runes) <= max {

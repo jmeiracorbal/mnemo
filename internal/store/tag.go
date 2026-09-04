@@ -445,15 +445,6 @@ func (s *Store) loadTagsForSession(sess *Session) error {
 	return nil
 }
 
-func (s *Store) loadTagsForSessionTx(tx *sql.Tx, sess *Session) error {
-	rows, err := s.q.WithTx(tx).ListSessionTags(context.Background(), sess.ID)
-	if err != nil {
-		return fmt.Errorf("load session tags: %w", err)
-	}
-	sess.Tags = append(sess.Tags, rows...)
-	return nil
-}
-
 func (s *Store) loadTagsForSearchResults(results []SearchResult) error {
 	if len(results) == 0 {
 		return nil

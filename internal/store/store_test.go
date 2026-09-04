@@ -3757,36 +3757,6 @@ func TestExportImportRoundTripPreservesTags(t *testing.T) {
 
 // ─── Sync + Tags ─────────────────────────────────────────────────────────────
 
-// ─── Sync + Tags ─────────────────────────────────────────────────────────────
-
-// enrollAndList enrolls project and returns pending mutations.
-func enrollAndList(t *testing.T, s *Store, project string) []SyncMutation {
-	t.Helper()
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 50)
-	if err != nil {
-		t.Fatalf("ListPendingSyncMutations: %v", err)
-	}
-	return mutations
-}
-
-func findObsMutation(t *testing.T, mutations []SyncMutation, syncID string) SyncMutation {
-	t.Helper()
-	for _, m := range mutations {
-		if m.Entity != SyncEntityObservation {
-			continue
-		}
-		if syncID == "" {
-			return m
-		}
-		var p syncObservationPayload
-		if err := decodeSyncPayload([]byte(m.Payload), &p); err == nil && p.SyncID == syncID {
-			return m
-		}
-	}
-	t.Fatalf("observation mutation not found (syncID=%q)", syncID)
-	return SyncMutation{}
-}
-
 func TestSetSessionTagsPersistsAndLoads(t *testing.T) {
 	s := newTestStore(t)
 	newTestSession(t, s, "sess-tag-session", "mnemo")
