@@ -11,7 +11,6 @@ import (
 
 type Querier interface {
 	AckMutationSeq(ctx context.Context, arg AckMutationSeqParams) error
-	AckMutationsThrough(ctx context.Context, arg AckMutationsThroughParams) error
 	AcquireSyncLease(ctx context.Context, arg AcquireSyncLeaseParams) (int64, error)
 	ApplySessionPayload(ctx context.Context, arg ApplySessionPayloadParams) error
 	CopyObservationTag(ctx context.Context, arg CopyObservationTagParams) error
@@ -71,7 +70,6 @@ type Querier interface {
 	ListObservationTags(ctx context.Context, observationID int64) ([]string, error)
 	ListObservations(ctx context.Context, arg ListObservationsParams) ([]ListObservationsRow, error)
 	ListObservationsAffectedByTag(ctx context.Context, tag string) ([]ListObservationsAffectedByTagRow, error)
-	ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]SyncMutation, error)
 	ListProjectSummaries(ctx context.Context) ([]ListProjectSummariesRow, error)
 	ListProjects(ctx context.Context) ([]Project, error)
 	ListRecentObservations(ctx context.Context, arg ListRecentObservationsParams) ([]ListRecentObservationsRow, error)

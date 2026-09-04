@@ -1325,7 +1325,7 @@ func TestSessionsOrderedByMostRecentActivity(t *testing.T) {
 	}
 }
 
-func TestSessionObservationsAddPromptImportAndSyncChunks(t *testing.T) {
+func TestSessionObservationsAddPromptImportAndSyncQueue(t *testing.T) {
 	s := newTestStore(t)
 
 	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
@@ -1440,7 +1440,7 @@ func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 		t.Fatalf("expected 7 enqueued mutations including the project, got %d", state.LastEnqueuedSeq)
 	}
 
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 10)
+	mutations, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 10)
 	if err != nil {
 		t.Fatalf("list pending sync mutations: %v", err)
 	}
@@ -1497,10 +1497,10 @@ func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 		t.Fatalf("expected delete payload to mark is_deleted=true, got %#v", deletedPayload["is_deleted"])
 	}
 
-	if err := s.AckSyncMutations(DefaultSyncTargetKey, mutations[4].Seq); err != nil {
+	if err := s.AckSyncMutationSeqs(DefaultSyncTargetKey, []int64{mutations[0].Seq, mutations[1].Seq, mutations[2].Seq, mutations[3].Seq, mutations[4].Seq}); err != nil {
 		t.Fatalf("ack sync mutations: %v", err)
 	}
-	remaining, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 10)
+	remaining, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 10)
 	if err != nil {
 		t.Fatalf("list remaining sync mutations: %v", err)
 	}
@@ -1645,7 +1645,7 @@ func TestApplyRemoteMutationIdempotent(t *testing.T) {
 		t.Fatalf("expected pulled delete to hide observation")
 	}
 
-	pending, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 10)
+	pending, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 10)
 	if err != nil {
 		t.Fatalf("list pending after pulled apply: %v", err)
 	}
@@ -2901,7 +2901,7 @@ func TestTruncateUTF8(t *testing.T) {
 	}
 }
 
-func TestListPendingSyncMutationsDoesNotRequireProjectColumn(t *testing.T) {
+func TestListAllPendingSyncMutationsDoesNotRequireProjectColumn(t *testing.T) {
 	s := newTestStore(t)
 
 	if err := s.CreateSession("proj-session", "my-project", "/tmp"); err != nil {
@@ -2920,7 +2920,7 @@ func TestListPendingSyncMutationsDoesNotRequireProjectColumn(t *testing.T) {
 		t.Fatalf("add observation: %v", err)
 	}
 
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 10)
+	mutations, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 10)
 	if err != nil {
 		t.Fatalf("list pending: %v", err)
 	}
@@ -5003,7 +5003,7 @@ func TestBackfillAllSyncMutationsDoesNotRequireProjectEnrollment(t *testing.T) {
 		seen[m.Entity+":"+m.EntityKey] = true
 	}
 	if !seen[SyncEntitySession+":cloud-all-session"] || !seen[SyncEntityObservation+":"+obs.SyncID] {
-		t.Fatalf("expected session and observation backfill without enrollment, got %#v", mutations)
+	t.Fatalf("expected session and observation backfill from canonical rows, got %#v", mutations)
 	}
 
 	if err := s.BackfillAllSyncMutations(); err != nil {

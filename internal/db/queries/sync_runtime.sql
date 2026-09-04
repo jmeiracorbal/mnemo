@@ -1,18 +1,3 @@
--- name: ListPendingSyncMutations :many
-SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source,
-       sm.occurred_at, sm.acked_at
-FROM sync_mutations sm
-WHERE sm.target_key = sqlc.arg('target_key') AND sm.acked_at IS NULL
-ORDER BY sm.seq ASC
-LIMIT sqlc.arg('result_limit');
-
--- name: AckMutationsThrough :exec
-UPDATE sync_mutations
-SET acked_at = datetime('now')
-WHERE target_key = sqlc.arg('target_key')
-  AND seq <= sqlc.arg('last_acked_seq')
-  AND acked_at IS NULL;
-
 -- name: AckMutationSeq :exec
 UPDATE sync_mutations
 SET acked_at = datetime('now')

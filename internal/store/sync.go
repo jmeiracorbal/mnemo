@@ -18,58 +18,6 @@ func (s *Store) GetSyncState(targetKey string) (*SyncState, error) {
 	return s.getSyncState(targetKey)
 }
 
-func (s *Store) ListPendingSyncMutations(targetKey string, limit int) ([]SyncMutation, error) {
-	targetKey = normalizeSyncTargetKey(targetKey)
-	if limit <= 0 {
-		limit = 100
-	}
-	rows, err := s.q.ListPendingSyncMutations(context.Background(), dbgen.ListPendingSyncMutationsParams{
-		TargetKey: targetKey, ResultLimit: int64(limit),
-	})
-	if err != nil {
-		return nil, err
-	}
-	mutations := make([]SyncMutation, 0, len(rows))
-	for _, row := range rows {
-		mutations = append(mutations, SyncMutation{
-			Seq: row.Seq, TargetKey: row.TargetKey, Entity: row.Entity, EntityKey: row.EntityKey,
-			Op: row.Op, Payload: row.Payload, Source: row.Source,
-			OccurredAt: row.OccurredAt, AckedAt: nullablePtr(row.AckedAt),
-		})
-	}
-	return mutations, nil
-}
-
-func (s *Store) AckSyncMutations(targetKey string, lastAckedSeq int64) error {
-	if lastAckedSeq <= 0 {
-		return nil
-	}
-	targetKey = normalizeSyncTargetKey(targetKey)
-	return s.withTx(func(tx *sql.Tx) error {
-		q := s.q.WithTx(tx)
-		state, err := s.getSyncStateTx(tx, targetKey)
-		if err != nil {
-			return err
-		}
-		if err := q.AckMutationsThrough(context.Background(), dbgen.AckMutationsThroughParams{
-			TargetKey: targetKey, LastAckedSeq: lastAckedSeq,
-		}); err != nil {
-			return err
-		}
-		acked := state.LastAckedSeq
-		if lastAckedSeq > acked {
-			acked = lastAckedSeq
-		}
-		lifecycle := SyncLifecyclePending
-		if acked >= state.LastEnqueuedSeq {
-			lifecycle = SyncLifecycleHealthy
-		}
-		return q.UpdateSyncAckState(context.Background(), dbgen.UpdateSyncAckStateParams{
-			LastAckedSeq: acked, Lifecycle: lifecycle, TargetKey: targetKey,
-		})
-	})
-}
-
 func (s *Store) AckSyncMutationSeqs(targetKey string, seqs []int64) error {
 	if len(seqs) == 0 {
 		return nil
@@ -466,9 +414,8 @@ func (s *Store) applyPromptUpsertTx(tx *sql.Tx, payload syncPromptPayload) error
 	})
 }
 
-// BackfillAllSyncMutations ensures all locally stored sessions, observations, and prompts
-// have pending sync mutations. Cloud sync is complete by default; enrollment is kept only
-// for backward-compatible legacy commands and is not used by the cloud sync engine.
+// BackfillAllSyncMutations reconstructs missing queue entries from every canonical
+// synchronizable table, including soft-deleted rows.
 func (s *Store) BackfillAllSyncMutations() error {
 	return s.withTx(func(tx *sql.Tx) error {
 		if err := s.ensureSyncStateTx(tx, DefaultSyncTargetKey); err != nil {
@@ -641,9 +588,7 @@ func syncEntityForTable(table string) string {
 	return map[string]string{"projects": SyncEntityProject, "sessions": SyncEntitySession, "observations": SyncEntityObservation, "observation_tags": SyncEntityObservationTag, "session_tags": SyncEntitySessionTag, "observation_reviews": SyncEntityObservationReview, "provenance_contexts": SyncEntityProvenanceContext, "agents": SyncEntityAgent, "tools": SyncEntityTool, "models": SyncEntityModel, "source_kinds": SyncEntitySourceKind, "mcp_clients": SyncEntityMCPClient}[table]
 }
 
-// ListAllPendingSyncMutations returns all pending local mutations regardless of
-// legacy project enrollment. Cloud sync semantics require every local mutation to
-// be uploaded idempotently.
+// ListAllPendingSyncMutations returns pending local mutations for a sync target.
 func (s *Store) ListAllPendingSyncMutations(targetKey string, limit int) ([]SyncMutation, error) {
 	targetKey = normalizeSyncTargetKey(targetKey)
 	if limit <= 0 {

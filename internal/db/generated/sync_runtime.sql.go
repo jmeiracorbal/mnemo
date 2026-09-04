@@ -28,24 +28,6 @@ func (q *Queries) AckMutationSeq(ctx context.Context, arg AckMutationSeqParams) 
 	return err
 }
 
-const ackMutationsThrough = `-- name: AckMutationsThrough :exec
-UPDATE sync_mutations
-SET acked_at = datetime('now')
-WHERE target_key = ?1
-  AND seq <= ?2
-  AND acked_at IS NULL
-`
-
-type AckMutationsThroughParams struct {
-	TargetKey    string `json:"target_key"`
-	LastAckedSeq int64  `json:"last_acked_seq"`
-}
-
-func (q *Queries) AckMutationsThrough(ctx context.Context, arg AckMutationsThroughParams) error {
-	_, err := q.db.ExecContext(ctx, ackMutationsThrough, arg.TargetKey, arg.LastAckedSeq)
-	return err
-}
-
 const acquireSyncLease = `-- name: AcquireSyncLease :execrows
 UPDATE sync_state
 SET lease_owner = ?1,
@@ -131,53 +113,6 @@ func (q *Queries) CountSessionProjectRows(ctx context.Context, projectName strin
 	var count int64
 	err := row.Scan(&count)
 	return count, err
-}
-
-const listPendingSyncMutations = `-- name: ListPendingSyncMutations :many
-SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source,
-       sm.occurred_at, sm.acked_at
-FROM sync_mutations sm
-WHERE sm.target_key = ?1 AND sm.acked_at IS NULL
-ORDER BY sm.seq ASC
-LIMIT ?2
-`
-
-type ListPendingSyncMutationsParams struct {
-	TargetKey   string `json:"target_key"`
-	ResultLimit int64  `json:"result_limit"`
-}
-
-func (q *Queries) ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]SyncMutation, error) {
-	rows, err := q.db.QueryContext(ctx, listPendingSyncMutations, arg.TargetKey, arg.ResultLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []SyncMutation{}
-	for rows.Next() {
-		var i SyncMutation
-		if err := rows.Scan(
-			&i.Seq,
-			&i.TargetKey,
-			&i.Entity,
-			&i.EntityKey,
-			&i.Op,
-			&i.Payload,
-			&i.Source,
-			&i.OccurredAt,
-			&i.AckedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const markSyncFailure = `-- name: MarkSyncFailure :exec
