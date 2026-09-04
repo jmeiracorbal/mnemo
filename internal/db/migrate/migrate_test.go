@@ -75,8 +75,8 @@ func TestApplyDataDirCreatesCurrentSchemaAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
-	if first.LatestVersion != "0024" {
-		t.Fatalf("latest version = %q, want 0024", first.LatestVersion)
+	if first.LatestVersion != "0026" {
+		t.Fatalf("latest version = %q, want 0026", first.LatestVersion)
 	}
 	second, err := ApplyDataDir(dataDir)
 	if err != nil {
@@ -90,6 +90,15 @@ func TestApplyDataDirCreatesCurrentSchemaAndIsIdempotent(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	if err := ValidateCurrent(db); err != nil {
 		t.Fatalf("validate current schema: %v", err)
+	}
+	for _, table := range []string{"sync_chunks", "sync_enrolled_projects"} {
+		var count int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&count); err != nil {
+			t.Fatalf("check removed table %s: %v", table, err)
+		}
+		if count != 0 {
+			t.Fatalf("legacy synchronization table %s still exists", table)
+		}
 	}
 }
 
@@ -106,8 +115,6 @@ func TestProjectColumnsReferenceProjects(t *testing.T) {
 		from  string
 	}{
 		{table: "sessions", from: "project"},
-		{table: "sync_mutations", from: "project"},
-		{table: "sync_enrolled_projects", from: "project"},
 	} {
 		t.Run(tc.table, func(t *testing.T) {
 			fks := foreignKeys(t, db, tc.table)

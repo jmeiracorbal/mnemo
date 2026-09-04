@@ -12,6 +12,7 @@ type Agent struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
 	Kind        string `json:"kind"`
+	IsDeleted   int64  `json:"is_deleted"`
 	CreatedAt   string `json:"created_at"`
 }
 
@@ -20,6 +21,7 @@ type McpClient struct {
 	Name      string `json:"name"`
 	Version   string `json:"version"`
 	Transport string `json:"transport"`
+	IsDeleted int64  `json:"is_deleted"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -27,6 +29,7 @@ type Model struct {
 	ID          string `json:"id"`
 	Provider    string `json:"provider"`
 	DisplayName string `json:"display_name"`
+	IsDeleted   int64  `json:"is_deleted"`
 	CreatedAt   string `json:"created_at"`
 }
 
@@ -46,7 +49,7 @@ type Observation struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -56,12 +59,14 @@ type ObservationReview struct {
 	Reason        string         `json:"reason"`
 	SupersededBy  sql.NullInt64  `json:"superseded_by"`
 	ReviewedAt    sql.NullString `json:"reviewed_at"`
+	IsDeleted     int64          `json:"is_deleted"`
 	UpdatedAt     string         `json:"updated_at"`
 }
 
 type ObservationTag struct {
 	ObservationID int64  `json:"observation_id"`
 	Tag           string `json:"tag"`
+	IsDeleted     int64  `json:"is_deleted"`
 }
 
 type ObservationsFt struct {
@@ -74,6 +79,7 @@ type ObservationsFt struct {
 type Project struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	IsDeleted int64  `json:"is_deleted"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -84,6 +90,7 @@ type ProvenanceContext struct {
 	ToolID       string `json:"tool_id"`
 	ModelID      string `json:"model_id"`
 	McpClientID  string `json:"mcp_client_id"`
+	IsDeleted    int64  `json:"is_deleted"`
 	CreatedAt    string `json:"created_at"`
 }
 
@@ -102,28 +109,21 @@ type Session struct {
 	StartedAt    string         `json:"started_at"`
 	EndedAt      sql.NullString `json:"ended_at"`
 	Summary      sql.NullString `json:"summary"`
+	IsDeleted    int64          `json:"is_deleted"`
 	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
 type SessionTag struct {
 	SessionID string `json:"session_id"`
 	Tag       string `json:"tag"`
+	IsDeleted int64  `json:"is_deleted"`
 }
 
 type SourceKind struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
+	IsDeleted   int64  `json:"is_deleted"`
 	CreatedAt   string `json:"created_at"`
-}
-
-type SyncChunk struct {
-	ChunkID    string `json:"chunk_id"`
-	ImportedAt string `json:"imported_at"`
-}
-
-type SyncEnrolledProject struct {
-	Project    string `json:"project"`
-	EnrolledAt string `json:"enrolled_at"`
 }
 
 type SyncMutation struct {
@@ -134,7 +134,6 @@ type SyncMutation struct {
 	Op         string         `json:"op"`
 	Payload    string         `json:"payload"`
 	Source     string         `json:"source"`
-	Project    sql.NullString `json:"project"`
 	OccurredAt string         `json:"occurred_at"`
 	AckedAt    sql.NullString `json:"acked_at"`
 }
@@ -162,6 +161,7 @@ type SyncType struct {
 type Tool struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"display_name"`
+	IsDeleted   int64  `json:"is_deleted"`
 	CreatedAt   string `json:"created_at"`
 }
 
@@ -171,6 +171,7 @@ type UserPrompt struct {
 	SessionID    string         `json:"session_id"`
 	Content      string         `json:"content"`
 	CreatedAt    string         `json:"created_at"`
+	IsDeleted    int64          `json:"is_deleted"`
 	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 

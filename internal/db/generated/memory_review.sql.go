@@ -18,7 +18,8 @@ SELECT o.id, o.type, o.title, s.project AS project, o.scope, ifnull(o.topic_key,
 FROM observations o
 JOIN sessions s ON s.id = o.session_id
 LEFT JOIN observation_reviews r ON r.observation_id = o.id
-WHERE o.deleted_at IS NULL
+WHERE o.is_deleted = 0
+  AND ifnull(r.is_deleted, 0) = 0
   AND (?1 = '' OR s.project = ?1)
   AND (?2 = '' OR o.scope = ?2)
   AND (?3 = '' OR ifnull(o.topic_key, '') = ?3)
@@ -92,7 +93,7 @@ const listObservationIDsByTopic = `-- name: ListObservationIDsByTopic :many
 SELECT o.id
 FROM observations o
 JOIN sessions s ON s.id = o.session_id
-WHERE o.deleted_at IS NULL
+WHERE o.is_deleted = 0
   AND o.topic_key = ?1
   AND (?2 = '' OR s.project = ?2)
   AND (?3 = '' OR o.scope = ?3)
@@ -139,6 +140,7 @@ ON CONFLICT(observation_id) DO UPDATE SET
   reason = excluded.reason,
   superseded_by = excluded.superseded_by,
   reviewed_at = excluded.reviewed_at,
+  is_deleted = 0,
   updated_at = datetime('now')
 `
 

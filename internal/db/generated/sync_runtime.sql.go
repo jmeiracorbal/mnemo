@@ -82,23 +82,6 @@ func (q *Queries) AcquireSyncLease(ctx context.Context, arg AcquireSyncLeasePara
 	return result.RowsAffected()
 }
 
-const copyProjectEnrollment = `-- name: CopyProjectEnrollment :exec
-INSERT OR IGNORE INTO sync_enrolled_projects (project, enrolled_at)
-SELECT ?1, enrolled_at
-FROM sync_enrolled_projects
-WHERE sync_enrolled_projects.project = ?2
-`
-
-type CopyProjectEnrollmentParams struct {
-	NewName string `json:"new_name"`
-	OldName string `json:"old_name"`
-}
-
-func (q *Queries) CopyProjectEnrollment(ctx context.Context, arg CopyProjectEnrollmentParams) error {
-	_, err := q.db.ExecContext(ctx, copyProjectEnrollment, arg.NewName, arg.OldName)
-	return err
-}
-
 const countObservationProjectRows = `-- name: CountObservationProjectRows :one
 SELECT COUNT(*)
 FROM observations o
@@ -150,33 +133,11 @@ func (q *Queries) CountSessionProjectRows(ctx context.Context, projectName strin
 	return count, err
 }
 
-const countSyncMutationProjectRows = `-- name: CountSyncMutationProjectRows :one
-SELECT COUNT(*) FROM sync_mutations WHERE project = ?1
-`
-
-func (q *Queries) CountSyncMutationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSyncMutationProjectRows, projectName)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const deleteProjectEnrollment = `-- name: DeleteProjectEnrollment :exec
-DELETE FROM sync_enrolled_projects WHERE project = ?
-`
-
-func (q *Queries) DeleteProjectEnrollment(ctx context.Context, project string) error {
-	_, err := q.db.ExecContext(ctx, deleteProjectEnrollment, project)
-	return err
-}
-
 const listPendingSyncMutations = `-- name: ListPendingSyncMutations :many
-SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source, CAST(ifnull(sm.project, '') AS TEXT) AS project,
+SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source,
        sm.occurred_at, sm.acked_at
 FROM sync_mutations sm
-LEFT JOIN sync_enrolled_projects sep ON sm.project = sep.project
 WHERE sm.target_key = ?1 AND sm.acked_at IS NULL
-  AND (sm.project IS NULL OR sm.project = '' OR sep.project IS NOT NULL)
 ORDER BY sm.seq ASC
 LIMIT ?2
 `
@@ -186,28 +147,15 @@ type ListPendingSyncMutationsParams struct {
 	ResultLimit int64  `json:"result_limit"`
 }
 
-type ListPendingSyncMutationsRow struct {
-	Seq        int64          `json:"seq"`
-	TargetKey  string         `json:"target_key"`
-	Entity     string         `json:"entity"`
-	EntityKey  string         `json:"entity_key"`
-	Op         string         `json:"op"`
-	Payload    string         `json:"payload"`
-	Source     string         `json:"source"`
-	Project    string         `json:"project"`
-	OccurredAt string         `json:"occurred_at"`
-	AckedAt    sql.NullString `json:"acked_at"`
-}
-
-func (q *Queries) ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]ListPendingSyncMutationsRow, error) {
+func (q *Queries) ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]SyncMutation, error) {
 	rows, err := q.db.QueryContext(ctx, listPendingSyncMutations, arg.TargetKey, arg.ResultLimit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListPendingSyncMutationsRow{}
+	items := []SyncMutation{}
 	for rows.Next() {
-		var i ListPendingSyncMutationsRow
+		var i SyncMutation
 		if err := rows.Scan(
 			&i.Seq,
 			&i.TargetKey,
@@ -216,7 +164,6 @@ func (q *Queries) ListPendingSyncMutations(ctx context.Context, arg ListPendingS
 			&i.Op,
 			&i.Payload,
 			&i.Source,
-			&i.Project,
 			&i.OccurredAt,
 			&i.AckedAt,
 		); err != nil {
@@ -282,10 +229,8 @@ func (q *Queries) MarkSyncHealthy(ctx context.Context, arg MarkSyncHealthyParams
 
 const projectExists = `-- name: ProjectExists :one
 SELECT EXISTS(
-  SELECT 1 FROM projects pr WHERE pr.id = ?1
-  UNION SELECT 1 FROM sessions s WHERE s.project = ?1
-  UNION SELECT 1 FROM sync_mutations m WHERE m.project = ?1
-  UNION SELECT 1 FROM sync_enrolled_projects e WHERE e.project = ?1
+  SELECT 1 FROM projects pr WHERE pr.id = ?1 AND pr.is_deleted = 0
+  UNION SELECT 1 FROM sessions s WHERE s.project = ?1 AND s.is_deleted = 0
 )
 `
 
@@ -313,26 +258,6 @@ func (q *Queries) ReleaseSyncLease(ctx context.Context, arg ReleaseSyncLeasePara
 	return err
 }
 
-const renameMutationProject = `-- name: RenameMutationProject :execrows
-UPDATE sync_mutations
-SET project = ?1,
-    payload = json_set(payload, '$.project', ?1)
-WHERE project = ?2
-`
-
-type RenameMutationProjectParams struct {
-	NewName sql.NullString `json:"new_name"`
-	OldName sql.NullString `json:"old_name"`
-}
-
-func (q *Queries) RenameMutationProject(ctx context.Context, arg RenameMutationProjectParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, renameMutationProject, arg.NewName, arg.OldName)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
 const renameSessionProject = `-- name: RenameSessionProject :execrows
 UPDATE sessions SET project = ?1 WHERE project = ?2
 `
@@ -344,24 +269,6 @@ type RenameSessionProjectParams struct {
 
 func (q *Queries) RenameSessionProject(ctx context.Context, arg RenameSessionProjectParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, renameSessionProject, arg.NewName, arg.OldName)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const skipNonEnrolledMutations = `-- name: SkipNonEnrolledMutations :execrows
-UPDATE sync_mutations
-SET acked_at = datetime('now')
-WHERE target_key = ?1
-  AND acked_at IS NULL
-  AND project IS NOT NULL
-  AND project != ''
-  AND project NOT IN (SELECT project FROM sync_enrolled_projects)
-`
-
-func (q *Queries) SkipNonEnrolledMutations(ctx context.Context, targetKey string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, skipNonEnrolledMutations, targetKey)
 	if err != nil {
 		return 0, err
 	}

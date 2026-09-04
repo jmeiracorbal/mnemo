@@ -13,7 +13,7 @@ const countObservationsByAgent = `-- name: CountObservationsByAgent :many
 SELECT COALESCE(p.agent_id, 'unknown') AS agent_id, COUNT(o.id) AS observation_count
 FROM observations o
 LEFT JOIN provenance_contexts p ON p.id = o.provenance_id
-WHERE o.deleted_at IS NULL
+WHERE o.is_deleted = 0
 GROUP BY COALESCE(p.agent_id, 'unknown')
 ORDER BY observation_count DESC, agent_id ASC
 `
@@ -184,7 +184,8 @@ INSERT INTO agents (id, display_name, kind)
 VALUES (?1, ?2, ?3)
 ON CONFLICT(id) DO UPDATE SET
   display_name = excluded.display_name,
-  kind = excluded.kind
+  kind = excluded.kind,
+  is_deleted = 0
 `
 
 type UpsertAgentParams struct {
@@ -204,7 +205,8 @@ VALUES (?1, ?2, ?3, ?4)
 ON CONFLICT(id) DO UPDATE SET
   name = excluded.name,
   version = excluded.version,
-  transport = excluded.transport
+  transport = excluded.transport,
+  is_deleted = 0
 `
 
 type UpsertMCPClientParams struct {
@@ -229,7 +231,8 @@ INSERT INTO models (id, provider, display_name)
 VALUES (?1, ?2, ?3)
 ON CONFLICT(id) DO UPDATE SET
   provider = excluded.provider,
-  display_name = excluded.display_name
+  display_name = excluded.display_name,
+  is_deleted = 0
 `
 
 type UpsertModelParams struct {
@@ -247,7 +250,8 @@ const upsertSourceKind = `-- name: UpsertSourceKind :exec
 INSERT INTO source_kinds (id, display_name)
 VALUES (?1, ?2)
 ON CONFLICT(id) DO UPDATE SET
-  display_name = excluded.display_name
+  display_name = excluded.display_name,
+  is_deleted = 0
 `
 
 type UpsertSourceKindParams struct {
@@ -264,7 +268,8 @@ const upsertTool = `-- name: UpsertTool :exec
 INSERT INTO tools (id, display_name)
 VALUES (?1, ?2)
 ON CONFLICT(id) DO UPDATE SET
-  display_name = excluded.display_name
+  display_name = excluded.display_name,
+  is_deleted = 0
 `
 
 type UpsertToolParams struct {

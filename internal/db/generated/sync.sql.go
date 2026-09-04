@@ -7,20 +7,7 @@ package db
 
 import (
 	"context"
-	"database/sql"
 )
-
-const enrollProject = `-- name: EnrollProject :execrows
-INSERT OR IGNORE INTO sync_enrolled_projects (project) VALUES (?)
-`
-
-func (q *Queries) EnrollProject(ctx context.Context, project string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, enrollProject, project)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
 
 const ensureSyncState = `-- name: EnsureSyncState :exec
 INSERT OR IGNORE INTO sync_state (target_key, sync_type_id, lifecycle, updated_at)
@@ -79,19 +66,18 @@ func (q *Queries) GetSyncState(ctx context.Context, targetKey string) (SyncState
 }
 
 const insertSyncMutation = `-- name: InsertSyncMutation :one
-INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
-VALUES (?, ?, ?, ?, ?, ?, ?7)
+INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source)
+VALUES (?, ?, ?, ?, ?, ?)
 RETURNING seq
 `
 
 type InsertSyncMutationParams struct {
-	TargetKey string         `json:"target_key"`
-	Entity    string         `json:"entity"`
-	EntityKey string         `json:"entity_key"`
-	Op        string         `json:"op"`
-	Payload   string         `json:"payload"`
-	Source    string         `json:"source"`
-	Project   sql.NullString `json:"project"`
+	TargetKey string `json:"target_key"`
+	Entity    string `json:"entity"`
+	EntityKey string `json:"entity_key"`
+	Op        string `json:"op"`
+	Payload   string `json:"payload"`
+	Source    string `json:"source"`
 }
 
 func (q *Queries) InsertSyncMutation(ctx context.Context, arg InsertSyncMutationParams) (int64, error) {
@@ -102,94 +88,10 @@ func (q *Queries) InsertSyncMutation(ctx context.Context, arg InsertSyncMutation
 		arg.Op,
 		arg.Payload,
 		arg.Source,
-		arg.Project,
 	)
 	var seq int64
 	err := row.Scan(&seq)
 	return seq, err
-}
-
-const insertSyncedChunk = `-- name: InsertSyncedChunk :exec
-INSERT OR IGNORE INTO sync_chunks (chunk_id) VALUES (?)
-`
-
-func (q *Queries) InsertSyncedChunk(ctx context.Context, chunkID string) error {
-	_, err := q.db.ExecContext(ctx, insertSyncedChunk, chunkID)
-	return err
-}
-
-const isProjectEnrolled = `-- name: IsProjectEnrolled :one
-SELECT EXISTS(SELECT 1 FROM sync_enrolled_projects WHERE project = ?)
-`
-
-func (q *Queries) IsProjectEnrolled(ctx context.Context, project string) (bool, error) {
-	row := q.db.QueryRowContext(ctx, isProjectEnrolled, project)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-const listEnrolledProjects = `-- name: ListEnrolledProjects :many
-SELECT project, enrolled_at FROM sync_enrolled_projects ORDER BY project ASC
-`
-
-func (q *Queries) ListEnrolledProjects(ctx context.Context) ([]SyncEnrolledProject, error) {
-	rows, err := q.db.QueryContext(ctx, listEnrolledProjects)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []SyncEnrolledProject{}
-	for rows.Next() {
-		var i SyncEnrolledProject
-		if err := rows.Scan(&i.Project, &i.EnrolledAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSyncedChunks = `-- name: ListSyncedChunks :many
-SELECT chunk_id FROM sync_chunks
-`
-
-func (q *Queries) ListSyncedChunks(ctx context.Context) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listSyncedChunks)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var chunk_id string
-		if err := rows.Scan(&chunk_id); err != nil {
-			return nil, err
-		}
-		items = append(items, chunk_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const unenrollProject = `-- name: UnenrollProject :exec
-DELETE FROM sync_enrolled_projects WHERE project = ?
-`
-
-func (q *Queries) UnenrollProject(ctx context.Context, project string) error {
-	_, err := q.db.ExecContext(ctx, unenrollProject, project)
-	return err
 }
 
 const updateLastEnqueuedSeq = `-- name: UpdateLastEnqueuedSeq :exec

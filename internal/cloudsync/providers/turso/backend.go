@@ -136,8 +136,8 @@ func (b *Backend) migrate(migrations fs.FS) error {
 	}
 
 	if _, err := b.pipeline([]hranaStmt{{
-		SQL:  `INSERT OR IGNORE INTO sync_state (target_key, lifecycle) VALUES (?, 'idle')`,
-		Args: []hranaValue{textVal("cloud")},
+		SQL:  `INSERT OR IGNORE INTO sync_state (target_key, sync_type_id, lifecycle) VALUES (?, ?, 'idle')`,
+		Args: []hranaValue{textVal("cloud"), textVal("cloud")},
 	}}); err != nil {
 		return fmt.Errorf("ensure sync_state: %w", err)
 	}
@@ -163,12 +163,11 @@ func (b *Backend) PushMutations(entries []cloudsync.MutationEntry) (*cloudsync.P
 
 		stmts = append(stmts, hranaStmt{
 			SQL: `INSERT OR IGNORE INTO sync_mutations
-				(target_key, entity, entity_key, op, payload, source, project, origin_id, client_seq, occurred_at)
-				VALUES (?, ?, ?, ?, ?, 'remote', ?, ?, ?, ?)`,
+					(target_key, entity, entity_key, op, payload, source, origin_id, client_seq, occurred_at)
+					VALUES (?, ?, ?, ?, ?, 'remote', ?, ?, ?)`,
 			Args: []hranaValue{
 				textVal("cloud"), textVal(e.Entity), textVal(e.EntityKey), textVal(e.Op),
-				textVal(string(e.Payload)), textVal(e.Project),
-				textVal(b.clientID), intVal(e.LocalSeq), textVal(e.OccurredAt),
+				textVal(string(e.Payload)), textVal(b.clientID), intVal(e.LocalSeq), textVal(e.OccurredAt),
 			},
 		})
 	}
@@ -194,19 +193,11 @@ func (b *Backend) mutationToSQL(e cloudsync.MutationEntry) ([]hranaStmt, error) 
 			return nil, fmt.Errorf("decode session payload seq=%d: %w", e.LocalSeq, err)
 		}
 		stmts := []hranaStmt{{
-			SQL: `INSERT OR REPLACE INTO sessions (id, project, directory, ended_at, summary)
-				VALUES (?, ?, ?, ?, ?)`,
+			SQL: `INSERT OR REPLACE INTO sessions (id, project, directory, ended_at, summary, is_deleted)
+					VALUES (?, ?, ?, ?, ?, ?)`,
 			Args: []hranaValue{textVal(p.ID), textVal(p.Project), textVal(p.Directory),
-				maybeTextVal(p.EndedAt), maybeTextVal(p.Summary)},
+				maybeTextVal(p.EndedAt), maybeTextVal(p.Summary), intVal(boolToInt64(p.IsDeleted))},
 		}}
-		if p.Tags != nil {
-			for _, tag := range *p.Tags {
-				stmts = append(stmts, hranaStmt{
-					SQL:  `INSERT OR IGNORE INTO session_tags (session_id, tag) VALUES (?, ?)`,
-					Args: []hranaValue{textVal(p.ID), textVal(tag)},
-				})
-			}
-		}
 		return stmts, nil
 
 	case "observation":
@@ -214,53 +205,92 @@ func (b *Backend) mutationToSQL(e cloudsync.MutationEntry) ([]hranaStmt, error) 
 		if err := json.Unmarshal(e.Payload, &p); err != nil {
 			return nil, fmt.Errorf("decode observation payload seq=%d: %w", e.LocalSeq, err)
 		}
-		if e.Op == "delete" || p.Deleted {
-			deletedAt := p.DeletedAt
-			if deletedAt == nil && e.OccurredAt != "" {
-				deletedAt = &e.OccurredAt
-			}
-			return []hranaStmt{{
-				SQL:  `UPDATE observations SET deleted_at = ? WHERE sync_id = ?`,
-				Args: []hranaValue{maybeTextVal(deletedAt), textVal(p.SyncID)},
-			}}, nil
-		}
 		scope := p.Scope
 		if scope == "" {
 			scope = "project"
 		}
 		stmts := []hranaStmt{{
 			SQL: `INSERT OR REPLACE INTO observations
-				(sync_id, session_id, type, title, content, tool_name, scope, topic_key)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+					(sync_id, session_id, type, title, content, tool_name, scope, topic_key, is_deleted)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			Args: []hranaValue{
 				textVal(p.SyncID), textVal(p.SessionID), textVal(p.Type),
 				textVal(p.Title), textVal(p.Content), maybeTextVal(p.ToolName),
-				textVal(scope), maybeTextVal(p.TopicKey),
+				textVal(scope), maybeTextVal(p.TopicKey), intVal(boolToInt64(p.IsDeleted)),
 			},
 		}}
-		if p.Tags != nil {
-			for _, tag := range *p.Tags {
-				stmts = append(stmts, hranaStmt{
-					SQL:  `INSERT OR IGNORE INTO observation_tags (observation_id, tag) SELECT id, ? FROM observations WHERE sync_id = ?`,
-					Args: []hranaValue{textVal(tag), textVal(p.SyncID)},
-				})
-			}
-		}
 		return stmts, nil
 
-	case "prompt":
+	case "user_prompt":
 		var p mutationPromptPayload
 		if err := json.Unmarshal(e.Payload, &p); err != nil {
 			return nil, fmt.Errorf("decode prompt payload seq=%d: %w", e.LocalSeq, err)
 		}
 		return []hranaStmt{{
-			SQL:  `INSERT OR REPLACE INTO user_prompts (sync_id, session_id, content) VALUES (?, ?, ?)`,
-			Args: []hranaValue{textVal(p.SyncID), textVal(p.SessionID), textVal(p.Content)},
+			SQL:  `INSERT OR REPLACE INTO user_prompts (sync_id, session_id, content, is_deleted) VALUES (?, ?, ?, ?)`,
+			Args: []hranaValue{textVal(p.SyncID), textVal(p.SessionID), textVal(p.Content), intVal(boolToInt64(p.IsDeleted))},
 		}}, nil
+
+	case "project", "agent", "tool", "model", "source_kind", "mcp_client", "provenance_context", "observation_tag", "session_tag", "observation_review":
+		var p map[string]any
+		if err := json.Unmarshal(e.Payload, &p); err != nil {
+			return nil, fmt.Errorf("decode %s payload seq=%d: %w", e.Entity, e.LocalSeq, err)
+		}
+		bval := func(name string) int64 {
+			if v, ok := p[name].(bool); ok && v {
+				return 1
+			}
+			return 0
+		}
+		text := func(name string) string {
+			if v, ok := p[name].(string); ok {
+				return v
+			}
+			return ""
+		}
+		switch e.Entity {
+		case "project":
+			return []hranaStmt{{SQL: `INSERT OR REPLACE INTO projects (id,name,is_deleted) VALUES (?,?,?)`, Args: []hranaValue{textVal(text("id")), textVal(text("name")), intVal(bval("is_deleted"))}}}, nil
+		case "agent":
+			return []hranaStmt{{SQL: `INSERT OR REPLACE INTO agents (id,display_name,kind,is_deleted) VALUES (?,?,?,?)`, Args: []hranaValue{textVal(text("id")), textVal(text("display_name")), textVal(text("kind")), intVal(bval("is_deleted"))}}}, nil
+		case "tool":
+			return []hranaStmt{{SQL: `INSERT OR REPLACE INTO tools (id,display_name,is_deleted) VALUES (?,?,?)`, Args: []hranaValue{textVal(text("id")), textVal(text("display_name")), intVal(bval("is_deleted"))}}}, nil
+		case "source_kind":
+			return []hranaStmt{{SQL: `INSERT OR REPLACE INTO source_kinds (id,display_name,is_deleted) VALUES (?,?,?)`, Args: []hranaValue{textVal(text("id")), textVal(text("display_name")), intVal(bval("is_deleted"))}}}, nil
+		case "model":
+			return []hranaStmt{{SQL: `INSERT OR REPLACE INTO models (id,provider,display_name,is_deleted) VALUES (?,?,?,?)`, Args: []hranaValue{textVal(text("id")), textVal(text("provider")), textVal(text("display_name")), intVal(bval("is_deleted"))}}}, nil
+		case "mcp_client":
+			return []hranaStmt{{SQL: `INSERT OR REPLACE INTO mcp_clients (id,name,version,transport,is_deleted) VALUES (?,?,?,?,?)`, Args: []hranaValue{textVal(text("id")), textVal(text("name")), textVal(text("version")), textVal(text("transport")), intVal(bval("is_deleted"))}}}, nil
+		case "provenance_context":
+			return []hranaStmt{{SQL: `INSERT OR REPLACE INTO provenance_contexts (id,agent_id,source_kind_id,tool_id,model_id,mcp_client_id,is_deleted) VALUES (?,?,?,?,?,?,?)`, Args: []hranaValue{intVal(int64(number(p["id"]))), textVal(text("agent_id")), textVal(text("source_kind_id")), textVal(text("tool_id")), textVal(text("model_id")), textVal(text("mcp_client_id")), intVal(bval("is_deleted"))}}}, nil
+		case "observation_tag":
+			return []hranaStmt{{SQL: `INSERT OR REPLACE INTO observation_tags (observation_id,tag,is_deleted) SELECT id,?,? FROM observations WHERE sync_id=?`, Args: []hranaValue{textVal(text("tag")), intVal(bval("is_deleted")), textVal(text("observation_sync_id"))}}}, nil
+		case "session_tag":
+			return []hranaStmt{{SQL: `INSERT OR REPLACE INTO session_tags (session_id,tag,is_deleted) VALUES (?,?,?)`, Args: []hranaValue{textVal(text("session_id")), textVal(text("tag")), intVal(bval("is_deleted"))}}}, nil
+		case "observation_review":
+			return []hranaStmt{{SQL: `INSERT OR REPLACE INTO observation_reviews (observation_id,state,reason,reviewed_at,is_deleted) SELECT id,?,?,?,? FROM observations WHERE sync_id=?`, Args: []hranaValue{textVal(text("state")), textVal(text("reason")), maybeTextVal(stringPtr(p["reviewed_at"])), intVal(bval("is_deleted")), textVal(text("observation_sync_id"))}}}, nil
+		}
+		return nil, fmt.Errorf("unknown entity %q", e.Entity)
 
 	default:
 		return nil, fmt.Errorf("unknown entity %q", e.Entity)
 	}
+}
+
+func number(v any) float64 {
+	if n, ok := v.(float64); ok {
+		return n
+	}
+	return 0
+}
+func stringPtr(v any) *string {
+	if v == nil {
+		return nil
+	}
+	if s, ok := v.(string); ok && s != "" {
+		return &s
+	}
+	return nil
 }
 
 // PullMutations returns mutations from other clients with cloud seq > sinceSeq.
@@ -269,10 +299,10 @@ func (b *Backend) PullMutations(sinceSeq int64, limit int) (*cloudsync.PullResul
 		limit = 100
 	}
 	results, err := b.pipeline([]hranaStmt{{
-		SQL: `SELECT seq, origin_id, client_seq, project, entity, entity_key, op, payload, occurred_at
-			FROM sync_mutations
-			WHERE seq > ? AND origin_id != '' AND origin_id != ?
-			ORDER BY seq ASC LIMIT ?`,
+		SQL: `SELECT seq, origin_id, client_seq, entity, entity_key, op, payload, occurred_at
+				FROM sync_mutations
+				WHERE seq > ? AND origin_id != '' AND origin_id != ?
+				ORDER BY seq ASC LIMIT ?`,
 		Args: []hranaValue{intVal(sinceSeq), textVal(b.clientID), intVal(int64(limit))},
 	}})
 	if err != nil {
@@ -283,7 +313,7 @@ func (b *Backend) PullMutations(sinceSeq int64, limit int) (*cloudsync.PullResul
 	latest := sinceSeq
 	if len(results) > 0 {
 		for _, row := range results[0].Rows {
-			if len(row) < 9 {
+			if len(row) < 8 {
 				continue
 			}
 			seq, _ := strconv.ParseInt(row[0].Value, 10, 64)
@@ -293,8 +323,8 @@ func (b *Backend) PullMutations(sinceSeq int64, limit int) (*cloudsync.PullResul
 			}
 			mutations = append(mutations, cloudsync.PulledMutation{
 				Seq: seq, OriginID: row[1].Value, ClientSeq: clientSeq,
-				Project: row[3].Value, Entity: row[4].Value, EntityKey: row[5].Value,
-				Op: row[6].Value, Payload: json.RawMessage(row[7].Value), OccurredAt: row[8].Value,
+				Entity: row[3].Value, EntityKey: row[4].Value,
+				Op: row[5].Value, Payload: json.RawMessage(row[6].Value), OccurredAt: row[7].Value,
 			})
 		}
 	}
@@ -306,34 +336,31 @@ func (b *Backend) PullMutations(sinceSeq int64, limit int) (*cloudsync.PullResul
 // ---------------------------------------------------------------------------
 
 type mutationSessionPayload struct {
-	ID        string    `json:"id"`
-	Project   string    `json:"project"`
-	Directory string    `json:"directory"`
-	EndedAt   *string   `json:"ended_at,omitempty"`
-	Summary   *string   `json:"summary,omitempty"`
-	Tags      *[]string `json:"tags,omitempty"`
+	ID        string  `json:"id"`
+	Project   string  `json:"project"`
+	Directory string  `json:"directory"`
+	EndedAt   *string `json:"ended_at,omitempty"`
+	Summary   *string `json:"summary,omitempty"`
+	IsDeleted bool    `json:"is_deleted"`
 }
 
 type mutationObservationPayload struct {
-	SyncID    string    `json:"sync_id"`
-	SessionID string    `json:"session_id"`
-	Type      string    `json:"type"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	ToolName  *string   `json:"tool_name,omitempty"`
-	Project   *string   `json:"project,omitempty"`
-	Scope     string    `json:"scope"`
-	TopicKey  *string   `json:"topic_key,omitempty"`
-	Tags      *[]string `json:"tags,omitempty"`
-	Deleted   bool      `json:"deleted,omitempty"`
-	DeletedAt *string   `json:"deleted_at,omitempty"`
+	SyncID    string  `json:"sync_id"`
+	SessionID string  `json:"session_id"`
+	Type      string  `json:"type"`
+	Title     string  `json:"title"`
+	Content   string  `json:"content"`
+	ToolName  *string `json:"tool_name,omitempty"`
+	Scope     string  `json:"scope"`
+	TopicKey  *string `json:"topic_key,omitempty"`
+	IsDeleted bool    `json:"is_deleted"`
 }
 
 type mutationPromptPayload struct {
-	SyncID    string  `json:"sync_id"`
-	SessionID string  `json:"session_id"`
-	Content   string  `json:"content"`
-	Project   *string `json:"project,omitempty"`
+	SyncID    string `json:"sync_id"`
+	SessionID string `json:"session_id"`
+	Content   string `json:"content"`
+	IsDeleted bool   `json:"is_deleted"`
 }
 
 // ---------------------------------------------------------------------------
@@ -523,6 +550,12 @@ func (b *Backend) addColumnIfMissing(table, colName, colDef string) {
 func textVal(s string) hranaValue { return hranaValue{Type: "text", Value: s} }
 func intVal(n int64) hranaValue   { return hranaValue{Type: "integer", Value: strconv.FormatInt(n, 10)} }
 func nullVal() hranaValue         { return hranaValue{Type: "null"} }
+func boolToInt64(value bool) int64 {
+	if value {
+		return 1
+	}
+	return 0
+}
 func maybeTextVal(s *string) hranaValue {
 	if s == nil {
 		return nullVal()

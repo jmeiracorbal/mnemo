@@ -11,10 +11,11 @@ import (
 )
 
 const copyObservationTag = `-- name: CopyObservationTag :exec
-INSERT OR IGNORE INTO observation_tags (observation_id, tag)
-SELECT observation_id, ?1
+INSERT INTO observation_tags (observation_id, tag, is_deleted)
+SELECT observation_id, ?1, 0
 FROM observation_tags
-WHERE observation_tags.tag = ?2
+WHERE observation_tags.tag = ?2 AND observation_tags.is_deleted = 0
+ON CONFLICT(observation_id, tag) DO UPDATE SET is_deleted = 0
 `
 
 type CopyObservationTagParams struct {
@@ -28,10 +29,11 @@ func (q *Queries) CopyObservationTag(ctx context.Context, arg CopyObservationTag
 }
 
 const copySessionTag = `-- name: CopySessionTag :exec
-INSERT OR IGNORE INTO session_tags (session_id, tag)
-SELECT session_id, ?1
+INSERT INTO session_tags (session_id, tag, is_deleted)
+SELECT session_id, ?1, 0
 FROM session_tags
-WHERE session_tags.tag = ?2
+WHERE session_tags.tag = ?2 AND session_tags.is_deleted = 0
+ON CONFLICT(session_id, tag) DO UPDATE SET is_deleted = 0
 `
 
 type CopySessionTagParams struct {
@@ -45,7 +47,7 @@ func (q *Queries) CopySessionTag(ctx context.Context, arg CopySessionTagParams) 
 }
 
 const deleteObservationTagByName = `-- name: DeleteObservationTagByName :exec
-DELETE FROM observation_tags WHERE tag = ?
+UPDATE observation_tags SET is_deleted = 1 WHERE tag = ?
 `
 
 func (q *Queries) DeleteObservationTagByName(ctx context.Context, tag string) error {
@@ -54,7 +56,7 @@ func (q *Queries) DeleteObservationTagByName(ctx context.Context, tag string) er
 }
 
 const deleteSessionTagByName = `-- name: DeleteSessionTagByName :exec
-DELETE FROM session_tags WHERE tag = ?
+UPDATE session_tags SET is_deleted = 1 WHERE tag = ?
 `
 
 func (q *Queries) DeleteSessionTagByName(ctx context.Context, tag string) error {
@@ -68,7 +70,7 @@ SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title,
 FROM observations o
 JOIN sessions s ON s.id = o.session_id
 JOIN observation_tags ot ON ot.observation_id = o.id
-WHERE ot.tag = ? AND o.deleted_at IS NULL
+WHERE ot.tag = ? AND ot.is_deleted = 0 AND o.is_deleted = 0
 `
 
 type ListObservationsAffectedByTagRow struct {
@@ -128,7 +130,9 @@ JOIN observation_tags ot2
 JOIN observations o ON o.id = ot1.observation_id
 JOIN sessions s ON s.id = o.session_id
 WHERE ot1.tag = ?1
-  AND o.deleted_at IS NULL
+  AND ot1.is_deleted = 0
+  AND ot2.is_deleted = 0
+  AND o.is_deleted = 0
   AND (?2 = '' OR s.project = ?2)
   AND (?3 = '' OR o.created_at >= datetime(?3))
 GROUP BY ot2.tag
@@ -176,6 +180,8 @@ JOIN session_tags st2
   ON st1.session_id = st2.session_id AND st2.tag != st1.tag
 JOIN sessions s ON s.id = st1.session_id
 WHERE st1.tag = ?1
+  AND st1.is_deleted = 0
+  AND st2.is_deleted = 0
   AND (?2 = '' OR s.project = ?2)
   AND (?3 = '' OR s.started_at >= datetime(?3))
 GROUP BY st2.tag
@@ -220,7 +226,7 @@ const listSessionsAffectedByTag = `-- name: ListSessionsAffectedByTag :many
 SELECT s.id, s.project, s.directory, s.ended_at, s.summary, s.provenance_id
 FROM sessions s
 JOIN session_tags st ON st.session_id = s.id
-WHERE st.tag = ?
+WHERE st.tag = ? AND st.is_deleted = 0
 `
 
 type ListSessionsAffectedByTagRow struct {
@@ -267,7 +273,8 @@ SELECT ot.tag, COUNT(*) AS count, MAX(datetime(o.created_at)) AS last_used_at
 FROM observation_tags ot
 JOIN observations o ON o.id = ot.observation_id
 JOIN sessions s ON s.id = o.session_id
-WHERE o.deleted_at IS NULL
+WHERE ot.is_deleted = 0
+  AND o.is_deleted = 0
   AND (?1 = '' OR s.project = ?1)
 GROUP BY ot.tag
 ORDER BY count DESC, ot.tag ASC

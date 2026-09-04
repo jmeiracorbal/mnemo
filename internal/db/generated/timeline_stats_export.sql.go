@@ -11,7 +11,7 @@ import (
 )
 
 const countLiveObservations = `-- name: CountLiveObservations :one
-SELECT COUNT(*) FROM observations WHERE deleted_at IS NULL
+SELECT COUNT(*) FROM observations WHERE is_deleted = 0
 `
 
 func (q *Queries) CountLiveObservations(ctx context.Context) (int64, error) {
@@ -46,7 +46,7 @@ func (q *Queries) CountSessions(ctx context.Context) (int64, error) {
 const exportObservations = `-- name: ExportObservations :many
 SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
        o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
-       o.last_seen_at, o.created_at, o.updated_at, o.deleted_at, o.provenance_id
+       o.last_seen_at, o.created_at, o.updated_at, o.is_deleted, o.provenance_id
 FROM observations o
 JOIN sessions s ON s.id = o.session_id
 ORDER BY o.id
@@ -68,7 +68,7 @@ type ExportObservationsRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -97,7 +97,7 @@ func (q *Queries) ExportObservations(ctx context.Context) ([]ExportObservationsR
 			&i.LastSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
+			&i.IsDeleted,
 			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
@@ -115,7 +115,7 @@ func (q *Queries) ExportObservations(ctx context.Context) ([]ExportObservationsR
 
 const exportPrompts = `-- name: ExportPrompts :many
 SELECT p.id, ifnull(p.sync_id, '') AS sync_id, p.session_id, p.content,
-       s.project AS project, p.created_at, p.provenance_id
+       s.project AS project, p.created_at, p.is_deleted, p.provenance_id
 FROM user_prompts p
 JOIN sessions s ON s.id = p.session_id
 ORDER BY p.id
@@ -128,6 +128,7 @@ type ExportPromptsRow struct {
 	Content      string        `json:"content"`
 	Project      string        `json:"project"`
 	CreatedAt    string        `json:"created_at"`
+	IsDeleted    int64         `json:"is_deleted"`
 	ProvenanceID sql.NullInt64 `json:"provenance_id"`
 }
 
@@ -147,6 +148,7 @@ func (q *Queries) ExportPrompts(ctx context.Context) ([]ExportPromptsRow, error)
 			&i.Content,
 			&i.Project,
 			&i.CreatedAt,
+			&i.IsDeleted,
 			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
@@ -167,15 +169,25 @@ SELECT id, project, directory, started_at, ended_at, summary, provenance_id
 FROM sessions ORDER BY started_at
 `
 
-func (q *Queries) ExportSessions(ctx context.Context) ([]Session, error) {
+type ExportSessionsRow struct {
+	ID           string         `json:"id"`
+	Project      string         `json:"project"`
+	Directory    string         `json:"directory"`
+	StartedAt    string         `json:"started_at"`
+	EndedAt      sql.NullString `json:"ended_at"`
+	Summary      sql.NullString `json:"summary"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
+}
+
+func (q *Queries) ExportSessions(ctx context.Context) ([]ExportSessionsRow, error) {
 	rows, err := q.db.QueryContext(ctx, exportSessions)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Session{}
+	items := []ExportSessionsRow{}
 	for rows.Next() {
-		var i Session
+		var i ExportSessionsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Project,
@@ -202,7 +214,7 @@ const listObservationProjects = `-- name: ListObservationProjects :many
 SELECT s.project
 FROM observations o
 JOIN sessions s ON s.id = o.session_id
-WHERE o.deleted_at IS NULL
+WHERE o.is_deleted = 0
 GROUP BY s.project
 ORDER BY MAX(o.created_at) DESC
 `
@@ -233,12 +245,12 @@ func (q *Queries) ListObservationProjects(ctx context.Context) ([]string, error)
 const listTimelineAfter = `-- name: ListTimelineAfter :many
 SELECT o.id, o.session_id, o.type, o.title, o.content, o.tool_name, s.project AS project,
        o.scope, o.topic_key, o.revision_count, o.duplicate_count, o.last_seen_at,
-       o.created_at, o.updated_at, o.deleted_at, o.provenance_id
+       o.created_at, o.updated_at, o.is_deleted, o.provenance_id
 FROM observations o
 JOIN sessions s ON s.id = o.session_id
 WHERE o.session_id = ?1
   AND o.id > ?2
-  AND o.deleted_at IS NULL
+  AND o.is_deleted = 0
 ORDER BY o.id ASC
 LIMIT ?3
 `
@@ -264,7 +276,7 @@ type ListTimelineAfterRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -292,7 +304,7 @@ func (q *Queries) ListTimelineAfter(ctx context.Context, arg ListTimelineAfterPa
 			&i.LastSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
+			&i.IsDeleted,
 			&i.ProvenanceID,
 		); err != nil {
 			return nil, err
@@ -311,12 +323,12 @@ func (q *Queries) ListTimelineAfter(ctx context.Context, arg ListTimelineAfterPa
 const listTimelineBefore = `-- name: ListTimelineBefore :many
 SELECT o.id, o.session_id, o.type, o.title, o.content, o.tool_name, s.project AS project,
        o.scope, o.topic_key, o.revision_count, o.duplicate_count, o.last_seen_at,
-       o.created_at, o.updated_at, o.deleted_at, o.provenance_id
+       o.created_at, o.updated_at, o.is_deleted, o.provenance_id
 FROM observations o
 JOIN sessions s ON s.id = o.session_id
 WHERE o.session_id = ?1
   AND o.id < ?2
-  AND o.deleted_at IS NULL
+  AND o.is_deleted = 0
 ORDER BY o.id DESC
 LIMIT ?3
 `
@@ -342,7 +354,7 @@ type ListTimelineBeforeRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -370,7 +382,7 @@ func (q *Queries) ListTimelineBefore(ctx context.Context, arg ListTimelineBefore
 			&i.LastSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
+			&i.IsDeleted,
 			&i.ProvenanceID,
 		); err != nil {
 			return nil, err

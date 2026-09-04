@@ -22,10 +22,10 @@ func (q *Queries) FindPromptBySyncID(ctx context.Context, syncID sql.NullString)
 }
 
 const insertPrompt = `-- name: InsertPrompt :one
-INSERT INTO user_prompts (sync_id, session_id, content, provenance_id)
+INSERT INTO user_prompts (sync_id, session_id, content, is_deleted, provenance_id)
 VALUES (
   ?1, ?2, ?3,
-  ?4
+  ?4, ?5
 )
 RETURNING id
 `
@@ -34,6 +34,7 @@ type InsertPromptParams struct {
 	SyncID       sql.NullString `json:"sync_id"`
 	SessionID    string         `json:"session_id"`
 	Content      string         `json:"content"`
+	IsDeleted    int64          `json:"is_deleted"`
 	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -42,6 +43,7 @@ func (q *Queries) InsertPrompt(ctx context.Context, arg InsertPromptParams) (int
 		arg.SyncID,
 		arg.SessionID,
 		arg.Content,
+		arg.IsDeleted,
 		arg.ProvenanceID,
 	)
 	var id int64
@@ -53,13 +55,15 @@ const updatePrompt = `-- name: UpdatePrompt :exec
 UPDATE user_prompts SET
   session_id = ?1,
   content = ?2,
-  provenance_id = COALESCE(?3, provenance_id)
-WHERE id = ?4
+  is_deleted = ?3,
+  provenance_id = COALESCE(?4, provenance_id)
+WHERE id = ?5
 `
 
 type UpdatePromptParams struct {
 	SessionID    string        `json:"session_id"`
 	Content      string        `json:"content"`
+	IsDeleted    int64         `json:"is_deleted"`
 	ProvenanceID sql.NullInt64 `json:"provenance_id"`
 	ID           int64         `json:"id"`
 }
@@ -68,6 +72,7 @@ func (q *Queries) UpdatePrompt(ctx context.Context, arg UpdatePromptParams) erro
 	_, err := q.db.ExecContext(ctx, updatePrompt,
 		arg.SessionID,
 		arg.Content,
+		arg.IsDeleted,
 		arg.ProvenanceID,
 		arg.ID,
 	)

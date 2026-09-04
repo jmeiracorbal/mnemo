@@ -5,6 +5,7 @@ import "time"
 type Project struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	IsDeleted bool   `json:"is_deleted"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -26,6 +27,7 @@ type Session struct {
 	StartedAt  string      `json:"started_at"`
 	EndedAt    *string     `json:"ended_at,omitempty"`
 	Summary    *string     `json:"summary,omitempty"`
+	IsDeleted  bool        `json:"is_deleted"`
 	Tags       []string    `json:"tags,omitempty"`
 	Provenance *Provenance `json:"provenance,omitempty"`
 }
@@ -47,7 +49,7 @@ type Observation struct {
 	LastSeenAt     *string     `json:"last_seen_at,omitempty"`
 	CreatedAt      string      `json:"created_at"`
 	UpdatedAt      string      `json:"updated_at"`
-	DeletedAt      *string     `json:"deleted_at,omitempty"`
+	IsDeleted      bool        `json:"is_deleted"`
 	Provenance     *Provenance `json:"provenance,omitempty"`
 }
 
@@ -127,7 +129,7 @@ type TimelineEntry struct {
 	LastSeenAt     *string     `json:"last_seen_at,omitempty"`
 	CreatedAt      string      `json:"created_at"`
 	UpdatedAt      string      `json:"updated_at"`
-	DeletedAt      *string     `json:"deleted_at,omitempty"`
+	IsDeleted      bool        `json:"is_deleted"`
 	IsFocus        bool        `json:"is_focus"`
 	Provenance     *Provenance `json:"provenance,omitempty"`
 }
@@ -187,6 +189,7 @@ type Prompt struct {
 	Content    string      `json:"content"`
 	Project    string      `json:"project,omitempty"`
 	CreatedAt  string      `json:"created_at"`
+	IsDeleted  bool        `json:"is_deleted"`
 	Provenance *Provenance `json:"provenance,omitempty"`
 }
 
@@ -238,12 +241,21 @@ const (
 	SyncLifecycleHealthy  = "healthy"
 	SyncLifecycleDegraded = "degraded"
 
-	SyncEntitySession     = "session"
-	SyncEntityObservation = "observation"
-	SyncEntityPrompt      = "prompt"
+	SyncEntityProject           = "project"
+	SyncEntitySession           = "session"
+	SyncEntityObservation       = "observation"
+	SyncEntityUserPrompt        = "user_prompt"
+	SyncEntityObservationTag    = "observation_tag"
+	SyncEntitySessionTag        = "session_tag"
+	SyncEntityObservationReview = "observation_review"
+	SyncEntityProvenanceContext = "provenance_context"
+	SyncEntityAgent             = "agent"
+	SyncEntityTool              = "tool"
+	SyncEntityModel             = "model"
+	SyncEntitySourceKind        = "source_kind"
+	SyncEntityMCPClient         = "mcp_client"
 
 	SyncOpUpsert = "upsert"
-	SyncOpDelete = "delete"
 
 	SyncSourceLocal  = "local"
 	SyncSourceRemote = "remote"
@@ -272,14 +284,8 @@ type SyncMutation struct {
 	Op         string  `json:"op"`
 	Payload    string  `json:"payload"`
 	Source     string  `json:"source"`
-	Project    string  `json:"project"`
 	OccurredAt string  `json:"occurred_at"`
 	AckedAt    *string `json:"acked_at,omitempty"`
-}
-
-type EnrolledProject struct {
-	Project    string `json:"project"`
-	EnrolledAt string `json:"enrolled_at"`
 }
 
 type syncSessionPayload struct {
@@ -288,7 +294,7 @@ type syncSessionPayload struct {
 	Directory  string           `json:"directory"`
 	EndedAt    *string          `json:"ended_at,omitempty"`
 	Summary    *string          `json:"summary,omitempty"`
-	Tags       *[]string        `json:"tags,omitempty"`
+	IsDeleted  bool             `json:"is_deleted"`
 	Provenance *ProvenanceInput `json:"provenance,omitempty"`
 }
 
@@ -299,13 +305,9 @@ type syncObservationPayload struct {
 	Title      string           `json:"title"`
 	Content    string           `json:"content"`
 	ToolName   *string          `json:"tool_name,omitempty"`
-	Project    *string          `json:"project,omitempty"`
 	Scope      string           `json:"scope"`
 	TopicKey   *string          `json:"topic_key,omitempty"`
-	Tags       *[]string        `json:"tags,omitempty"`
-	Deleted    bool             `json:"deleted,omitempty"`
-	DeletedAt  *string          `json:"deleted_at,omitempty"`
-	HardDelete bool             `json:"hard_delete,omitempty"`
+	IsDeleted  bool             `json:"is_deleted"`
 	Provenance *ProvenanceInput `json:"provenance,omitempty"`
 }
 
@@ -313,7 +315,7 @@ type syncPromptPayload struct {
 	SyncID     string           `json:"sync_id"`
 	SessionID  string           `json:"session_id"`
 	Content    string           `json:"content"`
-	Project    *string          `json:"project,omitempty"`
+	IsDeleted  bool             `json:"is_deleted"`
 	Provenance *ProvenanceInput `json:"provenance,omitempty"`
 }
 
@@ -347,21 +349,17 @@ type ProjectMergePlan struct {
 	Prompts                 int64          `json:"prompts"`
 	SyncMutations           int64          `json:"sync_mutations"`
 	SourceProjectRows       int64          `json:"source_project_rows"`
-	SourceEnrolled          bool           `json:"source_enrolled"`
-	DestinationEnrolled     bool           `json:"destination_enrolled"`
-	WillCopyEnrollment      bool           `json:"will_copy_enrollment"`
 	WillDeleteSourceProject bool           `json:"will_delete_source_project"`
 }
 
 type ProjectMergeResult struct {
-	Plan                  ProjectMergePlan `json:"plan"`
-	Merged                bool             `json:"merged"`
-	ObservationsUpdated   int64            `json:"observations_updated"`
-	SessionsUpdated       int64            `json:"sessions_updated"`
-	PromptsUpdated        int64            `json:"prompts_updated"`
-	SyncMutationsUpdated  int64            `json:"sync_mutations_updated"`
-	SourceProjectDeleted  bool             `json:"source_project_deleted"`
-	EnrollmentTransferred bool             `json:"enrollment_transferred"`
+	Plan                 ProjectMergePlan `json:"plan"`
+	Merged               bool             `json:"merged"`
+	ObservationsUpdated  int64            `json:"observations_updated"`
+	SessionsUpdated      int64            `json:"sessions_updated"`
+	PromptsUpdated       int64            `json:"prompts_updated"`
+	SyncMutationsUpdated int64            `json:"sync_mutations_updated"`
+	SourceProjectDeleted bool             `json:"source_project_deleted"`
 }
 
 type ProjectRenameSelector struct {

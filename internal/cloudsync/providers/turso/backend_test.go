@@ -187,7 +187,7 @@ func TestBackendPushObservationMutationUsesInsertOrReplace(t *testing.T) {
 	}
 }
 
-func TestBackendPushObservationDeleteMutationUsesUpdate(t *testing.T) {
+func TestBackendPushObservationSoftDeleteMutationUsesRowUpsert(t *testing.T) {
 	var bodyStr string
 	b := newTestBackend(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		raw, _ := io.ReadAll(r.Body)
@@ -199,18 +199,18 @@ func TestBackendPushObservationDeleteMutationUsesUpdate(t *testing.T) {
 		}, nil
 	}))
 	_, err := b.PushMutations([]cloudsync.MutationEntry{
-		{LocalSeq: 3, Entity: "observation", EntityKey: "obs-del", Op: "delete",
+		{LocalSeq: 3, Entity: "observation", EntityKey: "obs-del", Op: "upsert",
 			OccurredAt: "2026-09-02T10:00:00Z",
-			Payload:    json.RawMessage(`{"sync_id":"obs-del","session_id":"sess-1","type":"decision","title":"T","content":"C","scope":"project"}`)},
+			Payload:    json.RawMessage(`{"sync_id":"obs-del","session_id":"sess-1","type":"decision","title":"T","content":"C","scope":"project","is_deleted":true}`)},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(bodyStr, "INSERT OR REPLACE INTO observations") {
-		t.Fatal("delete op must not use INSERT OR REPLACE INTO observations")
+	if !strings.Contains(bodyStr, "INSERT OR REPLACE INTO observations") {
+		t.Fatalf("expected soft delete to be a normal row upsert, body=%s", bodyStr)
 	}
-	if !strings.Contains(bodyStr, "UPDATE observations SET deleted_at") {
-		t.Fatalf("expected UPDATE observations SET deleted_at, body=%s", bodyStr)
+	if !strings.Contains(bodyStr, "is_deleted") {
+		t.Fatalf("expected is_deleted in observation upsert, body=%s", bodyStr)
 	}
 }
 
@@ -226,7 +226,7 @@ func TestBackendPushPromptMutationUsesInsertOrReplace(t *testing.T) {
 		}, nil
 	}))
 	_, err := b.PushMutations([]cloudsync.MutationEntry{
-		{LocalSeq: 4, Entity: "prompt", EntityKey: "pr-1", Op: "upsert",
+		{LocalSeq: 4, Entity: "user_prompt", EntityKey: "pr-1", Op: "upsert",
 			Payload: json.RawMessage(`{"sync_id":"pr-1","session_id":"sess-1","content":"Hello world"}`)},
 	})
 	if err != nil {
@@ -278,7 +278,7 @@ func TestBackendPullBuildsCursorQueryWithClientExclusion(t *testing.T) {
 func TestBackendPullReturnsRowsFromResponse(t *testing.T) {
 	rows := [][]hranaValue{
 		{
-			intVal(12), textVal("client-b"), intVal(3), textVal("brain"),
+			intVal(12), textVal("client-b"), intVal(3),
 			textVal("session"), textVal("s1"), textVal("upsert"),
 			textVal(`{"id":"s1","project":"brain","directory":"/home"}`),
 			textVal("2026-09-02T10:00:00Z"),
@@ -299,7 +299,7 @@ func TestBackendPullReturnsRowsFromResponse(t *testing.T) {
 		t.Fatalf("expected 1 mutation, got %d", len(res.Mutations))
 	}
 	m := res.Mutations[0]
-	if m.Seq != 12 || m.OriginID != "client-b" || m.Project != "brain" || m.Entity != "session" {
+	if m.Seq != 12 || m.OriginID != "client-b" || m.Entity != "session" {
 		t.Fatalf("unexpected mutation: %+v", m)
 	}
 	if res.LatestSeq != 12 {

@@ -43,7 +43,7 @@ func (s *Store) Export() (*ExportData, error) {
 	for _, row := range obsRows {
 		o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 			row.ToolName, sqlNullString(row.Project), row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
-			row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+			row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.IsDeleted)
 		if err := s.attachObservationProvenance(&o, row.ProvenanceID); err != nil {
 			return nil, fmt.Errorf("export observation provenance: %w", err)
 		}
@@ -61,6 +61,7 @@ func (s *Store) Export() (*ExportData, error) {
 		data.Prompts = append(data.Prompts, Prompt{
 			ID: row.ID, SyncID: dbString(row.SyncID), SessionID: row.SessionID,
 			Content: row.Content, Project: dbString(row.Project), CreatedAt: row.CreatedAt,
+			IsDeleted: int64ToBool(row.IsDeleted),
 		})
 		if row.ProvenanceID.Valid {
 			provenance, err := s.getProvenance(row.ProvenanceID.Int64)
@@ -149,7 +150,7 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 			Scope:    normalizeScope(obs.Scope), TopicKey: sqlNullString(normalizeTopicKey(derefString(obs.TopicKey))),
 			NormalizedHash: sqlNullString(hash), RevisionCount: int64(maxInt(obs.RevisionCount, 1)),
 			DuplicateCount: int64(maxInt(obs.DuplicateCount, 1)), LastSeenAt: sqlNullStringPtr(obs.LastSeenAt),
-			CreatedAt: obs.CreatedAt, UpdatedAt: obs.UpdatedAt, DeletedAt: sqlNullStringPtr(obs.DeletedAt),
+			CreatedAt: obs.CreatedAt, UpdatedAt: obs.UpdatedAt, IsDeleted: boolToInt64(obs.IsDeleted),
 			ProvenanceID: provenanceID,
 		})
 		if err != nil {
@@ -177,7 +178,7 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 		err = q.ImportPrompt(context.Background(), dbgen.ImportPromptParams{
 			SyncID:    sqlNullString(normalizeExistingSyncID(p.SyncID, "prompt")),
 			SessionID: p.SessionID, Content: p.Content, CreatedAt: p.CreatedAt,
-			ProvenanceID: provenanceID,
+			IsDeleted: boolToInt64(p.IsDeleted), ProvenanceID: provenanceID,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("import prompt %d: %w", p.ID, err)
@@ -198,20 +199,4 @@ func (s *Store) validateImportedSessionProjectTx(tx *sql.Tx, sessionID string, p
 		return err
 	}
 	return validateSessionProjectPtrMatch(sessionProject, project)
-}
-
-func (s *Store) GetSyncedChunks() (map[string]bool, error) {
-	rows, err := s.q.ListSyncedChunks(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("get synced chunks: %w", err)
-	}
-	chunks := make(map[string]bool)
-	for _, id := range rows {
-		chunks[id] = true
-	}
-	return chunks, nil
-}
-
-func (s *Store) RecordSyncedChunk(chunkID string) error {
-	return s.q.InsertSyncedChunk(context.Background(), chunkID)
 }

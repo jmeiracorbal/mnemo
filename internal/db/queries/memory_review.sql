@@ -6,7 +6,8 @@ SELECT o.id, o.type, o.title, s.project AS project, o.scope, ifnull(o.topic_key,
 FROM observations o
 JOIN sessions s ON s.id = o.session_id
 LEFT JOIN observation_reviews r ON r.observation_id = o.id
-WHERE o.deleted_at IS NULL
+WHERE o.is_deleted = 0
+  AND ifnull(r.is_deleted, 0) = 0
   AND (sqlc.arg('project') = '' OR s.project = sqlc.arg('project'))
   AND (sqlc.arg('scope') = '' OR o.scope = sqlc.arg('scope'))
   AND (sqlc.arg('topic_key') = '' OR ifnull(o.topic_key, '') = sqlc.arg('topic_key'))
@@ -23,13 +24,14 @@ ON CONFLICT(observation_id) DO UPDATE SET
   reason = excluded.reason,
   superseded_by = excluded.superseded_by,
   reviewed_at = excluded.reviewed_at,
+  is_deleted = 0,
   updated_at = datetime('now');
 
 -- name: ListObservationIDsByTopic :many
 SELECT o.id
 FROM observations o
 JOIN sessions s ON s.id = o.session_id
-WHERE o.deleted_at IS NULL
+WHERE o.is_deleted = 0
   AND o.topic_key = sqlc.arg('topic_key')
   AND (sqlc.arg('project') = '' OR s.project = sqlc.arg('project'))
   AND (sqlc.arg('scope') = '' OR o.scope = sqlc.arg('scope'))

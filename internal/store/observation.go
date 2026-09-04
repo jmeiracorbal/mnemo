@@ -182,7 +182,7 @@ func (s *Store) GetObservation(id int64) (*Observation, error) {
 	}
 	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 		row.ToolName, sqlNullString(row.Project), row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
-		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.IsDeleted)
 	if err := s.attachObservationProvenance(&o, row.ProvenanceID); err != nil {
 		return nil, err
 	}
@@ -259,7 +259,7 @@ func (s *Store) UpdateObservation(id int64, p UpdateObservationParams) (*Observa
 	return updated, nil
 }
 
-func (s *Store) DeleteObservation(id int64, hardDelete bool) error {
+func (s *Store) DeleteObservation(id int64) error {
 	return s.withTx(func(tx *sql.Tx) error {
 		q := s.q.WithTx(tx)
 		obs, err := s.getObservationTx(tx, id)
@@ -269,31 +269,11 @@ func (s *Store) DeleteObservation(id int64, hardDelete bool) error {
 		if err != nil {
 			return err
 		}
-
-		deletedAt := Now()
-		if hardDelete {
-			if err := q.HardDeleteObservation(context.Background(), id); err != nil {
-				return err
-			}
-		} else {
-			if err := q.SoftDeleteObservation(context.Background(), id); err != nil {
-				return err
-			}
-			value, err := q.GetObservationDeletedAt(context.Background(), id)
-			if err != nil {
-				return err
-			}
-			deletedAt = value.String
+		if err := q.SoftDeleteObservation(context.Background(), id); err != nil {
+			return err
 		}
-
-		return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpDelete, syncObservationPayload{
-			SyncID:     obs.SyncID,
-			SessionID:  obs.SessionID,
-			Project:    obs.Project,
-			Deleted:    true,
-			DeletedAt:  &deletedAt,
-			HardDelete: hardDelete,
-		})
+		obs.IsDeleted = true
+		return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpUpsert, observationPayloadFromObservation(obs))
 	})
 }
 
@@ -328,7 +308,7 @@ func (s *Store) Timeline(observationID int64, before, after int) (*TimelineResul
 			ToolName: nullablePtr(row.ToolName), Project: nullablePtr(sqlNullString(row.Project)), Scope: row.Scope,
 			TopicKey: nullablePtr(row.TopicKey), RevisionCount: int(row.RevisionCount),
 			DuplicateCount: int(row.DuplicateCount), LastSeenAt: nullablePtr(row.LastSeenAt),
-			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, DeletedAt: nullablePtr(row.DeletedAt),
+			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, IsDeleted: int64ToBool(row.IsDeleted),
 		}
 		if err := s.attachTimelineEntryProvenance(&entry, row.ProvenanceID); err != nil {
 			return nil, fmt.Errorf("timeline: before provenance: %w", err)
@@ -352,7 +332,7 @@ func (s *Store) Timeline(observationID int64, before, after int) (*TimelineResul
 			ToolName: nullablePtr(row.ToolName), Project: nullablePtr(sqlNullString(row.Project)), Scope: row.Scope,
 			TopicKey: nullablePtr(row.TopicKey), RevisionCount: int(row.RevisionCount),
 			DuplicateCount: int(row.DuplicateCount), LastSeenAt: nullablePtr(row.LastSeenAt),
-			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, DeletedAt: nullablePtr(row.DeletedAt),
+			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, IsDeleted: int64ToBool(row.IsDeleted),
 		}
 		if err := s.attachTimelineEntryProvenance(&entry, row.ProvenanceID); err != nil {
 			return nil, fmt.Errorf("timeline: after provenance: %w", err)
@@ -446,7 +426,7 @@ func (s *Store) GetObservationBySyncID(syncID string) (*Observation, error) {
 	}
 	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 		row.ToolName, sqlNullString(row.Project), row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
-		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.IsDeleted)
 	if err := s.attachObservationProvenance(&o, row.ProvenanceID); err != nil {
 		return nil, err
 	}
@@ -475,16 +455,15 @@ func (s *Store) AddPrompt(p AddPromptParams) (int64, error) {
 		}
 		promptID, err = s.q.WithTx(tx).InsertPrompt(context.Background(), dbgen.InsertPromptParams{
 			SyncID: sqlNullString(syncID), SessionID: p.SessionID, Content: content,
-			ProvenanceID: provenanceID,
+			IsDeleted: 0, ProvenanceID: provenanceID,
 		})
 		if err != nil {
 			return err
 		}
-		return s.enqueueSyncMutationTx(tx, SyncEntityPrompt, syncID, SyncOpUpsert, syncPromptPayload{
+		return s.enqueueSyncMutationTx(tx, SyncEntityUserPrompt, syncID, SyncOpUpsert, syncPromptPayload{
 			SyncID:     syncID,
 			SessionID:  p.SessionID,
 			Content:    content,
-			Project:    nullableString(sessionProject),
 			Provenance: nullableProvenanceInput(p.Provenance),
 		})
 	})
@@ -593,7 +572,7 @@ func (s *Store) getObservationTx(tx *sql.Tx, id int64) (*Observation, error) {
 	}
 	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 		row.ToolName, sqlNullString(row.Project), row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
-		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.IsDeleted)
 	if err := attachObservationProvenanceTx(q, &o, row.ProvenanceID); err != nil {
 		return nil, err
 	}
@@ -612,7 +591,7 @@ func (s *Store) getObservationBySyncIDTx(tx *sql.Tx, syncID string, includeDelet
 		}
 		o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 			row.ToolName, sqlNullString(row.Project), row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
-			row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+			row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.IsDeleted)
 		if err := attachObservationProvenanceTx(q, &o, row.ProvenanceID); err != nil {
 			return nil, err
 		}
@@ -624,7 +603,7 @@ func (s *Store) getObservationBySyncIDTx(tx *sql.Tx, syncID string, includeDelet
 	}
 	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
 		row.ToolName, sqlNullString(row.Project), row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
-		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.DeletedAt)
+		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.IsDeleted)
 	if err := attachObservationProvenanceTx(q, &o, row.ProvenanceID); err != nil {
 		return nil, err
 	}

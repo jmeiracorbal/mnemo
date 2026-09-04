@@ -1,21 +1,10 @@
 -- name: ListPendingSyncMutations :many
-SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source, CAST(ifnull(sm.project, '') AS TEXT) AS project,
+SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source,
        sm.occurred_at, sm.acked_at
 FROM sync_mutations sm
-LEFT JOIN sync_enrolled_projects sep ON sm.project = sep.project
 WHERE sm.target_key = sqlc.arg('target_key') AND sm.acked_at IS NULL
-  AND (sm.project IS NULL OR sm.project = '' OR sep.project IS NOT NULL)
 ORDER BY sm.seq ASC
 LIMIT sqlc.arg('result_limit');
-
--- name: SkipNonEnrolledMutations :execrows
-UPDATE sync_mutations
-SET acked_at = datetime('now')
-WHERE target_key = sqlc.arg('target_key')
-  AND acked_at IS NULL
-  AND project IS NOT NULL
-  AND project != ''
-  AND project NOT IN (SELECT project FROM sync_enrolled_projects);
 
 -- name: AckMutationsThrough :exec
 UPDATE sync_mutations
@@ -91,10 +80,8 @@ WHERE target_key = sqlc.arg('target_key');
 
 -- name: ProjectExists :one
 SELECT EXISTS(
-  SELECT 1 FROM projects pr WHERE pr.id = sqlc.arg('project_name')
-  UNION SELECT 1 FROM sessions s WHERE s.project = sqlc.arg('project_name')
-  UNION SELECT 1 FROM sync_mutations m WHERE m.project = sqlc.arg('project_name')
-  UNION SELECT 1 FROM sync_enrolled_projects e WHERE e.project = sqlc.arg('project_name')
+  SELECT 1 FROM projects pr WHERE pr.id = sqlc.arg('project_name') AND pr.is_deleted = 0
+  UNION SELECT 1 FROM sessions s WHERE s.project = sqlc.arg('project_name') AND s.is_deleted = 0
 );
 
 -- name: CountObservationProjectRows :one
@@ -112,23 +99,5 @@ FROM user_prompts p
 JOIN sessions s ON s.id = p.session_id
 WHERE s.project = sqlc.arg('project_name');
 
--- name: CountSyncMutationProjectRows :one
-SELECT COUNT(*) FROM sync_mutations WHERE project = sqlc.arg('project_name');
-
 -- name: RenameSessionProject :execrows
 UPDATE sessions SET project = sqlc.arg('new_name') WHERE project = sqlc.arg('old_name');
-
--- name: RenameMutationProject :execrows
-UPDATE sync_mutations
-SET project = sqlc.arg('new_name'),
-    payload = json_set(payload, '$.project', sqlc.arg('new_name'))
-WHERE project = sqlc.arg('old_name');
-
--- name: CopyProjectEnrollment :exec
-INSERT OR IGNORE INTO sync_enrolled_projects (project, enrolled_at)
-SELECT sqlc.arg('new_name'), enrolled_at
-FROM sync_enrolled_projects
-WHERE sync_enrolled_projects.project = sqlc.arg('old_name');
-
--- name: DeleteProjectEnrollment :exec
-DELETE FROM sync_enrolled_projects WHERE project = ?;

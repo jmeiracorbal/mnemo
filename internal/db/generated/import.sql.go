@@ -13,7 +13,7 @@ import (
 const importObservation = `-- name: ImportObservation :one
 INSERT INTO observations (
   sync_id, session_id, type, title, content, tool_name, scope, topic_key,
-  normalized_hash, revision_count, duplicate_count, last_seen_at, created_at, updated_at, deleted_at,
+  normalized_hash, revision_count, duplicate_count, last_seen_at, created_at, updated_at, is_deleted,
   provenance_id
 ) VALUES (
   ?1, ?2, ?3, ?4,
@@ -40,7 +40,7 @@ type ImportObservationParams struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -60,7 +60,7 @@ func (q *Queries) ImportObservation(ctx context.Context, arg ImportObservationPa
 		arg.LastSeenAt,
 		arg.CreatedAt,
 		arg.UpdatedAt,
-		arg.DeletedAt,
+		arg.IsDeleted,
 		arg.ProvenanceID,
 	)
 	var id int64
@@ -69,10 +69,10 @@ func (q *Queries) ImportObservation(ctx context.Context, arg ImportObservationPa
 }
 
 const importPrompt = `-- name: ImportPrompt :exec
-INSERT INTO user_prompts (sync_id, session_id, content, created_at, provenance_id)
+INSERT INTO user_prompts (sync_id, session_id, content, created_at, is_deleted, provenance_id)
 VALUES (
   ?1, ?2, ?3,
-  ?4, ?5
+  ?4, ?5, ?6
 )
 `
 
@@ -81,6 +81,7 @@ type ImportPromptParams struct {
 	SessionID    string         `json:"session_id"`
 	Content      string         `json:"content"`
 	CreatedAt    string         `json:"created_at"`
+	IsDeleted    int64          `json:"is_deleted"`
 	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -90,6 +91,7 @@ func (q *Queries) ImportPrompt(ctx context.Context, arg ImportPromptParams) erro
 		arg.SessionID,
 		arg.Content,
 		arg.CreatedAt,
+		arg.IsDeleted,
 		arg.ProvenanceID,
 	)
 	return err

@@ -194,11 +194,10 @@ func New(cfg Config) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("mnemo: migration: %w", err)
 	}
-	if err := s.repairEnrolledProjectSyncMutations(); err != nil {
+	if err := s.BackfillAllSyncMutations(); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("mnemo: repair enrolled sync journal: %w", err)
+		return nil, fmt.Errorf("mnemo: rebuild sync journal: %w", err)
 	}
-
 	return s, nil
 }
 

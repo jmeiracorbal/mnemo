@@ -18,6 +18,9 @@ func (s *Store) CreateSessionWithProvenance(id, project, directory string, prove
 		if err := s.createSessionTx(tx, id, project, directory, provenance); err != nil {
 			return err
 		}
+		if err := s.enqueueSyncMutationTx(tx, SyncEntityProject, project, SyncOpUpsert, map[string]any{"id": project, "name": project, "is_deleted": false}); err != nil {
+			return err
+		}
 		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
 			ID:         id,
 			Project:    project,

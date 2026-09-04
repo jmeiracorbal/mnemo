@@ -78,7 +78,7 @@ func (e *Engine) Push(ctx context.Context) (*Result, error) {
 		entries := make([]MutationEntry, 0, len(pending))
 		for _, mut := range pending {
 			entries = append(entries, MutationEntry{
-				LocalSeq: mut.Seq, Project: mut.Project, Entity: mut.Entity, EntityKey: mut.EntityKey,
+				LocalSeq: mut.Seq, Entity: mut.Entity, EntityKey: mut.EntityKey,
 				Op: mut.Op, Payload: json.RawMessage(mut.Payload), OccurredAt: mut.OccurredAt,
 			})
 		}
@@ -131,7 +131,7 @@ func (e *Engine) Pull(ctx context.Context) (*Result, error) {
 			mutation := store.SyncMutation{
 				Seq: remote.Seq, TargetKey: e.cfg.TargetKey, Entity: remote.Entity, EntityKey: remote.EntityKey,
 				Op: remote.Op, Payload: string(remote.Payload), Source: store.SyncSourceRemote,
-				Project: remote.Project, OccurredAt: remote.OccurredAt,
+				OccurredAt: remote.OccurredAt,
 			}
 			if err := e.local.ApplyPulledMutation(e.cfg.TargetKey, mutation); err != nil {
 				return res, fmt.Errorf("apply pulled mutation seq=%d: %w", remote.Seq, err)
