@@ -28,24 +28,6 @@ func (q *Queries) AckMutationSeq(ctx context.Context, arg AckMutationSeqParams) 
 	return err
 }
 
-const ackMutationsThrough = `-- name: AckMutationsThrough :exec
-UPDATE sync_mutations
-SET acked_at = datetime('now')
-WHERE target_key = ?1
-  AND seq <= ?2
-  AND acked_at IS NULL
-`
-
-type AckMutationsThroughParams struct {
-	TargetKey    string `json:"target_key"`
-	LastAckedSeq int64  `json:"last_acked_seq"`
-}
-
-func (q *Queries) AckMutationsThrough(ctx context.Context, arg AckMutationsThroughParams) error {
-	_, err := q.db.ExecContext(ctx, ackMutationsThrough, arg.TargetKey, arg.LastAckedSeq)
-	return err
-}
-
 const acquireSyncLease = `-- name: AcquireSyncLease :execrows
 UPDATE sync_state
 SET lease_owner = ?1,
@@ -82,28 +64,14 @@ func (q *Queries) AcquireSyncLease(ctx context.Context, arg AcquireSyncLeasePara
 	return result.RowsAffected()
 }
 
-const copyProjectEnrollment = `-- name: CopyProjectEnrollment :exec
-INSERT OR IGNORE INTO sync_enrolled_projects (project, enrolled_at)
-SELECT ?1, enrolled_at
-FROM sync_enrolled_projects
-WHERE sync_enrolled_projects.project = ?2
-`
-
-type CopyProjectEnrollmentParams struct {
-	NewName string `json:"new_name"`
-	OldName string `json:"old_name"`
-}
-
-func (q *Queries) CopyProjectEnrollment(ctx context.Context, arg CopyProjectEnrollmentParams) error {
-	_, err := q.db.ExecContext(ctx, copyProjectEnrollment, arg.NewName, arg.OldName)
-	return err
-}
-
 const countObservationProjectRows = `-- name: CountObservationProjectRows :one
-SELECT COUNT(*) FROM observations WHERE project = ?1
+SELECT COUNT(*)
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE s.project = ?1
 `
 
-func (q *Queries) CountObservationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error) {
+func (q *Queries) CountObservationProjectRows(ctx context.Context, projectName string) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countObservationProjectRows, projectName)
 	var count int64
 	err := row.Scan(&count)
@@ -123,10 +91,13 @@ func (q *Queries) CountPendingMutations(ctx context.Context, targetKey string) (
 }
 
 const countPromptProjectRows = `-- name: CountPromptProjectRows :one
-SELECT COUNT(*) FROM user_prompts WHERE project = ?1
+SELECT COUNT(*)
+FROM user_prompts p
+JOIN sessions s ON s.id = p.session_id
+WHERE s.project = ?1
 `
 
-func (q *Queries) CountPromptProjectRows(ctx context.Context, projectName sql.NullString) (int64, error) {
+func (q *Queries) CountPromptProjectRows(ctx context.Context, projectName string) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPromptProjectRows, projectName)
 	var count int64
 	err := row.Scan(&count)
@@ -142,89 +113,6 @@ func (q *Queries) CountSessionProjectRows(ctx context.Context, projectName strin
 	var count int64
 	err := row.Scan(&count)
 	return count, err
-}
-
-const countSyncMutationProjectRows = `-- name: CountSyncMutationProjectRows :one
-SELECT COUNT(*) FROM sync_mutations WHERE project = ?1
-`
-
-func (q *Queries) CountSyncMutationProjectRows(ctx context.Context, projectName sql.NullString) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSyncMutationProjectRows, projectName)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const deleteProjectEnrollment = `-- name: DeleteProjectEnrollment :exec
-DELETE FROM sync_enrolled_projects WHERE project = ?
-`
-
-func (q *Queries) DeleteProjectEnrollment(ctx context.Context, project string) error {
-	_, err := q.db.ExecContext(ctx, deleteProjectEnrollment, project)
-	return err
-}
-
-const listPendingSyncMutations = `-- name: ListPendingSyncMutations :many
-SELECT sm.seq, sm.target_key, sm.entity, sm.entity_key, sm.op, sm.payload, sm.source, CAST(ifnull(sm.project, '') AS TEXT) AS project,
-       sm.occurred_at, sm.acked_at
-FROM sync_mutations sm
-LEFT JOIN sync_enrolled_projects sep ON sm.project = sep.project
-WHERE sm.target_key = ?1 AND sm.acked_at IS NULL
-  AND (sm.project IS NULL OR sm.project = '' OR sep.project IS NOT NULL)
-ORDER BY sm.seq ASC
-LIMIT ?2
-`
-
-type ListPendingSyncMutationsParams struct {
-	TargetKey   string `json:"target_key"`
-	ResultLimit int64  `json:"result_limit"`
-}
-
-type ListPendingSyncMutationsRow struct {
-	Seq        int64          `json:"seq"`
-	TargetKey  string         `json:"target_key"`
-	Entity     string         `json:"entity"`
-	EntityKey  string         `json:"entity_key"`
-	Op         string         `json:"op"`
-	Payload    string         `json:"payload"`
-	Source     string         `json:"source"`
-	Project    string         `json:"project"`
-	OccurredAt string         `json:"occurred_at"`
-	AckedAt    sql.NullString `json:"acked_at"`
-}
-
-func (q *Queries) ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]ListPendingSyncMutationsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPendingSyncMutations, arg.TargetKey, arg.ResultLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListPendingSyncMutationsRow{}
-	for rows.Next() {
-		var i ListPendingSyncMutationsRow
-		if err := rows.Scan(
-			&i.Seq,
-			&i.TargetKey,
-			&i.Entity,
-			&i.EntityKey,
-			&i.Op,
-			&i.Payload,
-			&i.Source,
-			&i.Project,
-			&i.OccurredAt,
-			&i.AckedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const markSyncFailure = `-- name: MarkSyncFailure :exec
@@ -276,15 +164,12 @@ func (q *Queries) MarkSyncHealthy(ctx context.Context, arg MarkSyncHealthyParams
 
 const projectExists = `-- name: ProjectExists :one
 SELECT EXISTS(
-  SELECT 1 FROM observations o WHERE o.project = ?1
-  UNION SELECT 1 FROM sessions s WHERE s.project = ?1
-  UNION SELECT 1 FROM user_prompts p WHERE p.project = ?1
-  UNION SELECT 1 FROM sync_mutations m WHERE m.project = ?1
-  UNION SELECT 1 FROM sync_enrolled_projects e WHERE e.project = ?1
+  SELECT 1 FROM projects pr WHERE pr.id = ?1 AND pr.is_deleted = 0
+  UNION SELECT 1 FROM sessions s WHERE s.project = ?1 AND s.is_deleted = 0
 )
 `
 
-func (q *Queries) ProjectExists(ctx context.Context, projectName sql.NullString) (bool, error) {
+func (q *Queries) ProjectExists(ctx context.Context, projectName string) (bool, error) {
 	row := q.db.QueryRowContext(ctx, projectExists, projectName)
 	var exists bool
 	err := row.Scan(&exists)
@@ -308,60 +193,6 @@ func (q *Queries) ReleaseSyncLease(ctx context.Context, arg ReleaseSyncLeasePara
 	return err
 }
 
-const renameMutationProject = `-- name: RenameMutationProject :execrows
-UPDATE sync_mutations
-SET project = ?1,
-    payload = json_set(payload, '$.project', ?1)
-WHERE project = ?2
-`
-
-type RenameMutationProjectParams struct {
-	NewName sql.NullString `json:"new_name"`
-	OldName sql.NullString `json:"old_name"`
-}
-
-func (q *Queries) RenameMutationProject(ctx context.Context, arg RenameMutationProjectParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, renameMutationProject, arg.NewName, arg.OldName)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const renameObservationProject = `-- name: RenameObservationProject :execrows
-UPDATE observations SET project = ?1 WHERE project = ?2
-`
-
-type RenameObservationProjectParams struct {
-	NewName sql.NullString `json:"new_name"`
-	OldName sql.NullString `json:"old_name"`
-}
-
-func (q *Queries) RenameObservationProject(ctx context.Context, arg RenameObservationProjectParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, renameObservationProject, arg.NewName, arg.OldName)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const renamePromptProject = `-- name: RenamePromptProject :execrows
-UPDATE user_prompts SET project = ?1 WHERE project = ?2
-`
-
-type RenamePromptProjectParams struct {
-	NewName sql.NullString `json:"new_name"`
-	OldName sql.NullString `json:"old_name"`
-}
-
-func (q *Queries) RenamePromptProject(ctx context.Context, arg RenamePromptProjectParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, renamePromptProject, arg.NewName, arg.OldName)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
 const renameSessionProject = `-- name: RenameSessionProject :execrows
 UPDATE sessions SET project = ?1 WHERE project = ?2
 `
@@ -373,24 +204,6 @@ type RenameSessionProjectParams struct {
 
 func (q *Queries) RenameSessionProject(ctx context.Context, arg RenameSessionProjectParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, renameSessionProject, arg.NewName, arg.OldName)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const skipNonEnrolledMutations = `-- name: SkipNonEnrolledMutations :execrows
-UPDATE sync_mutations
-SET acked_at = datetime('now')
-WHERE target_key = ?1
-  AND acked_at IS NULL
-  AND project IS NOT NULL
-  AND project != ''
-  AND project NOT IN (SELECT project FROM sync_enrolled_projects)
-`
-
-func (q *Queries) SkipNonEnrolledMutations(ctx context.Context, targetKey string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, skipNonEnrolledMutations, targetKey)
 	if err != nil {
 		return 0, err
 	}

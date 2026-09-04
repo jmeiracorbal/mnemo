@@ -13,7 +13,7 @@ import (
 
 const countObservationsByHash = `-- name: CountObservationsByHash :one
 SELECT COUNT(*) FROM observations
-WHERE normalized_hash = ? AND deleted_at IS NULL
+WHERE normalized_hash = ? AND is_deleted = 0
 `
 
 func (q *Queries) CountObservationsByHash(ctx context.Context, normalizedHash sql.NullString) (int64, error) {
@@ -24,7 +24,7 @@ func (q *Queries) CountObservationsByHash(ctx context.Context, normalizedHash sq
 }
 
 const deleteObservationTags = `-- name: DeleteObservationTags :exec
-DELETE FROM observation_tags WHERE observation_id = ?
+UPDATE observation_tags SET is_deleted = 1 WHERE observation_id = ?
 `
 
 func (q *Queries) DeleteObservationTags(ctx context.Context, observationID int64) error {
@@ -33,20 +33,22 @@ func (q *Queries) DeleteObservationTags(ctx context.Context, observationID int64
 }
 
 const findDuplicateObservation = `-- name: FindDuplicateObservation :one
-SELECT id FROM observations
-WHERE normalized_hash = ?1
-  AND ifnull(project, '') = ifnull(?2, '')
-  AND scope = ?3
-  AND type = ?4
-  AND title = ?5
-  AND deleted_at IS NULL
-  AND datetime(created_at) >= datetime('now', ?6)
-ORDER BY id DESC LIMIT 1
+SELECT o.id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.normalized_hash = ?1
+  AND s.project = ?2
+  AND o.scope = ?3
+  AND o.type = ?4
+  AND o.title = ?5
+  AND o.is_deleted = 0
+  AND datetime(o.created_at) >= datetime('now', ?6)
+ORDER BY o.id DESC LIMIT 1
 `
 
 type FindDuplicateObservationParams struct {
 	NormalizedHash sql.NullString `json:"normalized_hash"`
-	Project        interface{}    `json:"project"`
+	Project        string         `json:"project"`
 	Scope          string         `json:"scope"`
 	Type           string         `json:"type"`
 	Title          string         `json:"title"`
@@ -68,10 +70,12 @@ func (q *Queries) FindDuplicateObservation(ctx context.Context, arg FindDuplicat
 }
 
 const findObservationByHashAndProject = `-- name: FindObservationByHashAndProject :one
-SELECT id FROM observations
-WHERE normalized_hash = ?1
-  AND ifnull(project, '') = ifnull(?2, '')
-  AND deleted_at IS NULL
+SELECT o.id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.normalized_hash = ?1
+  AND (?2 = '' OR s.project = ?2)
+  AND o.is_deleted = 0
 LIMIT 1
 `
 
@@ -88,18 +92,20 @@ func (q *Queries) FindObservationByHashAndProject(ctx context.Context, arg FindO
 }
 
 const findObservationByTopic = `-- name: FindObservationByTopic :one
-SELECT id FROM observations
-WHERE topic_key = ?1
-  AND ifnull(project, '') = ifnull(?2, '')
-  AND scope = ?3
-  AND deleted_at IS NULL
-ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC
+SELECT o.id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.topic_key = ?1
+  AND s.project = ?2
+  AND o.scope = ?3
+  AND o.is_deleted = 0
+ORDER BY datetime(o.updated_at) DESC, datetime(o.created_at) DESC
 LIMIT 1
 `
 
 type FindObservationByTopicParams struct {
 	TopicKey sql.NullString `json:"topic_key"`
-	Project  interface{}    `json:"project"`
+	Project  string         `json:"project"`
 	Scope    string         `json:"scope"`
 }
 
@@ -111,10 +117,12 @@ func (q *Queries) FindObservationByTopic(ctx context.Context, arg FindObservatio
 }
 
 const getLiveObservation = `-- name: GetLiveObservation :one
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at, provenance_id
-FROM observations WHERE id = ? AND deleted_at IS NULL
+SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.is_deleted, o.provenance_id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.id = ? AND o.is_deleted = 0
 `
 
 type GetLiveObservationRow struct {
@@ -125,7 +133,7 @@ type GetLiveObservationRow struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
+	Project        string         `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	RevisionCount  int64          `json:"revision_count"`
@@ -133,7 +141,7 @@ type GetLiveObservationRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -156,18 +164,20 @@ func (q *Queries) GetLiveObservation(ctx context.Context, id int64) (GetLiveObse
 		&i.LastSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.DeletedAt,
+		&i.IsDeleted,
 		&i.ProvenanceID,
 	)
 	return i, err
 }
 
 const getLiveObservationBySyncID = `-- name: GetLiveObservationBySyncID :one
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at, provenance_id
-FROM observations WHERE sync_id = ? AND deleted_at IS NULL
-ORDER BY id DESC LIMIT 1
+SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.is_deleted, o.provenance_id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.sync_id = ? AND o.is_deleted = 0
+ORDER BY o.id DESC LIMIT 1
 `
 
 type GetLiveObservationBySyncIDRow struct {
@@ -178,7 +188,7 @@ type GetLiveObservationBySyncIDRow struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
+	Project        string         `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	RevisionCount  int64          `json:"revision_count"`
@@ -186,7 +196,7 @@ type GetLiveObservationBySyncIDRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -209,17 +219,19 @@ func (q *Queries) GetLiveObservationBySyncID(ctx context.Context, syncID sql.Nul
 		&i.LastSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.DeletedAt,
+		&i.IsDeleted,
 		&i.ProvenanceID,
 	)
 	return i, err
 }
 
 const getObservation = `-- name: GetObservation :one
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at, provenance_id
-FROM observations WHERE id = ?
+SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.is_deleted, o.provenance_id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.id = ?
 `
 
 type GetObservationRow struct {
@@ -230,7 +242,7 @@ type GetObservationRow struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
+	Project        string         `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	RevisionCount  int64          `json:"revision_count"`
@@ -238,7 +250,7 @@ type GetObservationRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -261,18 +273,20 @@ func (q *Queries) GetObservation(ctx context.Context, id int64) (GetObservationR
 		&i.LastSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.DeletedAt,
+		&i.IsDeleted,
 		&i.ProvenanceID,
 	)
 	return i, err
 }
 
 const getObservationBySyncIDIncludingDeleted = `-- name: GetObservationBySyncIDIncludingDeleted :one
-SELECT id, ifnull(sync_id, '') AS sync_id, session_id, type, title, content,
-       tool_name, project, scope, topic_key, revision_count, duplicate_count,
-       last_seen_at, created_at, updated_at, deleted_at, provenance_id
-FROM observations WHERE sync_id = ?
-ORDER BY id DESC LIMIT 1
+SELECT o.id, ifnull(o.sync_id, '') AS sync_id, o.session_id, o.type, o.title, o.content,
+       o.tool_name, s.project AS project, o.scope, o.topic_key, o.revision_count, o.duplicate_count,
+       o.last_seen_at, o.created_at, o.updated_at, o.is_deleted, o.provenance_id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.sync_id = ?
+ORDER BY o.id DESC LIMIT 1
 `
 
 type GetObservationBySyncIDIncludingDeletedRow struct {
@@ -283,7 +297,7 @@ type GetObservationBySyncIDIncludingDeletedRow struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
+	Project        string         `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	RevisionCount  int64          `json:"revision_count"`
@@ -291,7 +305,7 @@ type GetObservationBySyncIDIncludingDeletedRow struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -314,41 +328,21 @@ func (q *Queries) GetObservationBySyncIDIncludingDeleted(ctx context.Context, sy
 		&i.LastSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.DeletedAt,
+		&i.IsDeleted,
 		&i.ProvenanceID,
 	)
 	return i, err
 }
 
-const getObservationDeletedAt = `-- name: GetObservationDeletedAt :one
-SELECT deleted_at FROM observations WHERE id = ?
-`
-
-func (q *Queries) GetObservationDeletedAt(ctx context.Context, id int64) (sql.NullString, error) {
-	row := q.db.QueryRowContext(ctx, getObservationDeletedAt, id)
-	var deleted_at sql.NullString
-	err := row.Scan(&deleted_at)
-	return deleted_at, err
-}
-
-const hardDeleteObservation = `-- name: HardDeleteObservation :exec
-DELETE FROM observations WHERE id = ?
-`
-
-func (q *Queries) HardDeleteObservation(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, hardDeleteObservation, id)
-	return err
-}
-
 const insertObservation = `-- name: InsertObservation :one
 INSERT INTO observations (
-  sync_id, session_id, type, title, content, tool_name, project, scope,
+  sync_id, session_id, type, title, content, tool_name, scope,
   topic_key, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at, provenance_id
 ) VALUES (
   ?1, ?2, ?3, ?4,
-  ?5, ?6, ?7, ?8,
-  ?9, ?10, 1, 1, datetime('now'), datetime('now'),
-  ?11
+  ?5, ?6, ?7,
+  ?8, ?9, 1, 1, datetime('now'), datetime('now'),
+  ?10
 )
 RETURNING id
 `
@@ -360,7 +354,6 @@ type InsertObservationParams struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	NormalizedHash sql.NullString `json:"normalized_hash"`
@@ -375,7 +368,6 @@ func (q *Queries) InsertObservation(ctx context.Context, arg InsertObservationPa
 		arg.Title,
 		arg.Content,
 		arg.ToolName,
-		arg.Project,
 		arg.Scope,
 		arg.TopicKey,
 		arg.NormalizedHash,
@@ -387,7 +379,8 @@ func (q *Queries) InsertObservation(ctx context.Context, arg InsertObservationPa
 }
 
 const insertObservationTag = `-- name: InsertObservationTag :exec
-INSERT OR IGNORE INTO observation_tags (observation_id, tag) VALUES (?, ?)
+INSERT INTO observation_tags (observation_id, tag, is_deleted) VALUES (?, ?, 0)
+ON CONFLICT(observation_id, tag) DO UPDATE SET is_deleted = 0
 `
 
 type InsertObservationTagParams struct {
@@ -401,7 +394,7 @@ func (q *Queries) InsertObservationTag(ctx context.Context, arg InsertObservatio
 }
 
 const listObservationTags = `-- name: ListObservationTags :many
-SELECT tag FROM observation_tags WHERE observation_id = ? ORDER BY tag
+SELECT tag FROM observation_tags WHERE observation_id = ? AND is_deleted = 0 ORDER BY tag
 `
 
 func (q *Queries) ListObservationTags(ctx context.Context, observationID int64) ([]string, error) {
@@ -431,10 +424,16 @@ const listTagsForObservationIDs = `-- name: ListTagsForObservationIDs :many
 SELECT observation_id, tag
 FROM observation_tags
 WHERE observation_id IN (/*SLICE:observation_ids*/?)
+  AND is_deleted = 0
 ORDER BY observation_id, tag
 `
 
-func (q *Queries) ListTagsForObservationIDs(ctx context.Context, observationIds []int64) ([]ObservationTag, error) {
+type ListTagsForObservationIDsRow struct {
+	ObservationID int64  `json:"observation_id"`
+	Tag           string `json:"tag"`
+}
+
+func (q *Queries) ListTagsForObservationIDs(ctx context.Context, observationIds []int64) ([]ListTagsForObservationIDsRow, error) {
 	query := listTagsForObservationIDs
 	var queryParams []interface{}
 	if len(observationIds) > 0 {
@@ -450,9 +449,9 @@ func (q *Queries) ListTagsForObservationIDs(ctx context.Context, observationIds 
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ObservationTag{}
+	items := []ListTagsForObservationIDsRow{}
 	for rows.Next() {
-		var i ObservationTag
+		var i ListTagsForObservationIDsRow
 		if err := rows.Scan(&i.ObservationID, &i.Tag); err != nil {
 			return nil, err
 		}
@@ -469,7 +468,7 @@ func (q *Queries) ListTagsForObservationIDs(ctx context.Context, observationIds 
 
 const softDeleteObservation = `-- name: SoftDeleteObservation :exec
 UPDATE observations
-SET deleted_at = datetime('now'), updated_at = datetime('now')
+SET is_deleted = 1, updated_at = datetime('now')
 WHERE id = ?
 `
 
@@ -536,20 +535,18 @@ UPDATE observations SET
   type = ?1,
   title = ?2,
   content = ?3,
-  project = ?4,
-  scope = ?5,
-  topic_key = ?6,
-  normalized_hash = ?7,
+  scope = ?4,
+  topic_key = ?5,
+  normalized_hash = ?6,
   revision_count = revision_count + 1,
   updated_at = datetime('now')
-WHERE id = ?8 AND deleted_at IS NULL
+WHERE id = ?7 AND is_deleted = 0
 `
 
 type UpdateObservationFieldsParams struct {
 	Type           string         `json:"type"`
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
-	Project        sql.NullString `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	NormalizedHash sql.NullString `json:"normalized_hash"`
@@ -561,7 +558,6 @@ func (q *Queries) UpdateObservationFields(ctx context.Context, arg UpdateObserva
 		arg.Type,
 		arg.Title,
 		arg.Content,
-		arg.Project,
 		arg.Scope,
 		arg.TopicKey,
 		arg.NormalizedHash,

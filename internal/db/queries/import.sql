@@ -7,21 +7,21 @@ VALUES (
 
 -- name: ImportObservation :one
 INSERT INTO observations (
-  sync_id, session_id, type, title, content, tool_name, project, scope, topic_key,
-  normalized_hash, revision_count, duplicate_count, last_seen_at, created_at, updated_at, deleted_at,
+  sync_id, session_id, type, title, content, tool_name, scope, topic_key,
+  normalized_hash, revision_count, duplicate_count, last_seen_at, created_at, updated_at, is_deleted,
   provenance_id
 ) VALUES (
   sqlc.narg('sync_id'), sqlc.arg('session_id'), sqlc.arg('type'), sqlc.arg('title'),
-  sqlc.arg('content'), sqlc.narg('tool_name'), sqlc.narg('project'), sqlc.arg('scope'),
+  sqlc.arg('content'), sqlc.narg('tool_name'), sqlc.arg('scope'),
   sqlc.narg('topic_key'), sqlc.narg('normalized_hash'), sqlc.arg('revision_count'),
   sqlc.arg('duplicate_count'), sqlc.narg('last_seen_at'), sqlc.arg('created_at'),
-  sqlc.arg('updated_at'), sqlc.narg('deleted_at'), sqlc.narg('provenance_id')
+  sqlc.arg('updated_at'), sqlc.arg('is_deleted'), sqlc.narg('provenance_id')
 )
 RETURNING id;
 
 -- name: ImportPrompt :exec
-INSERT INTO user_prompts (sync_id, session_id, content, project, created_at, provenance_id)
+INSERT INTO user_prompts (sync_id, session_id, content, created_at, is_deleted, provenance_id)
 VALUES (
   sqlc.narg('sync_id'), sqlc.arg('session_id'), sqlc.arg('content'),
-  sqlc.narg('project'), sqlc.arg('created_at'), sqlc.narg('provenance_id')
+  sqlc.arg('created_at'), sqlc.arg('is_deleted'), sqlc.narg('provenance_id')
 );

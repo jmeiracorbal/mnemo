@@ -100,7 +100,7 @@ func TestEnginePushBackfillsAndAcksAcceptedSeqs(t *testing.T) {
 func TestEnginePullSkipsOwnRowsAndAppliesForeignRows(t *testing.T) {
 	payload := json.RawMessage(`{"id":"s2","project":"brain","directory":"/tmp"}`)
 	local := &fakeStore{}
-	backend := &fakeBackend{pulls: []*PullResult{{Mutations: []PulledMutation{{Seq: 10, OriginID: "client-a", ClientSeq: 1, Entity: store.SyncEntitySession, EntityKey: "s1", Op: store.SyncOpUpsert, Payload: payload}, {Seq: 11, OriginID: "client-b", ClientSeq: 7, Project: "brain", Entity: store.SyncEntitySession, EntityKey: "s2", Op: store.SyncOpUpsert, Payload: payload}}}}}
+	backend := &fakeBackend{pulls: []*PullResult{{Mutations: []PulledMutation{{Seq: 10, OriginID: "client-a", ClientSeq: 1, Entity: store.SyncEntitySession, EntityKey: "s1", Op: store.SyncOpUpsert, Payload: payload}, {Seq: 11, OriginID: "client-b", ClientSeq: 7, Entity: store.SyncEntitySession, EntityKey: "s2", Op: store.SyncOpUpsert, Payload: payload}}}}}
 	engine, err := NewEngine(local, backend, Config{URL: "libsql://example.turso.io", Key: "publishable", ClientID: "client-a", TargetKey: store.DefaultSyncTargetKey})
 	if err != nil {
 		t.Fatal(err)
@@ -115,7 +115,7 @@ func TestEnginePullSkipsOwnRowsAndAppliesForeignRows(t *testing.T) {
 	if !reflect.DeepEqual(local.advanced, []int64{10}) {
 		t.Fatalf("advanced seqs = %#v", local.advanced)
 	}
-	if len(local.applied) != 1 || local.applied[0].Seq != 11 || local.applied[0].Project != "brain" {
+	if len(local.applied) != 1 || local.applied[0].Seq != 11 {
 		t.Fatalf("applied = %#v", local.applied)
 	}
 }

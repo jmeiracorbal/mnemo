@@ -11,17 +11,19 @@ import (
 )
 
 const listMemoryReviewCandidates = `-- name: ListMemoryReviewCandidates :many
-SELECT o.id, o.type, o.title, ifnull(o.project, '') AS project, o.scope, ifnull(o.topic_key, '') AS topic_key,
+SELECT o.id, o.type, o.title, s.project AS project, o.scope, ifnull(o.topic_key, '') AS topic_key,
        ifnull(o.normalized_hash, '') AS normalized_hash, o.created_at, o.updated_at, o.provenance_id,
        ifnull(r.state, '') AS review_state, ifnull(r.reason, '') AS review_reason, r.superseded_by,
        ifnull(r.reviewed_at, '') AS review_reviewed_at, ifnull(r.updated_at, '') AS review_updated_at
 FROM observations o
+JOIN sessions s ON s.id = o.session_id
 LEFT JOIN observation_reviews r ON r.observation_id = o.id
-WHERE o.deleted_at IS NULL
-  AND (?1 = '' OR ifnull(o.project, '') = ?1)
+WHERE o.is_deleted = 0
+  AND ifnull(r.is_deleted, 0) = 0
+  AND (?1 = '' OR s.project = ?1)
   AND (?2 = '' OR o.scope = ?2)
   AND (?3 = '' OR ifnull(o.topic_key, '') = ?3)
-ORDER BY ifnull(o.project, ''), o.scope, ifnull(o.topic_key, ''), lower(o.title), o.id
+ORDER BY s.project, o.scope, ifnull(o.topic_key, ''), lower(o.title), o.id
 `
 
 type ListMemoryReviewCandidatesParams struct {
@@ -34,7 +36,7 @@ type ListMemoryReviewCandidatesRow struct {
 	ID               int64         `json:"id"`
 	Type             string        `json:"type"`
 	Title            string        `json:"title"`
-	Project          interface{}   `json:"project"`
+	Project          string        `json:"project"`
 	Scope            string        `json:"scope"`
 	TopicKey         interface{}   `json:"topic_key"`
 	NormalizedHash   interface{}   `json:"normalized_hash"`
@@ -88,12 +90,14 @@ func (q *Queries) ListMemoryReviewCandidates(ctx context.Context, arg ListMemory
 }
 
 const listObservationIDsByTopic = `-- name: ListObservationIDsByTopic :many
-SELECT id FROM observations
-WHERE deleted_at IS NULL
-  AND topic_key = ?1
-  AND (?2 = '' OR ifnull(project, '') = ?2)
-  AND (?3 = '' OR scope = ?3)
-ORDER BY id ASC
+SELECT o.id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.is_deleted = 0
+  AND o.topic_key = ?1
+  AND (?2 = '' OR s.project = ?2)
+  AND (?3 = '' OR o.scope = ?3)
+ORDER BY o.id ASC
 `
 
 type ListObservationIDsByTopicParams struct {
@@ -136,6 +140,7 @@ ON CONFLICT(observation_id) DO UPDATE SET
   reason = excluded.reason,
   superseded_by = excluded.superseded_by,
   reviewed_at = excluded.reviewed_at,
+  is_deleted = 0,
   updated_at = datetime('now')
 `
 

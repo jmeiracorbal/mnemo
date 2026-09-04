@@ -12,15 +12,15 @@ import (
 
 const importObservation = `-- name: ImportObservation :one
 INSERT INTO observations (
-  sync_id, session_id, type, title, content, tool_name, project, scope, topic_key,
-  normalized_hash, revision_count, duplicate_count, last_seen_at, created_at, updated_at, deleted_at,
+  sync_id, session_id, type, title, content, tool_name, scope, topic_key,
+  normalized_hash, revision_count, duplicate_count, last_seen_at, created_at, updated_at, is_deleted,
   provenance_id
 ) VALUES (
   ?1, ?2, ?3, ?4,
-  ?5, ?6, ?7, ?8,
-  ?9, ?10, ?11,
-  ?12, ?13, ?14,
-  ?15, ?16, ?17
+  ?5, ?6, ?7,
+  ?8, ?9, ?10,
+  ?11, ?12, ?13,
+  ?14, ?15, ?16
 )
 RETURNING id
 `
@@ -32,7 +32,6 @@ type ImportObservationParams struct {
 	Title          string         `json:"title"`
 	Content        string         `json:"content"`
 	ToolName       sql.NullString `json:"tool_name"`
-	Project        sql.NullString `json:"project"`
 	Scope          string         `json:"scope"`
 	TopicKey       sql.NullString `json:"topic_key"`
 	NormalizedHash sql.NullString `json:"normalized_hash"`
@@ -41,7 +40,7 @@ type ImportObservationParams struct {
 	LastSeenAt     sql.NullString `json:"last_seen_at"`
 	CreatedAt      string         `json:"created_at"`
 	UpdatedAt      string         `json:"updated_at"`
-	DeletedAt      sql.NullString `json:"deleted_at"`
+	IsDeleted      int64          `json:"is_deleted"`
 	ProvenanceID   sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -53,7 +52,6 @@ func (q *Queries) ImportObservation(ctx context.Context, arg ImportObservationPa
 		arg.Title,
 		arg.Content,
 		arg.ToolName,
-		arg.Project,
 		arg.Scope,
 		arg.TopicKey,
 		arg.NormalizedHash,
@@ -62,7 +60,7 @@ func (q *Queries) ImportObservation(ctx context.Context, arg ImportObservationPa
 		arg.LastSeenAt,
 		arg.CreatedAt,
 		arg.UpdatedAt,
-		arg.DeletedAt,
+		arg.IsDeleted,
 		arg.ProvenanceID,
 	)
 	var id int64
@@ -71,7 +69,7 @@ func (q *Queries) ImportObservation(ctx context.Context, arg ImportObservationPa
 }
 
 const importPrompt = `-- name: ImportPrompt :exec
-INSERT INTO user_prompts (sync_id, session_id, content, project, created_at, provenance_id)
+INSERT INTO user_prompts (sync_id, session_id, content, created_at, is_deleted, provenance_id)
 VALUES (
   ?1, ?2, ?3,
   ?4, ?5, ?6
@@ -82,8 +80,8 @@ type ImportPromptParams struct {
 	SyncID       sql.NullString `json:"sync_id"`
 	SessionID    string         `json:"session_id"`
 	Content      string         `json:"content"`
-	Project      sql.NullString `json:"project"`
 	CreatedAt    string         `json:"created_at"`
+	IsDeleted    int64          `json:"is_deleted"`
 	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -92,8 +90,8 @@ func (q *Queries) ImportPrompt(ctx context.Context, arg ImportPromptParams) erro
 		arg.SyncID,
 		arg.SessionID,
 		arg.Content,
-		arg.Project,
 		arg.CreatedAt,
+		arg.IsDeleted,
 		arg.ProvenanceID,
 	)
 	return err

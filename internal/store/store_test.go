@@ -79,7 +79,6 @@ func TestAddObservationDeduplicatesWithinWindow(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "Fixed tokenizer",
 		Content:   "Normalized tokenizer panic on edge case",
-		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -91,7 +90,6 @@ func TestAddObservationDeduplicatesWithinWindow(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "Fixed tokenizer",
 		Content:   "normalized   tokenizer panic on EDGE case",
-		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -351,7 +349,6 @@ func TestProvenanceMigrationKeepsLegacyRowsWritable(t *testing.T) {
 		Type:      "decision",
 		Title:     "Modern",
 		Content:   "Modern content after migration",
-		Project:   "mnemo",
 		Scope:     "project",
 	}); err != nil {
 		t.Fatalf("add observation without provenance after migration: %v", err)
@@ -370,7 +367,6 @@ func TestScopeFiltersSearchAndContext(t *testing.T) {
 		Type:      "decision",
 		Title:     "Project auth",
 		Content:   "Keep auth middleware in project memory",
-		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -382,7 +378,6 @@ func TestScopeFiltersSearchAndContext(t *testing.T) {
 		Type:      "decision",
 		Title:     "Personal note",
 		Content:   "Use this regex trick later",
-		Project:   "mnemo",
 		Scope:     "personal",
 	})
 	if err != nil {
@@ -429,7 +424,6 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "first",
 		Content:   "first event",
-		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -441,7 +435,6 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "middle",
 		Content:   "to be deleted",
-		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -453,7 +446,6 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "last",
 		Content:   "last event",
-		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -475,7 +467,7 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 		t.Fatalf("update did not apply; got title=%q scope=%q", updated.Title, updated.Scope)
 	}
 
-	if err := s.DeleteObservation(middleID, false); err != nil {
+	if err := s.DeleteObservation(middleID); err != nil {
 		t.Fatalf("soft delete: %v", err)
 	}
 
@@ -499,11 +491,11 @@ func TestUpdateAndSoftDeleteExcludedFromSearchAndTimeline(t *testing.T) {
 		t.Fatalf("expected timeline to skip deleted observation")
 	}
 
-	if err := s.DeleteObservation(lastID, true); err != nil {
-		t.Fatalf("hard delete: %v", err)
+	if err := s.DeleteObservation(lastID); err != nil {
+		t.Fatalf("soft delete: %v", err)
 	}
 	if _, err := s.GetObservation(lastID); err == nil {
-		t.Fatalf("expected hard-deleted observation to be missing")
+		t.Fatalf("expected soft-deleted observation to be hidden")
 	}
 }
 
@@ -519,7 +511,6 @@ func TestTopicKeyUpsertUpdatesSameTopicWithoutCreatingNewRow(t *testing.T) {
 		Type:      "architecture",
 		Title:     "Auth architecture",
 		Content:   "Use middleware for JWT validation.",
-		Project:   "mnemo",
 		Scope:     "project",
 		TopicKey:  "architecture auth model",
 	})
@@ -532,7 +523,6 @@ func TestTopicKeyUpsertUpdatesSameTopicWithoutCreatingNewRow(t *testing.T) {
 		Type:      "architecture",
 		Title:     "Auth architecture",
 		Content:   "Move auth to gateway + middleware chain.",
-		Project:   "mnemo",
 		Scope:     "project",
 		TopicKey:  "ARCHITECTURE   AUTH  MODEL",
 	})
@@ -571,7 +561,6 @@ func TestDifferentTopicsDoNotReplaceEachOther(t *testing.T) {
 		Type:      "architecture",
 		Title:     "Auth architecture",
 		Content:   "Architecture decision",
-		Project:   "mnemo",
 		Scope:     "project",
 		TopicKey:  "architecture/auth",
 	})
@@ -584,7 +573,6 @@ func TestDifferentTopicsDoNotReplaceEachOther(t *testing.T) {
 		Type:      "bugfix",
 		Title:     "Fix auth nil panic",
 		Content:   "Bugfix details",
-		Project:   "mnemo",
 		Scope:     "project",
 		TopicKey:  "bug/auth-nil-panic",
 	})
@@ -637,7 +625,6 @@ func TestLegacySyncPayloadPreservesExistingProvenance(t *testing.T) {
 		t.Fatal("expected initial provenance")
 	}
 
-	project := "mnemo"
 	err = s.withTx(func(tx *sql.Tx) error {
 		return s.applyObservationUpsertTx(tx, syncObservationPayload{
 			SyncID:    obs.SyncID,
@@ -645,7 +632,6 @@ func TestLegacySyncPayloadPreservesExistingProvenance(t *testing.T) {
 			Type:      obs.Type,
 			Title:     obs.Title,
 			Content:   "Updated by legacy sync payload",
-			Project:   &project,
 			Scope:     obs.Scope,
 		})
 	})
@@ -906,7 +892,6 @@ func TestTopicKeyUpsertIsScopedByProjectAndScope(t *testing.T) {
 		Type:      "architecture",
 		Title:     "Auth model",
 		Content:   "Initial architecture",
-		Project:   "mnemo",
 		Scope:     "project",
 		TopicKey:  "architecture/auth-model",
 	})
@@ -919,7 +904,6 @@ func TestTopicKeyUpsertIsScopedByProjectAndScope(t *testing.T) {
 		Type:      "architecture",
 		Title:     "Auth model",
 		Content:   "Personal take",
-		Project:   "mnemo",
 		Scope:     "personal",
 		TopicKey:  "architecture/auth-model",
 	})
@@ -927,8 +911,11 @@ func TestTopicKeyUpsertIsScopedByProjectAndScope(t *testing.T) {
 		t.Fatalf("add personal scoped observation: %v", err)
 	}
 
+	if err := s.CreateSession("s-other", "another-project", "/tmp/other"); err != nil {
+		t.Fatalf("create other session: %v", err)
+	}
 	otherProjectID, err := s.AddObservation(AddObservationParams{
-		SessionID: "s1",
+		SessionID: "s-other",
 		Type:      "architecture",
 		Title:     "Auth model",
 		Content:   "Other project",
@@ -954,7 +941,7 @@ func TestPromptProjectNullScan(t *testing.T) {
 
 	// Manually insert a prompt with NULL project to simulate legacy data or external changes
 	_, err := s.db.Exec(
-		"INSERT INTO user_prompts (session_id, content, project) VALUES (?, ?, NULL)",
+		"INSERT INTO user_prompts (session_id, content) VALUES (?, ?)",
 		"s1", "prompt with null project",
 	)
 	if err != nil {
@@ -966,8 +953,8 @@ func TestPromptProjectNullScan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RecentPrompts failed with null project: %v", err)
 	}
-	if len(prompts) != 1 || prompts[0].Project != "" {
-		t.Errorf("expected empty string for null project, got %q", prompts[0].Project)
+	if len(prompts) != 1 || prompts[0].Project != "mnemo" {
+		t.Errorf("expected derived session project, got %q", prompts[0].Project)
 	}
 
 	// 2. Test SearchPrompts
@@ -975,8 +962,8 @@ func TestPromptProjectNullScan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SearchPrompts failed with null project: %v", err)
 	}
-	if len(searchResult) != 1 || searchResult[0].Project != "" {
-		t.Errorf("expected empty string for null project in search, got %q", searchResult[0].Project)
+	if len(searchResult) != 1 || searchResult[0].Project != "mnemo" {
+		t.Errorf("expected derived session project in search, got %q", searchResult[0].Project)
 	}
 
 	// 3. Test Export
@@ -988,8 +975,8 @@ func TestPromptProjectNullScan(t *testing.T) {
 	for _, p := range data.Prompts {
 		if p.Content == "prompt with null project" {
 			found = true
-			if p.Project != "" {
-				t.Errorf("expected empty string for null project in export, got %q", p.Project)
+			if p.Project != "mnemo" {
+				t.Errorf("expected derived session project in export, got %q", p.Project)
 			}
 		}
 	}
@@ -1145,7 +1132,6 @@ func TestPassiveCaptureStoresLearnings(t *testing.T) {
 	result, err := s.PassiveCapture(PassiveCaptureParams{
 		SessionID: "s1",
 		Content:   text,
-		Project:   "mnemo",
 		Source:    "test",
 	})
 	if err != nil {
@@ -1185,7 +1171,6 @@ func TestPassiveCaptureEmptyContent(t *testing.T) {
 	result, err := s.PassiveCapture(PassiveCaptureParams{
 		SessionID: "s1",
 		Content:   "",
-		Project:   "mnemo",
 		Source:    "test",
 	})
 	if err != nil {
@@ -1209,7 +1194,6 @@ func TestPassiveCaptureDedupesAgainstExistingObservations(t *testing.T) {
 		Type:      "decision",
 		Title:     "bcrypt cost",
 		Content:   "bcrypt cost=12 is the right balance for our server performance",
-		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -1225,7 +1209,6 @@ func TestPassiveCaptureDedupesAgainstExistingObservations(t *testing.T) {
 	result, err := s.PassiveCapture(PassiveCaptureParams{
 		SessionID: "s1",
 		Content:   text,
-		Project:   "mnemo",
 		Source:    "test",
 	})
 	if err != nil {
@@ -1252,7 +1235,6 @@ func TestPassiveCaptureReturnsErrorWhenSessionDoesNotExist(t *testing.T) {
 	_, err := s.PassiveCapture(PassiveCaptureParams{
 		SessionID: "missing-session",
 		Content:   text,
-		Project:   "mnemo",
 		Source:    "test",
 	})
 	if err == nil {
@@ -1263,25 +1245,19 @@ func TestPassiveCaptureReturnsErrorWhenSessionDoesNotExist(t *testing.T) {
 func TestStatsProjectsOrderedByMostRecentObservation(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
+	if err := s.CreateSession("s1", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("create session s1: %v", err)
 	}
-	if err := s.CreateSession("s2", "mnemo", "/tmp/mnemo"); err != nil {
+	if err := s.CreateSession("s2", "beta", "/tmp/beta"); err != nil {
 		t.Fatalf("create session s2: %v", err)
-	}
-	if err := s.EnsureProject("alpha", "alpha"); err != nil {
-		t.Fatalf("ensure alpha project: %v", err)
-	}
-	if err := s.EnsureProject("beta", "beta"); err != nil {
-		t.Fatalf("ensure beta project: %v", err)
 	}
 
 	_, err := s.db.Exec(
-		`INSERT INTO observations (session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?),
-		        (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`,
-		"s1", "note", "older", "older alpha", "alpha", "project", hashNormalized("older alpha"), "2026-02-01 10:00:00", "2026-02-01 10:00:00",
-		"s2", "note", "newer", "newer beta", "beta", "project", hashNormalized("newer beta"), "2026-02-02 10:00:00", "2026-02-02 10:00:00",
+		`INSERT INTO observations (session_id, type, title, content, scope, normalized_hash, revision_count, duplicate_count, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?),
+		        (?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`,
+		"s1", "note", "older", "older alpha", "project", hashNormalized("older alpha"), "2026-02-01 10:00:00", "2026-02-01 10:00:00",
+		"s2", "note", "newer", "newer beta", "project", hashNormalized("newer beta"), "2026-02-02 10:00:00", "2026-02-02 10:00:00",
 	)
 	if err != nil {
 		t.Fatalf("insert observations: %v", err)
@@ -1318,9 +1294,9 @@ func TestSessionsOrderedByMostRecentActivity(t *testing.T) {
 	}
 
 	_, err = s.db.Exec(
-		`INSERT INTO observations (session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`,
-		"s-older", "note", "latest", "session old got new activity", "mnemo", "project", hashNormalized("session old got new activity"), "2026-02-03 09:00:00", "2026-02-03 09:00:00",
+		`INSERT INTO observations (session_id, type, title, content, scope, normalized_hash, revision_count, duplicate_count, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?)`,
+		"s-older", "note", "latest", "session old got new activity", "project", hashNormalized("session old got new activity"), "2026-02-03 09:00:00", "2026-02-03 09:00:00",
 	)
 	if err != nil {
 		t.Fatalf("insert latest observation: %v", err)
@@ -1349,7 +1325,7 @@ func TestSessionsOrderedByMostRecentActivity(t *testing.T) {
 	}
 }
 
-func TestSessionObservationsAddPromptImportAndSyncChunks(t *testing.T) {
+func TestSessionObservationsAddPromptImportAndSyncQueue(t *testing.T) {
 	s := newTestStore(t)
 
 	if err := s.CreateSession("s1", "mnemo", "/tmp/mnemo"); err != nil {
@@ -1361,7 +1337,6 @@ func TestSessionObservationsAddPromptImportAndSyncChunks(t *testing.T) {
 		Type:      "decision",
 		Title:     "Auth",
 		Content:   "Use middleware chain",
-		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -1406,25 +1381,10 @@ func TestSessionObservationsAddPromptImportAndSyncChunks(t *testing.T) {
 		t.Fatalf("expected non-zero import counts, got %+v", imported)
 	}
 
-	if err := dst.RecordSyncedChunk("chunk-1"); err != nil {
-		t.Fatalf("record synced chunk: %v", err)
-	}
-	chunks, err := dst.GetSyncedChunks()
-	if err != nil {
-		t.Fatalf("get synced chunks: %v", err)
-	}
-	if !chunks["chunk-1"] {
-		t.Fatalf("expected chunk-1 to be marked as synced")
-	}
 }
 
 func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 	s := newTestStore(t)
-
-	// Enroll "mnemo" so mutations are visible via ListPendingSyncMutations.
-	if err := s.EnrollProject("mnemo"); err != nil {
-		t.Fatalf("enroll: %v", err)
-	}
 
 	if err := s.CreateSession("sync-session", "mnemo", "/tmp/mnemo"); err != nil {
 		t.Fatalf("create session: %v", err)
@@ -1435,7 +1395,6 @@ func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 		Type:      "decision",
 		Title:     "Initial title",
 		Content:   "Initial content",
-		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -1451,14 +1410,13 @@ func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 		t.Fatalf("update observation: %v", err)
 	}
 
-	if err := s.DeleteObservation(obsID, false); err != nil {
+	if err := s.DeleteObservation(obsID); err != nil {
 		t.Fatalf("soft delete observation: %v", err)
 	}
 
 	promptID, err := s.AddPrompt(AddPromptParams{
 		SessionID: "sync-session",
 		Content:   "How do we keep this local-first?",
-		Project:   "mnemo",
 	})
 	if err != nil {
 		t.Fatalf("add prompt: %v", err)
@@ -1478,15 +1436,15 @@ func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 	if state.Lifecycle != SyncLifecyclePending {
 		t.Fatalf("expected pending lifecycle after local writes, got %q", state.Lifecycle)
 	}
-	if state.LastEnqueuedSeq != 6 {
-		t.Fatalf("expected 6 enqueued mutations, got %d", state.LastEnqueuedSeq)
+	if state.LastEnqueuedSeq != 7 {
+		t.Fatalf("expected 7 enqueued mutations including the project, got %d", state.LastEnqueuedSeq)
 	}
 
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 10)
+	mutations, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 10)
 	if err != nil {
 		t.Fatalf("list pending sync mutations: %v", err)
 	}
-	if len(mutations) != 6 {
+	if len(mutations) != 7 {
 		t.Fatalf("expected 6 pending mutations, got %d", len(mutations))
 	}
 
@@ -1506,44 +1464,47 @@ func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 		t.Fatalf("expected prompt sync id to be persisted")
 	}
 
-	if mutations[0].Entity != SyncEntitySession || mutations[0].EntityKey != "sync-session" || mutations[0].Op != SyncOpUpsert {
-		t.Fatalf("unexpected session mutation: %+v", mutations[0])
+	if mutations[0].Entity != SyncEntityProject || mutations[0].EntityKey != "mnemo" || mutations[0].Op != SyncOpUpsert {
+		t.Fatalf("unexpected project mutation: %+v", mutations[0])
 	}
-	if mutations[1].Entity != SyncEntityObservation || mutations[1].EntityKey != observationSyncID || mutations[1].Op != SyncOpUpsert {
-		t.Fatalf("unexpected observation insert mutation: %+v", mutations[1])
+	if mutations[1].Entity != SyncEntitySession || mutations[1].EntityKey != "sync-session" || mutations[1].Op != SyncOpUpsert {
+		t.Fatalf("unexpected session mutation: %+v", mutations[1])
 	}
 	if mutations[2].Entity != SyncEntityObservation || mutations[2].EntityKey != observationSyncID || mutations[2].Op != SyncOpUpsert {
-		t.Fatalf("unexpected observation update mutation: %+v", mutations[2])
+		t.Fatalf("unexpected observation insert mutation: %+v", mutations[2])
 	}
-	if mutations[3].Entity != SyncEntityObservation || mutations[3].EntityKey != observationSyncID || mutations[3].Op != SyncOpDelete {
-		t.Fatalf("unexpected observation delete mutation: %+v", mutations[3])
+	if mutations[3].Entity != SyncEntityObservation || mutations[3].EntityKey != observationSyncID || mutations[3].Op != SyncOpUpsert {
+		t.Fatalf("unexpected observation update mutation: %+v", mutations[3])
 	}
-	if mutations[4].Entity != SyncEntityPrompt || mutations[4].EntityKey != promptSyncID || mutations[4].Op != SyncOpUpsert {
-		t.Fatalf("unexpected prompt mutation: %+v", mutations[4])
+	if mutations[4].Entity != SyncEntityObservation || mutations[4].EntityKey != observationSyncID || mutations[4].Op != SyncOpUpsert {
+		t.Fatalf("unexpected observation delete mutation: %+v", mutations[4])
 	}
-	if mutations[5].Entity != SyncEntitySession || mutations[5].EntityKey != "sync-session" || mutations[5].Op != SyncOpUpsert {
-		t.Fatalf("unexpected end session mutation: %+v", mutations[5])
+	if mutations[5].Entity != SyncEntityUserPrompt || mutations[5].EntityKey != promptSyncID || mutations[5].Op != SyncOpUpsert {
+		t.Fatalf("unexpected prompt mutation: %+v", mutations[5])
+	}
+	if mutations[6].Entity != SyncEntitySession || mutations[6].EntityKey != "sync-session" || mutations[6].Op != SyncOpUpsert {
+		t.Fatalf("unexpected end session mutation: %+v", mutations[6])
 	}
 
 	var deletedPayload map[string]any
-	if err := json.Unmarshal([]byte(mutations[3].Payload), &deletedPayload); err != nil {
+	if err := json.Unmarshal([]byte(mutations[4].Payload), &deletedPayload); err != nil {
 		t.Fatalf("decode delete payload: %v", err)
 	}
 	if deletedPayload["sync_id"] != observationSyncID {
 		t.Fatalf("expected delete payload sync id %q, got %#v", observationSyncID, deletedPayload["sync_id"])
 	}
-	if deletedPayload["deleted"] != true {
-		t.Fatalf("expected delete payload to mark deleted=true, got %#v", deletedPayload["deleted"])
+	if deletedPayload["is_deleted"] != true {
+		t.Fatalf("expected delete payload to mark is_deleted=true, got %#v", deletedPayload["is_deleted"])
 	}
 
-	if err := s.AckSyncMutations(DefaultSyncTargetKey, mutations[3].Seq); err != nil {
+	if err := s.AckSyncMutationSeqs(DefaultSyncTargetKey, []int64{mutations[0].Seq, mutations[1].Seq, mutations[2].Seq, mutations[3].Seq, mutations[4].Seq}); err != nil {
 		t.Fatalf("ack sync mutations: %v", err)
 	}
-	remaining, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 10)
+	remaining, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 10)
 	if err != nil {
 		t.Fatalf("list remaining sync mutations: %v", err)
 	}
-	if len(remaining) != 2 || remaining[0].Entity != SyncEntityPrompt || remaining[1].Entity != SyncEntitySession {
+	if len(remaining) != 2 || remaining[0].Entity != SyncEntityUserPrompt || remaining[1].Entity != SyncEntitySession {
 		t.Fatalf("expected prompt and end-session mutations to remain pending, got %+v", remaining)
 	}
 }
@@ -1670,8 +1631,8 @@ func TestApplyRemoteMutationIdempotent(t *testing.T) {
 		TargetKey: DefaultSyncTargetKey,
 		Entity:    SyncEntityObservation,
 		EntityKey: "obs-remote-1",
-		Op:        SyncOpDelete,
-		Payload:   `{"sync_id":"obs-remote-1","deleted":true}`,
+		Op:        SyncOpUpsert,
+		Payload:   `{"sync_id":"obs-remote-1","session_id":"remote-session","type":"decision","title":"Remote","content":"Pulled from remote","scope":"project","is_deleted":true}`,
 	}
 	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, deleteMutation); err != nil {
 		t.Fatalf("apply delete mutation: %v", err)
@@ -1684,7 +1645,7 @@ func TestApplyRemoteMutationIdempotent(t *testing.T) {
 		t.Fatalf("expected pulled delete to hide observation")
 	}
 
-	pending, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 10)
+	pending, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 10)
 	if err != nil {
 		t.Fatalf("list pending after pulled apply: %v", err)
 	}
@@ -1716,7 +1677,6 @@ func TestApplyPulledMutationAcceptsRemoteHighWaterMarkGaps(t *testing.T) {
 		Op:        SyncOpUpsert,
 		Payload:   `{"id":"remote-session-with-gap","project":"mnemo","directory":"/remote"}`,
 		Source:    SyncSourceRemote,
-		Project:   "mnemo",
 	}
 	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, mutation); err != nil {
 		t.Fatalf("apply high-water-mark gap mutation: %v", err)
@@ -1778,7 +1738,7 @@ func TestApplyPulledMutationWithoutProvenanceRecordsSyncPullSource(t *testing.T)
 		{
 			Seq:       3,
 			TargetKey: DefaultSyncTargetKey,
-			Entity:    SyncEntityPrompt,
+			Entity:    SyncEntityUserPrompt,
 			EntityKey: "prompt-remote-1",
 			Op:        SyncOpUpsert,
 			Payload:   `{"sync_id":"prompt-remote-1","session_id":"remote-session","content":"Remote prompt","project":"mnemo"}`,
@@ -1878,7 +1838,6 @@ func TestEndSessionAndTimelineDefaults(t *testing.T) {
 		Type:      "note",
 		Title:     "first",
 		Content:   "first note",
-		Project:   "mnemo",
 	})
 	if err != nil {
 		t.Fatalf("add first observation: %v", err)
@@ -1888,7 +1847,6 @@ func TestEndSessionAndTimelineDefaults(t *testing.T) {
 		Type:      "note",
 		Title:     "second",
 		Content:   "second note",
-		Project:   "mnemo",
 	})
 	if err != nil {
 		t.Fatalf("add second observation: %v", err)
@@ -1971,7 +1929,6 @@ func TestStoreAdditionalQueryAndMutationBranches(t *testing.T) {
 		Type:      "note",
 		Title:     "Private <private>secret</private> title",
 		Content:   longContent + " <private>token</private>",
-		Project:   "mnemo",
 		Scope:     "project",
 	})
 	if err != nil {
@@ -1994,17 +1951,23 @@ func TestStoreAdditionalQueryAndMutationBranches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update observation: %v", err)
 	}
-	if updated.Project != nil {
-		t.Fatalf("expected nil project after empty update")
+	if updated.Project == nil || *updated.Project != "mnemo" {
+		t.Fatalf("expected derived session project after empty update, got %v", updated.Project)
 	}
 	if updated.TopicKey != nil {
 		t.Fatalf("expected nil topic key after empty update")
 	}
 
-	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-q", Content: "alpha prompt", Project: "alpha"}); err != nil {
+	if err := s.CreateSession("s-alpha", "alpha", "/tmp/alpha"); err != nil {
+		t.Fatalf("create alpha session: %v", err)
+	}
+	if err := s.CreateSession("s-beta", "beta", "/tmp/beta"); err != nil {
+		t.Fatalf("create beta session: %v", err)
+	}
+	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-alpha", Content: "alpha prompt", Project: "alpha"}); err != nil {
 		t.Fatalf("add alpha prompt: %v", err)
 	}
-	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-q", Content: "beta prompt", Project: "beta"}); err != nil {
+	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-beta", Content: "beta prompt", Project: "beta"}); err != nil {
 		t.Fatalf("add beta prompt: %v", err)
 	}
 
@@ -2109,9 +2072,9 @@ func TestTimelineHandlesMissingSessionRecord(t *testing.T) {
 	}()
 
 	res, err := s.db.Exec(
-		`INSERT INTO observations (session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
-		"manual-save", "manual", "orphan", "orphan content", "mnemo", "project", hashNormalized("orphan content"),
+		`INSERT INTO observations (session_id, type, title, content, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
+		"manual-save", "manual", "orphan", "orphan content", "project", hashNormalized("orphan content"),
 	)
 	if err != nil {
 		t.Fatalf("insert orphan observation: %v", err)
@@ -2121,15 +2084,8 @@ func TestTimelineHandlesMissingSessionRecord(t *testing.T) {
 		t.Fatalf("last insert id: %v", err)
 	}
 
-	timeline, err := s.Timeline(obsID, 1, 1)
-	if err != nil {
-		t.Fatalf("timeline: %v", err)
-	}
-	if timeline.SessionInfo != nil {
-		t.Fatalf("expected nil session info for missing session, got %+v", timeline.SessionInfo)
-	}
-	if timeline.TotalInRange != 1 {
-		t.Fatalf("expected total in range=1, got %d", timeline.TotalInRange)
+	if _, err := s.Timeline(obsID, 1, 1); err == nil {
+		t.Fatalf("expected orphan observation to be invisible without a session")
 	}
 }
 
@@ -2139,10 +2095,8 @@ func TestMigratedStoreHasCanonicalSchemaObjects(t *testing.T) {
 		"sessions",
 		"observations",
 		"user_prompts",
-		"sync_chunks",
 		"sync_state",
 		"sync_mutations",
-		"sync_enrolled_projects",
 		"observation_tags",
 		"session_tags",
 		"projects",
@@ -2845,15 +2799,6 @@ func TestStoreUncoveredBranchesPushToHundred(t *testing.T) {
 		}
 	})
 
-	t.Run("closed database query errors", func(t *testing.T) {
-		s := newTestStore(t)
-		if err := s.Close(); err != nil {
-			t.Fatalf("close store: %v", err)
-		}
-		if _, err := s.GetSyncedChunks(); err == nil {
-			t.Fatalf("expected synced chunks query error")
-		}
-	})
 }
 
 // ─── Issue #25: Session collision regression tests ──────────────────────────
@@ -2956,520 +2901,8 @@ func TestTruncateUTF8(t *testing.T) {
 	}
 }
 
-// ─── Project Enrollment CRUD Tests ───────────────────────────────────────────
-
-func TestEnrollProjectBasic(t *testing.T) {
+func TestListAllPendingSyncMutationsDoesNotRequireProjectColumn(t *testing.T) {
 	s := newTestStore(t)
-
-	// Enroll a project.
-	if err := s.EnrollProject("mnemo"); err != nil {
-		t.Fatalf("enroll project: %v", err)
-	}
-
-	// Verify it shows up in the list.
-	projects, err := s.ListEnrolledProjects()
-	if err != nil {
-		t.Fatalf("list enrolled projects: %v", err)
-	}
-	if len(projects) != 1 {
-		t.Fatalf("expected 1 enrolled project, got %d", len(projects))
-	}
-	if projects[0].Project != "mnemo" {
-		t.Fatalf("expected project 'mnemo', got %q", projects[0].Project)
-	}
-	if projects[0].EnrolledAt == "" {
-		t.Fatal("expected enrolled_at to be set")
-	}
-
-	// Verify IsProjectEnrolled returns true.
-	enrolled, err := s.IsProjectEnrolled("mnemo")
-	if err != nil {
-		t.Fatalf("is project enrolled: %v", err)
-	}
-	if !enrolled {
-		t.Fatal("expected project to be enrolled")
-	}
-}
-
-func TestEnrollProjectIdempotent(t *testing.T) {
-	s := newTestStore(t)
-
-	// Enroll twice — should not error.
-	if err := s.EnrollProject("mnemo"); err != nil {
-		t.Fatalf("first enroll: %v", err)
-	}
-	if err := s.EnrollProject("mnemo"); err != nil {
-		t.Fatalf("second enroll (idempotent): %v", err)
-	}
-
-	// Should still be exactly one row.
-	projects, err := s.ListEnrolledProjects()
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	if len(projects) != 1 {
-		t.Fatalf("expected 1 enrolled project after double-enroll, got %d", len(projects))
-	}
-}
-
-func TestEnrollProjectBackfillsHistoricalMutations(t *testing.T) {
-	s := newTestStore(t)
-	if err := s.EnsureProject("legacy-proj", "legacy-proj"); err != nil {
-		t.Fatalf("ensure legacy project: %v", err)
-	}
-
-	if _, err := s.db.Exec(
-		`INSERT INTO sessions (id, project, directory, ended_at, summary) VALUES (?, ?, ?, datetime('now'), ?)`,
-		"legacy-session", "legacy-proj", "/tmp/legacy", "done",
-	); err != nil {
-		t.Fatalf("insert session: %v", err)
-	}
-
-	if _, err := s.db.Exec(
-		`INSERT INTO observations (sync_id, session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
-		"obs-legacy", "legacy-session", "decision", "Legacy obs", "Historical content", "legacy-proj", "project", hashNormalized("Historical content"),
-	); err != nil {
-		t.Fatalf("insert observation: %v", err)
-	}
-
-	if _, err := s.db.Exec(
-		`INSERT INTO user_prompts (sync_id, session_id, content, project) VALUES (?, ?, ?, ?)`,
-		"prompt-legacy", "legacy-session", "What happened before enterprise?", "legacy-proj",
-	); err != nil {
-		t.Fatalf("insert prompt: %v", err)
-	}
-
-	var before int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations`).Scan(&before); err != nil {
-		t.Fatalf("count mutations before enroll: %v", err)
-	}
-	if before != 0 {
-		t.Fatalf("expected 0 sync mutations before enroll, got %d", before)
-	}
-
-	if err := s.EnrollProject("legacy-proj"); err != nil {
-		t.Fatalf("enroll project: %v", err)
-	}
-
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 10)
-	if err != nil {
-		t.Fatalf("list pending: %v", err)
-	}
-	if len(mutations) != 3 {
-		t.Fatalf("expected 3 backfilled mutations, got %d", len(mutations))
-	}
-
-	expected := map[string]string{
-		SyncEntitySession:     "legacy-session",
-		SyncEntityObservation: "obs-legacy",
-		SyncEntityPrompt:      "prompt-legacy",
-	}
-	for _, mutation := range mutations {
-		entityKey, ok := expected[mutation.Entity]
-		if !ok {
-			t.Fatalf("unexpected mutation entity %q", mutation.Entity)
-		}
-		if mutation.EntityKey != entityKey {
-			t.Fatalf("expected entity_key %q for %s, got %q", entityKey, mutation.Entity, mutation.EntityKey)
-		}
-		if mutation.Project != "legacy-proj" {
-			t.Fatalf("expected project legacy-proj, got %q", mutation.Project)
-		}
-	}
-	state, err := s.GetSyncState(DefaultSyncTargetKey)
-	if err != nil {
-		t.Fatalf("get sync state: %v", err)
-	}
-	if state.LastEnqueuedSeq != 3 {
-		t.Fatalf("expected last_enqueued_seq 3 after backfill, got %d", state.LastEnqueuedSeq)
-	}
-}
-
-func TestEnrollProjectBackfillIsIdempotentAndSkipsExistingMutations(t *testing.T) {
-	s := newTestStore(t)
-	if err := s.EnsureProject("legacy-proj", "legacy-proj"); err != nil {
-		t.Fatalf("ensure legacy project: %v", err)
-	}
-
-	if _, err := s.db.Exec(
-		`INSERT INTO sessions (id, project, directory) VALUES (?, ?, ?)`,
-		"legacy-session", "legacy-proj", "/tmp/legacy",
-	); err != nil {
-		t.Fatalf("insert session: %v", err)
-	}
-
-	if _, err := s.db.Exec(
-		`INSERT INTO observations (sync_id, session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))`,
-		"obs-legacy", "legacy-session", "decision", "Legacy obs", "Historical content", "legacy-proj", "project", hashNormalized("Historical content"),
-	); err != nil {
-		t.Fatalf("insert observation: %v", err)
-	}
-
-	if _, err := s.db.Exec(
-		`INSERT INTO user_prompts (sync_id, session_id, content, project) VALUES (?, ?, ?, ?)`,
-		"prompt-legacy", "legacy-session", "Historical prompt", "legacy-proj",
-	); err != nil {
-		t.Fatalf("insert prompt: %v", err)
-	}
-
-	if _, err := s.db.Exec(
-		`INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		DefaultSyncTargetKey, SyncEntityObservation, "obs-legacy", SyncOpUpsert, `{"sync_id":"obs-legacy","session_id":"legacy-session","project":"legacy-proj"}`, SyncSourceLocal, "legacy-proj",
-	); err != nil {
-		t.Fatalf("insert existing mutation: %v", err)
-	}
-
-	if err := s.EnrollProject("legacy-proj"); err != nil {
-		t.Fatalf("first enroll: %v", err)
-	}
-
-	var afterFirst int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations`).Scan(&afterFirst); err != nil {
-		t.Fatalf("count after first enroll: %v", err)
-	}
-	if afterFirst != 3 {
-		t.Fatalf("expected 3 total mutations after first enroll, got %d", afterFirst)
-	}
-
-	var observationMutations int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations WHERE entity = ? AND entity_key = ?`, SyncEntityObservation, "obs-legacy").Scan(&observationMutations); err != nil {
-		t.Fatalf("count observation mutations: %v", err)
-	}
-	if observationMutations != 1 {
-		t.Fatalf("expected existing observation mutation to remain single, got %d rows", observationMutations)
-	}
-
-	if err := s.EnrollProject("legacy-proj"); err != nil {
-		t.Fatalf("second enroll: %v", err)
-	}
-
-	var afterSecond int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations`).Scan(&afterSecond); err != nil {
-		t.Fatalf("count after second enroll: %v", err)
-	}
-	if afterSecond != afterFirst {
-		t.Fatalf("expected no duplicate backfill on re-enroll, got %d mutations after second enroll vs %d after first", afterSecond, afterFirst)
-	}
-}
-
-func TestNewRepairsAlreadyEnrolledProjectsMissingHistoricalSyncMutations(t *testing.T) {
-	dataDir := t.TempDir()
-	dbPath := filepath.Join(dataDir, "memory.db")
-
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatalf("open legacy db: %v", err)
-	}
-
-	obsHash := hashNormalized("Historical content")
-	_, err = db.Exec(`
-		CREATE TABLE sessions (
-			id TEXT PRIMARY KEY,
-			project TEXT NOT NULL,
-			directory TEXT NOT NULL,
-			started_at TEXT NOT NULL DEFAULT (datetime('now')),
-			ended_at TEXT,
-			summary TEXT
-		);
-		CREATE TABLE observations (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			sync_id TEXT,
-			session_id TEXT NOT NULL,
-			type TEXT NOT NULL,
-			title TEXT NOT NULL,
-			content TEXT NOT NULL,
-			tool_name TEXT,
-			project TEXT,
-			scope TEXT NOT NULL DEFAULT 'project',
-			topic_key TEXT,
-			normalized_hash TEXT,
-			revision_count INTEGER NOT NULL DEFAULT 1,
-			duplicate_count INTEGER NOT NULL DEFAULT 1,
-			last_seen_at TEXT,
-			created_at TEXT NOT NULL DEFAULT (datetime('now')),
-			updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-			deleted_at TEXT,
-			FOREIGN KEY (session_id) REFERENCES sessions(id)
-		);
-		CREATE TABLE user_prompts (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			sync_id TEXT,
-			session_id TEXT NOT NULL,
-			content TEXT NOT NULL,
-			project TEXT,
-			created_at TEXT NOT NULL DEFAULT (datetime('now')),
-			FOREIGN KEY (session_id) REFERENCES sessions(id)
-		);
-		CREATE TABLE sync_state (
-			target_key TEXT PRIMARY KEY,
-			lifecycle TEXT NOT NULL DEFAULT 'idle',
-			last_enqueued_seq INTEGER NOT NULL DEFAULT 0,
-			last_acked_seq INTEGER NOT NULL DEFAULT 0,
-			last_pulled_seq INTEGER NOT NULL DEFAULT 0,
-			consecutive_failures INTEGER NOT NULL DEFAULT 0,
-			backoff_until TEXT,
-			lease_owner TEXT,
-			lease_until TEXT,
-			last_error TEXT,
-			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-		);
-		CREATE TABLE sync_mutations (
-			seq INTEGER PRIMARY KEY AUTOINCREMENT,
-			target_key TEXT NOT NULL,
-			entity TEXT NOT NULL,
-			entity_key TEXT NOT NULL,
-			op TEXT NOT NULL,
-			payload TEXT NOT NULL,
-			source TEXT NOT NULL DEFAULT 'local',
-			occurred_at TEXT NOT NULL DEFAULT (datetime('now')),
-			acked_at TEXT,
-			project TEXT NOT NULL DEFAULT '',
-			FOREIGN KEY (target_key) REFERENCES sync_state(target_key)
-		);
-		CREATE TABLE sync_enrolled_projects (
-			project TEXT PRIMARY KEY,
-			enrolled_at TEXT NOT NULL DEFAULT (datetime('now'))
-		);
-		INSERT INTO sessions (id, project, directory, summary) VALUES ('legacy-session', 'legacy-proj', '/tmp/legacy', 'done');
-		INSERT INTO observations (sync_id, session_id, type, title, content, project, scope, normalized_hash, revision_count, duplicate_count, last_seen_at, updated_at)
-		VALUES ('obs-legacy', 'legacy-session', 'decision', 'Legacy obs', 'Historical content', 'legacy-proj', 'project', ?, 1, 1, datetime('now'), datetime('now'));
-		INSERT INTO user_prompts (sync_id, session_id, content, project) VALUES ('prompt-legacy', 'legacy-session', 'Historical prompt', 'legacy-proj');
-		INSERT INTO sync_state (target_key, lifecycle, updated_at) VALUES (?, 'idle', datetime('now'));
-		INSERT INTO sync_enrolled_projects (project) VALUES ('legacy-proj');
-	`, obsHash, DefaultSyncTargetKey)
-	if err != nil {
-		_ = db.Close()
-		t.Fatalf("seed legacy db: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close legacy db: %v", err)
-	}
-
-	cfg := mustDefaultConfig(t)
-	cfg.DataDir = dataDir
-
-	s, err := New(cfg)
-	if err != nil {
-		t.Fatalf("new store after enrolled legacy state: %v", err)
-	}
-
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 10)
-	if err != nil {
-		_ = s.Close()
-		t.Fatalf("list pending after repair: %v", err)
-	}
-	if len(mutations) != 3 {
-		_ = s.Close()
-		t.Fatalf("expected 3 repaired mutations, got %d", len(mutations))
-	}
-
-	state, err := s.GetSyncState(DefaultSyncTargetKey)
-	if err != nil {
-		_ = s.Close()
-		t.Fatalf("get sync state after repair: %v", err)
-	}
-	if state.LastEnqueuedSeq != 3 {
-		_ = s.Close()
-		t.Fatalf("expected last_enqueued_seq 3 after automatic repair, got %d", state.LastEnqueuedSeq)
-	}
-
-	if err := s.Close(); err != nil {
-		t.Fatalf("close repaired store: %v", err)
-	}
-
-	s, err = New(cfg)
-	if err != nil {
-		t.Fatalf("reopen repaired store: %v", err)
-	}
-	t.Cleanup(func() { _ = s.Close() })
-
-	var count int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations`).Scan(&count); err != nil {
-		t.Fatalf("count repaired mutations after reopen: %v", err)
-	}
-	if count != 3 {
-		t.Fatalf("expected repair to stay idempotent across reopen, got %d sync mutations", count)
-	}
-}
-
-func TestEnrollProjectEmptyNameReturnsError(t *testing.T) {
-	s := newTestStore(t)
-
-	if err := s.EnrollProject(""); err == nil {
-		t.Fatal("expected error when enrolling empty project name")
-	}
-}
-
-func TestUnenrollProjectBasic(t *testing.T) {
-	s := newTestStore(t)
-
-	if err := s.EnrollProject("mnemo"); err != nil {
-		t.Fatalf("enroll: %v", err)
-	}
-
-	// Unenroll.
-	if err := s.UnenrollProject("mnemo"); err != nil {
-		t.Fatalf("unenroll: %v", err)
-	}
-
-	// Should be gone.
-	enrolled, err := s.IsProjectEnrolled("mnemo")
-	if err != nil {
-		t.Fatalf("is enrolled after unenroll: %v", err)
-	}
-	if enrolled {
-		t.Fatal("expected project to be unenrolled")
-	}
-
-	projects, err := s.ListEnrolledProjects()
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	if len(projects) != 0 {
-		t.Fatalf("expected 0 enrolled projects after unenroll, got %d", len(projects))
-	}
-}
-
-func TestUnenrollProjectIdempotent(t *testing.T) {
-	s := newTestStore(t)
-
-	// Unenroll a project that was never enrolled — should not error.
-	if err := s.UnenrollProject("nonexistent"); err != nil {
-		t.Fatalf("unenroll non-enrolled project should be idempotent: %v", err)
-	}
-}
-
-func TestUnenrollProjectEmptyNameReturnsError(t *testing.T) {
-	s := newTestStore(t)
-
-	if err := s.UnenrollProject(""); err == nil {
-		t.Fatal("expected error when unenrolling empty project name")
-	}
-}
-
-func TestIsProjectEnrolledReturnsFalseForUnknown(t *testing.T) {
-	s := newTestStore(t)
-
-	enrolled, err := s.IsProjectEnrolled("unknown-project")
-	if err != nil {
-		t.Fatalf("is enrolled: %v", err)
-	}
-	if enrolled {
-		t.Fatal("expected false for unknown project")
-	}
-}
-
-func TestListEnrolledProjectsEmpty(t *testing.T) {
-	s := newTestStore(t)
-
-	projects, err := s.ListEnrolledProjects()
-	if err != nil {
-		t.Fatalf("list enrolled projects: %v", err)
-	}
-	if projects != nil {
-		t.Fatalf("expected nil for empty list, got %v", projects)
-	}
-}
-
-func TestListEnrolledProjectsAlphabeticalOrder(t *testing.T) {
-	s := newTestStore(t)
-
-	// Enroll in non-alphabetical order.
-	for _, p := range []string{"zebra", "alpha", "mango"} {
-		if err := s.EnrollProject(p); err != nil {
-			t.Fatalf("enroll %q: %v", p, err)
-		}
-	}
-
-	projects, err := s.ListEnrolledProjects()
-	if err != nil {
-		t.Fatalf("list: %v", err)
-	}
-	if len(projects) != 3 {
-		t.Fatalf("expected 3 projects, got %d", len(projects))
-	}
-	expected := []string{"alpha", "mango", "zebra"}
-	for i, ep := range projects {
-		if ep.Project != expected[i] {
-			t.Fatalf("position %d: expected %q, got %q", i, expected[i], ep.Project)
-		}
-	}
-}
-
-func TestSyncMutationProjectColumnExists(t *testing.T) {
-	s := newTestStore(t)
-	if err := s.EnsureProject("myproj", "myproj"); err != nil {
-		t.Fatalf("ensure project: %v", err)
-	}
-
-	// Verify the project column exists on sync_mutations by inserting a row.
-	_, err := s.db.Exec(
-		`INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		DefaultSyncTargetKey, "session", "test-key", SyncOpUpsert, `{"project":"myproj"}`, SyncSourceLocal, "myproj",
-	)
-	if err != nil {
-		t.Fatalf("insert sync_mutation with project: %v", err)
-	}
-
-	// Read it back and verify project is populated.
-	var project string
-	if err := s.db.QueryRow(`SELECT project FROM sync_mutations WHERE entity_key = ?`, "test-key").Scan(&project); err != nil {
-		t.Fatalf("scan project: %v", err)
-	}
-	if project != "myproj" {
-		t.Fatalf("expected project 'myproj', got %q", project)
-	}
-}
-
-func TestSyncMutationProjectBackfill(t *testing.T) {
-	s := newTestStore(t)
-	if err := s.EnsureProject("backfilled", "backfilled"); err != nil {
-		t.Fatalf("ensure backfilled project: %v", err)
-	}
-
-	// Insert a mutation that simulates a pre-migration row (project is null, but payload has it).
-	// The backfill runs during schema init, so we test it by inserting directly then re-running.
-	// Since the store already ran migrations, let's verify backfill logic by inserting a new row
-	// with empty project and manually running the backfill.
-	_, err := s.db.Exec(
-		`INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
-		 VALUES (?, ?, ?, ?, ?, ?, NULL)`,
-		DefaultSyncTargetKey, "observation", "backfill-key", SyncOpUpsert, `{"project":"backfilled"}`, SyncSourceLocal,
-	)
-	if err != nil {
-		t.Fatalf("insert: %v", err)
-	}
-
-	// Run the backfill manually.
-	_, err = s.db.Exec(`
-		UPDATE sync_mutations
-		SET project = json_extract(payload, '$.project')
-		WHERE project IS NULL AND payload != ''
-	`)
-	if err != nil {
-		t.Fatalf("backfill: %v", err)
-	}
-
-	var project string
-	if err := s.db.QueryRow(`SELECT project FROM sync_mutations WHERE entity_key = ?`, "backfill-key").Scan(&project); err != nil {
-		t.Fatalf("scan: %v", err)
-	}
-	if project != "backfilled" {
-		t.Fatalf("expected backfilled project 'backfilled', got %q", project)
-	}
-}
-
-func TestListPendingSyncMutationsIncludesProject(t *testing.T) {
-	s := newTestStore(t)
-
-	// Enroll the project so mutations are visible in ListPendingSyncMutations.
-	if err := s.EnrollProject("my-project"); err != nil {
-		t.Fatalf("enroll: %v", err)
-	}
 
 	if err := s.CreateSession("proj-session", "my-project", "/tmp"); err != nil {
 		t.Fatalf("create session: %v", err)
@@ -3487,7 +2920,7 @@ func TestListPendingSyncMutationsIncludesProject(t *testing.T) {
 		t.Fatalf("add observation: %v", err)
 	}
 
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 10)
+	mutations, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 10)
 	if err != nil {
 		t.Fatalf("list pending: %v", err)
 	}
@@ -3495,410 +2928,6 @@ func TestListPendingSyncMutationsIncludesProject(t *testing.T) {
 	// There should be mutations (session create + observation create at minimum).
 	if len(mutations) == 0 {
 		t.Fatal("expected at least one pending mutation")
-	}
-
-	// Phase 3: Verify the Project field is populated at enqueue time.
-	foundProject := false
-	for _, m := range mutations {
-		if m.Project == "my-project" {
-			foundProject = true
-			break
-		}
-	}
-	if !foundProject {
-		t.Fatal("expected at least one mutation with project='my-project'")
-	}
-}
-
-// ─── Phase 3: extractProjectFromPayload ──────────────────────────────────────
-
-func TestExtractProjectFromSessionPayload(t *testing.T) {
-	p := syncSessionPayload{ID: "s1", Project: "acme"}
-	got := extractProjectFromPayload(p)
-	if got != "acme" {
-		t.Fatalf("expected 'acme', got %q", got)
-	}
-}
-
-func TestExtractProjectFromObservationPayload(t *testing.T) {
-	proj := "obs-project"
-	p := syncObservationPayload{SyncID: "obs-1", Project: &proj}
-	got := extractProjectFromPayload(p)
-	if got != "obs-project" {
-		t.Fatalf("expected 'obs-project', got %q", got)
-	}
-}
-
-func TestExtractProjectFromObservationPayloadNil(t *testing.T) {
-	p := syncObservationPayload{SyncID: "obs-1", Project: nil}
-	got := extractProjectFromPayload(p)
-	if got != "" {
-		t.Fatalf("expected empty string, got %q", got)
-	}
-}
-
-func TestExtractProjectFromPromptPayload(t *testing.T) {
-	proj := "prompt-project"
-	p := syncPromptPayload{SyncID: "p1", Project: &proj}
-	got := extractProjectFromPayload(p)
-	if got != "prompt-project" {
-		t.Fatalf("expected 'prompt-project', got %q", got)
-	}
-}
-
-func TestExtractProjectFromPromptPayloadNil(t *testing.T) {
-	p := syncPromptPayload{SyncID: "p1", Project: nil}
-	got := extractProjectFromPayload(p)
-	if got != "" {
-		t.Fatalf("expected empty string, got %q", got)
-	}
-}
-
-func TestExtractProjectFromUnknownPayloadFallback(t *testing.T) {
-	// Unknown struct with a project field — uses JSON fallback.
-	p := struct {
-		Project string `json:"project"`
-		Other   string `json:"other"`
-	}{Project: "fallback-proj", Other: "x"}
-	got := extractProjectFromPayload(p)
-	if got != "fallback-proj" {
-		t.Fatalf("expected 'fallback-proj', got %q", got)
-	}
-}
-
-func TestExtractProjectFromPayloadWithoutProjectField(t *testing.T) {
-	// Unknown struct without a project field — returns empty.
-	p := struct {
-		Name string `json:"name"`
-	}{Name: "test"}
-	got := extractProjectFromPayload(p)
-	if got != "" {
-		t.Fatalf("expected empty string, got %q", got)
-	}
-}
-
-// ─── Phase 3: enqueueSyncMutationTx populates project column ────────────────
-
-func TestEnqueueSyncMutationPopulatesProjectFromSessionPayload(t *testing.T) {
-	s := newTestStore(t)
-	if err := s.CreateSession("enq-session", "enqueued-project", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-
-	// CreateSession enqueues a sync mutation internally. Check the project column.
-	var project string
-	err := s.db.QueryRow(
-		`SELECT project FROM sync_mutations WHERE entity = ? AND entity_key = ?`,
-		SyncEntitySession, "enq-session",
-	).Scan(&project)
-	if err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if project != "enqueued-project" {
-		t.Fatalf("expected project='enqueued-project', got %q", project)
-	}
-}
-
-func TestEnqueueSyncMutationPopulatesProjectFromObservationPayload(t *testing.T) {
-	s := newTestStore(t)
-	if err := s.CreateSession("obs-enq", "obs-proj", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-
-	_, err := s.AddObservation(AddObservationParams{
-		SessionID: "obs-enq",
-		Type:      "decision",
-		Title:     "Test",
-		Content:   "Content",
-		Project:   "obs-proj",
-	})
-	if err != nil {
-		t.Fatalf("add observation: %v", err)
-	}
-
-	// Check the observation mutation's project column.
-	var project string
-	err = s.db.QueryRow(
-		`SELECT project FROM sync_mutations WHERE entity = ? ORDER BY seq DESC LIMIT 1`,
-		SyncEntityObservation,
-	).Scan(&project)
-	if err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if project != "obs-proj" {
-		t.Fatalf("expected project='obs-proj', got %q", project)
-	}
-}
-
-func TestEnqueueSyncMutationPopulatesProjectFromPromptPayload(t *testing.T) {
-	s := newTestStore(t)
-	if err := s.CreateSession("prompt-enq", "prompt-proj", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-
-	_, err := s.AddPrompt(AddPromptParams{
-		SessionID: "prompt-enq",
-		Content:   "What did we do?",
-		Project:   "prompt-proj",
-	})
-	if err != nil {
-		t.Fatalf("add prompt: %v", err)
-	}
-
-	var project string
-	err = s.db.QueryRow(
-		`SELECT project FROM sync_mutations WHERE entity = ? ORDER BY seq DESC LIMIT 1`,
-		SyncEntityPrompt,
-	).Scan(&project)
-	if err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	if project != "prompt-proj" {
-		t.Fatalf("expected project='prompt-proj', got %q", project)
-	}
-}
-
-// ─── Phase 4: ListPendingSyncMutations enrollment filtering ──────────────────
-
-func TestListPendingFiltersNonEnrolledProjects(t *testing.T) {
-	s := newTestStore(t)
-
-	if err := s.CreateSession("s-enrolled", "enrolled-proj", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-	if err := s.CreateSession("s-not-enrolled", "other-proj", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-
-	// Enroll only "enrolled-proj".
-	if err := s.EnrollProject("enrolled-proj"); err != nil {
-		t.Fatalf("enroll: %v", err)
-	}
-
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 100)
-	if err != nil {
-		t.Fatalf("list pending: %v", err)
-	}
-
-	// Only enrolled-proj mutations should appear.
-	for _, m := range mutations {
-		if m.Project == "other-proj" {
-			t.Fatalf("non-enrolled project 'other-proj' should not appear in pending mutations")
-		}
-	}
-
-	foundEnrolled := false
-	for _, m := range mutations {
-		if m.Project == "enrolled-proj" {
-			foundEnrolled = true
-			break
-		}
-	}
-	if !foundEnrolled {
-		t.Fatal("expected enrolled-proj mutations to appear")
-	}
-}
-
-func TestListPendingReturnsNoMutationsWhenNoneEnrolled(t *testing.T) {
-	s := newTestStore(t)
-
-	if err := s.CreateSession("s-no-enroll", "some-proj", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 100)
-	if err != nil {
-		t.Fatalf("list pending: %v", err)
-	}
-
-	// No projects enrolled → no mutations (all have project != '').
-	if len(mutations) != 0 {
-		t.Fatalf("expected 0 mutations when no projects enrolled, got %d", len(mutations))
-	}
-}
-
-// ─── Phase 4: SkipAckNonEnrolledMutations ────────────────────────────────────
-
-func TestSkipAckNonEnrolledMutationsBasic(t *testing.T) {
-	s := newTestStore(t)
-
-	if err := s.CreateSession("skip-session", "skip-proj", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-
-	// Do NOT enroll "skip-proj" → mutations should be skip-acked.
-	skipped, err := s.SkipAckNonEnrolledMutations(DefaultSyncTargetKey)
-	if err != nil {
-		t.Fatalf("skip-ack: %v", err)
-	}
-	if skipped == 0 {
-		t.Fatal("expected at least one mutation to be skip-acked")
-	}
-
-	// After skip-ack, there should be no pending mutations left.
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 100)
-	if err != nil {
-		t.Fatalf("list pending: %v", err)
-	}
-	if len(mutations) != 0 {
-		t.Fatalf("expected 0 pending mutations after skip-ack, got %d", len(mutations))
-	}
-}
-
-func TestSkipAckPreservesEnrolledProjectMutations(t *testing.T) {
-	s := newTestStore(t)
-
-	if err := s.EnrollProject("enrolled"); err != nil {
-		t.Fatalf("enroll: %v", err)
-	}
-
-	if err := s.CreateSession("s-enrolled", "enrolled", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-	if err := s.CreateSession("s-not-enrolled", "not-enrolled", "/tmp"); err != nil {
-		t.Fatalf("create session: %v", err)
-	}
-
-	// Count total pending before skip-ack.
-	var totalBefore int
-	_ = s.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations WHERE acked_at IS NULL`).Scan(&totalBefore)
-
-	skipped, err := s.SkipAckNonEnrolledMutations(DefaultSyncTargetKey)
-	if err != nil {
-		t.Fatalf("skip-ack: %v", err)
-	}
-	if skipped == 0 {
-		t.Fatal("expected at least one mutation to be skip-acked for 'not-enrolled'")
-	}
-
-	// Remaining pending should be only "enrolled" mutations.
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 100)
-	if err != nil {
-		t.Fatalf("list pending: %v", err)
-	}
-	for _, m := range mutations {
-		if m.Project == "not-enrolled" {
-			t.Fatal("skip-acked mutation still appears as pending")
-		}
-	}
-	if len(mutations) == 0 {
-		t.Fatal("expected enrolled-project mutations to remain")
-	}
-}
-
-// ─── Phase 5: Projectless mutations always sync ─────────────────────────────
-
-func TestProjectlessMutationsAlwaysSync(t *testing.T) {
-	s := newTestStore(t)
-
-	if _, err := s.db.Exec(
-		`INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
-		 VALUES (?, ?, ?, ?, ?, ?, NULL)`,
-		DefaultSyncTargetKey, SyncEntityObservation, "global-observation", SyncOpUpsert, `{}`, SyncSourceLocal,
-	); err != nil {
-		t.Fatalf("insert projectless mutation: %v", err)
-	}
-
-	// No projects enrolled, but projectless mutations should still appear.
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 100)
-	if err != nil {
-		t.Fatalf("list pending: %v", err)
-	}
-
-	if len(mutations) == 0 {
-		t.Fatal("expected empty-project mutations to always sync regardless of enrollment")
-	}
-
-	// Verify they are returned as project = ''.
-	for _, m := range mutations {
-		if m.Project != "" {
-			t.Fatalf("expected empty project, got %q", m.Project)
-		}
-	}
-}
-
-func TestSkipAckDoesNotAffectProjectlessMutations(t *testing.T) {
-	s := newTestStore(t)
-
-	if _, err := s.db.Exec(
-		`INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
-		 VALUES (?, ?, ?, ?, ?, ?, NULL)`,
-		DefaultSyncTargetKey, SyncEntityObservation, "global-observation-2", SyncOpUpsert, `{}`, SyncSourceLocal,
-	); err != nil {
-		t.Fatalf("insert projectless mutation: %v", err)
-	}
-
-	// Count pending before skip-ack.
-	beforeMutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 100)
-	if err != nil {
-		t.Fatalf("list pending: %v", err)
-	}
-	beforeCount := len(beforeMutations)
-
-	// Skip-ack should not affect empty-project mutations.
-	skipped, err := s.SkipAckNonEnrolledMutations(DefaultSyncTargetKey)
-	if err != nil {
-		t.Fatalf("skip-ack: %v", err)
-	}
-	if skipped != 0 {
-		t.Fatalf("expected 0 mutations to be skip-acked (all projectless), got %d", skipped)
-	}
-
-	// Verify count unchanged.
-	afterMutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 100)
-	if err != nil {
-		t.Fatalf("list pending: %v", err)
-	}
-	if len(afterMutations) != beforeCount {
-		t.Fatalf("expected %d mutations after skip-ack, got %d", beforeCount, len(afterMutations))
-	}
-}
-
-func TestMixedEnrolledAndProjectlessMutations(t *testing.T) {
-	s := newTestStore(t)
-
-	if err := s.EnrollProject("enrolled-mix"); err != nil {
-		t.Fatalf("enroll: %v", err)
-	}
-
-	// Create sessions with different project states.
-	if err := s.CreateSession("mix-enrolled", "enrolled-mix", "/tmp"); err != nil {
-		t.Fatalf("create enrolled session: %v", err)
-	}
-	if _, err := s.db.Exec(
-		`INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, project)
-		 VALUES (?, ?, ?, ?, ?, ?, NULL)`,
-		DefaultSyncTargetKey, SyncEntityObservation, "mix-global", SyncOpUpsert, `{}`, SyncSourceLocal,
-	); err != nil {
-		t.Fatalf("insert projectless mutation: %v", err)
-	}
-	if err := s.CreateSession("mix-unenrolled", "unenrolled-mix", "/tmp"); err != nil {
-		t.Fatalf("create unenrolled session: %v", err)
-	}
-
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 100)
-	if err != nil {
-		t.Fatalf("list pending: %v", err)
-	}
-
-	// Should have enrolled-mix and projectless mutations, but NOT unenrolled-mix.
-	var hasEnrolled, hasGlobal bool
-	for _, m := range mutations {
-		if m.Project == "unenrolled-mix" {
-			t.Fatal("unenrolled project mutations should not appear")
-		}
-		if m.Project == "enrolled-mix" {
-			hasEnrolled = true
-		}
-		if m.Project == "" {
-			hasGlobal = true
-		}
-	}
-	if !hasEnrolled {
-		t.Fatal("expected enrolled-mix mutations to appear")
-	}
-	if !hasGlobal {
-		t.Fatal("expected empty-project (global) mutations to appear")
 	}
 }
 
@@ -4023,7 +3052,6 @@ func TestAddObservationWithTags(t *testing.T) {
 		Type:      "decision",
 		Title:     "use sqlite for storage",
 		Content:   "decided to use sqlite because it is embedded and requires no external process",
-		Project:   "mnemo",
 		Tags:      []string{"database", "architecture", "sqlite"},
 	})
 	if err != nil {
@@ -4059,7 +3087,6 @@ func TestAddObservationTagNormalization(t *testing.T) {
 		Type:      "decision",
 		Title:     "normalization test",
 		Content:   "tags should be normalized to lowercase with hyphens",
-		Project:   "mnemo",
 		Tags:      []string{"  Auth  ", "BACKEND", "some thing"},
 	})
 	if err != nil {
@@ -4095,7 +3122,6 @@ func TestUpdateObservationReplaceTags(t *testing.T) {
 		Type:      "decision",
 		Title:     "original tags",
 		Content:   "content with original tags",
-		Project:   "mnemo",
 		Tags:      []string{"alpha", "beta"},
 	})
 	if err != nil {
@@ -4139,7 +3165,6 @@ func TestUpdateObservationClearTags(t *testing.T) {
 		Type:      "decision",
 		Title:     "tags to be cleared",
 		Content:   "will have tags removed after update",
-		Project:   "mnemo",
 		Tags:      []string{"remove-me"},
 	})
 	if err != nil {
@@ -4173,7 +3198,6 @@ func TestUpdateObservationOmittedTagsPreserved(t *testing.T) {
 		Type:      "decision",
 		Title:     "preserve tags",
 		Content:   "tags should not change when Tags field is nil",
-		Project:   "mnemo",
 		Tags:      []string{"keep-me"},
 	})
 	if err != nil {
@@ -4209,7 +3233,6 @@ func TestSearchFilterByTags(t *testing.T) {
 		Type:      "decision",
 		Title:     "jwt authentication middleware",
 		Content:   "jwt middleware implemented for authenticated routes",
-		Project:   "mnemo",
 		Tags:      []string{"auth", "backend"},
 	})
 	if err != nil {
@@ -4221,7 +3244,6 @@ func TestSearchFilterByTags(t *testing.T) {
 		Type:      "decision",
 		Title:     "sqlite schema migrations",
 		Content:   "sqlite schema migration system applied",
-		Project:   "mnemo",
 		Tags:      []string{"database", "backend"},
 	})
 	if err != nil {
@@ -4260,7 +3282,6 @@ func TestSearchResultsHaveTags(t *testing.T) {
 		Type:      "decision",
 		Title:     "tagged memory observation",
 		Content:   "observation with tags for search result verification purpose",
-		Project:   "mnemo",
 		Tags:      []string{"verify", "search"},
 	})
 	if err != nil {
@@ -4289,7 +3310,6 @@ func TestRecentObservationsFilterByTags(t *testing.T) {
 		Type:      "decision",
 		Title:     "auth decision",
 		Content:   "auth content details",
-		Project:   "mnemo",
 		Tags:      []string{"auth"},
 	})
 	if err != nil {
@@ -4301,7 +3321,6 @@ func TestRecentObservationsFilterByTags(t *testing.T) {
 		Type:      "decision",
 		Title:     "perf decision",
 		Content:   "performance content details",
-		Project:   "mnemo",
 		Tags:      []string{"performance"},
 	})
 	if err != nil {
@@ -4407,7 +3426,6 @@ func TestObservationTagLimit(t *testing.T) {
 		Type:      "decision",
 		Title:     "tag limit test",
 		Content:   "test",
-		Project:   "mnemo",
 		Tags:      many,
 	})
 	if err != nil {
@@ -4451,7 +3469,6 @@ func TestBlockedTagsNotStored(t *testing.T) {
 		Type:      "decision",
 		Title:     "blocked tag test",
 		Content:   "test",
-		Project:   "mnemo",
 		Tags:      []string{"auth", "topic", "general", "backend"},
 	})
 	if err != nil {
@@ -4564,7 +3581,6 @@ func TestMergeTagsLegacyAlias(t *testing.T) {
 		Type:      "decision",
 		Title:     "legacy db obs",
 		Content:   "test",
-		Project:   "mnemo",
 		Tags:      []string{"backend"},
 	})
 	if err != nil {
@@ -4607,7 +3623,6 @@ func TestTopicKeyUpsertPreservesTags(t *testing.T) {
 		Type:      "architecture",
 		Title:     "auth model",
 		Content:   "initial auth design details",
-		Project:   "mnemo",
 		TopicKey:  "architecture/auth-model",
 		Tags:      []string{"auth", "architecture"},
 	})
@@ -4621,7 +3636,6 @@ func TestTopicKeyUpsertPreservesTags(t *testing.T) {
 		Type:      "architecture",
 		Title:     "auth model updated",
 		Content:   "revised auth design with jwt token",
-		Project:   "mnemo",
 		TopicKey:  "architecture/auth-model",
 		Tags:      []string{"auth", "jwt"},
 	})
@@ -4652,7 +3666,6 @@ func TestExportImportRoundTripPreservesTags(t *testing.T) {
 		Type:      "decision",
 		Title:     "exported with tags",
 		Content:   "this observation has tags that must survive export and import",
-		Project:   "mnemo",
 		Tags:      []string{"database", "auth", "backend"},
 	})
 	if err != nil {
@@ -4664,7 +3677,6 @@ func TestExportImportRoundTripPreservesTags(t *testing.T) {
 		Type:      "decision",
 		Title:     "exported without tags",
 		Content:   "this observation has no tags and should import cleanly",
-		Project:   "mnemo",
 	})
 	if err != nil {
 		t.Fatalf("AddObservation (no tags): %v", err)
@@ -4745,192 +3757,6 @@ func TestExportImportRoundTripPreservesTags(t *testing.T) {
 
 // ─── Sync + Tags ─────────────────────────────────────────────────────────────
 
-// ─── Sync + Tags ─────────────────────────────────────────────────────────────
-
-// enrollAndList enrolls project and returns pending mutations.
-func enrollAndList(t *testing.T, s *Store, project string) []SyncMutation {
-	t.Helper()
-	if err := s.EnrollProject(project); err != nil {
-		t.Fatalf("EnrollProject: %v", err)
-	}
-	mutations, err := s.ListPendingSyncMutations(DefaultSyncTargetKey, 50)
-	if err != nil {
-		t.Fatalf("ListPendingSyncMutations: %v", err)
-	}
-	return mutations
-}
-
-func findObsMutation(t *testing.T, mutations []SyncMutation, syncID string) SyncMutation {
-	t.Helper()
-	for _, m := range mutations {
-		if m.Entity != SyncEntityObservation {
-			continue
-		}
-		if syncID == "" {
-			return m
-		}
-		var p syncObservationPayload
-		if err := decodeSyncPayload([]byte(m.Payload), &p); err == nil && p.SyncID == syncID {
-			return m
-		}
-	}
-	t.Fatalf("observation mutation not found (syncID=%q)", syncID)
-	return SyncMutation{}
-}
-
-func TestSyncPayloadIncludesTags(t *testing.T) {
-	s := newTestStore(t)
-	newTestSession(t, s, "sess-sync-tags", "mnemo")
-
-	if _, err := s.AddObservation(AddObservationParams{
-		SessionID: "sess-sync-tags",
-		Type:      "decision",
-		Title:     "sync payload tags test",
-		Content:   "verifies that tags are serialized into the sync mutation payload",
-		Project:   "mnemo",
-		Tags:      []string{"auth", "backend"},
-	}); err != nil {
-		t.Fatalf("AddObservation: %v", err)
-	}
-
-	m := findObsMutation(t, enrollAndList(t, s, "mnemo"), "")
-
-	var payload syncObservationPayload
-	if err := decodeSyncPayload([]byte(m.Payload), &payload); err != nil {
-		t.Fatalf("decodeSyncPayload: %v", err)
-	}
-	if payload.Tags == nil {
-		t.Fatal("payload.Tags is nil — tags were not included in sync payload")
-	}
-	tagSet := make(map[string]bool)
-	for _, tag := range *payload.Tags {
-		tagSet[tag] = true
-	}
-	if !tagSet["auth"] || !tagSet["backend"] {
-		t.Errorf("expected tags [auth, backend] in payload, got: %v", *payload.Tags)
-	}
-}
-
-func TestSyncPayloadEmptyTagsForUntaggedObservation(t *testing.T) {
-	s := newTestStore(t)
-	newTestSession(t, s, "sess-sync-notags", "mnemo")
-
-	if _, err := s.AddObservation(AddObservationParams{
-		SessionID: "sess-sync-notags",
-		Type:      "decision",
-		Title:     "no tags observation",
-		Content:   "this observation has no tags at all anywhere",
-		Project:   "mnemo",
-	}); err != nil {
-		t.Fatalf("AddObservation: %v", err)
-	}
-
-	m := findObsMutation(t, enrollAndList(t, s, "mnemo"), "")
-
-	var payload syncObservationPayload
-	if err := decodeSyncPayload([]byte(m.Payload), &payload); err != nil {
-		t.Fatalf("decodeSyncPayload: %v", err)
-	}
-	if payload.Tags == nil {
-		t.Fatal("payload.Tags should be a non-nil empty slice, not nil")
-	}
-	if len(*payload.Tags) != 0 {
-		t.Errorf("expected empty tags, got: %v", *payload.Tags)
-	}
-}
-
-func TestApplyPulledMutationWithTagsPersistsTags(t *testing.T) {
-	src := newTestStore(t)
-	newTestSession(t, src, "sess-apply-tags", "mnemo")
-
-	if _, err := src.AddObservation(AddObservationParams{
-		SessionID: "sess-apply-tags",
-		Type:      "decision",
-		Title:     "observation to sync",
-		Content:   "content that will travel through sync with tags attached to it",
-		Project:   "mnemo",
-		Tags:      []string{"sync", "test"},
-	}); err != nil {
-		t.Fatalf("AddObservation: %v", err)
-	}
-
-	mutations := enrollAndList(t, src, "mnemo")
-
-	dst := newTestStore(t)
-	for _, m := range mutations {
-		if err := dst.ApplyPulledMutation(DefaultSyncTargetKey, m); err != nil {
-			t.Fatalf("ApplyPulledMutation: %v", err)
-		}
-	}
-
-	obs, err := dst.AllObservations("mnemo", "project", 10)
-	if err != nil {
-		t.Fatalf("AllObservations: %v", err)
-	}
-	if len(obs) == 0 {
-		t.Fatal("no observations in destination store after apply")
-	}
-	tagSet := make(map[string]bool)
-	for _, tag := range obs[0].Tags {
-		tagSet[tag] = true
-	}
-	if !tagSet["sync"] || !tagSet["test"] {
-		t.Errorf("expected tags [sync, test] after apply, got: %v", obs[0].Tags)
-	}
-}
-
-func TestApplyPulledMutationClearsTagsOnUpdate(t *testing.T) {
-	src := newTestStore(t)
-	newTestSession(t, src, "sess-clear-sync", "mnemo")
-
-	id, err := src.AddObservation(AddObservationParams{
-		SessionID: "sess-clear-sync",
-		Type:      "decision",
-		Title:     "will lose tags via sync update",
-		Content:   "initial content with tags that will be removed on next update",
-		Project:   "mnemo",
-		Tags:      []string{"old-tag"},
-	})
-	if err != nil {
-		t.Fatalf("AddObservation: %v", err)
-	}
-
-	origObs, err := src.GetObservation(id)
-	if err != nil {
-		t.Fatalf("GetObservation: %v", err)
-	}
-
-	emptyTags := []string{}
-	if _, err := src.UpdateObservation(id, UpdateObservationParams{Tags: &emptyTags}); err != nil {
-		t.Fatalf("UpdateObservation: %v", err)
-	}
-
-	mutations := enrollAndList(t, src, "mnemo")
-
-	// Find the last mutation for this observation (the update)
-	updateMutation := findObsMutation(t, mutations[len(mutations)-1:], origObs.SyncID)
-
-	dst := newTestStore(t)
-	// Apply all mutations in order (session + insert + update)
-	for _, m := range mutations {
-		if err := dst.ApplyPulledMutation(DefaultSyncTargetKey, m); err != nil {
-			t.Fatalf("ApplyPulledMutation (seq=%d): %v", m.Seq, err)
-		}
-	}
-	_ = updateMutation
-
-	dstObs, err := dst.AllObservations("mnemo", "project", 10)
-	if err != nil {
-		t.Fatalf("AllObservations: %v", err)
-	}
-	if len(dstObs) == 0 {
-		t.Fatal("no observations after apply")
-	}
-	if len(dstObs[0].Tags) != 0 {
-		t.Errorf("expected no tags after clear via sync, got: %v", dstObs[0].Tags)
-	}
-}
-
 func TestSetSessionTagsPersistsAndLoads(t *testing.T) {
 	s := newTestStore(t)
 	newTestSession(t, s, "sess-tag-session", "mnemo")
@@ -5006,48 +3832,6 @@ func TestSessionTagsExportImportRoundTrip(t *testing.T) {
 	}
 	if !tagSet2["feature"] || !tagSet2["sync"] {
 		t.Errorf("expected tags [feature, sync] after import, got: %v", sess.Tags)
-	}
-}
-
-func TestSessionTagsSyncPayloadIncludesTags(t *testing.T) {
-	s := newTestStore(t)
-	provenance := ProvenanceInput{AgentID: AgentCodex, SourceKindID: SourceMCP, ToolID: ToolMemSessionStart}
-	if err := s.CreateSessionWithProvenance("sess-sync-session-tags", "mnemo", "", provenance); err != nil {
-		t.Fatalf("CreateSessionWithProvenance: %v", err)
-	}
-
-	if err := s.SetSessionTags("sess-sync-session-tags", []string{"api", "refactor"}); err != nil {
-		t.Fatalf("SetSessionTags: %v", err)
-	}
-
-	mutations := enrollAndList(t, s, "mnemo")
-
-	var sessionMutation *SyncMutation
-	for i := range mutations {
-		if mutations[i].Entity == SyncEntitySession && mutations[i].EntityKey == "sess-sync-session-tags" {
-			sessionMutation = &mutations[i]
-		}
-	}
-	if sessionMutation == nil {
-		t.Fatal("no session mutation found")
-	}
-
-	var payload syncSessionPayload
-	if err := decodeSyncPayload([]byte(sessionMutation.Payload), &payload); err != nil {
-		t.Fatalf("decodeSyncPayload: %v", err)
-	}
-	if payload.Tags == nil {
-		t.Fatal("payload.Tags is nil — session tags not included in sync payload")
-	}
-	tagSet := make(map[string]bool)
-	for _, tag := range *payload.Tags {
-		tagSet[tag] = true
-	}
-	if !tagSet["api"] || !tagSet["refactor"] {
-		t.Errorf("expected tags [api, refactor] in session payload, got: %v", *payload.Tags)
-	}
-	if payload.Provenance == nil || payload.Provenance.AgentID != AgentCodex {
-		t.Fatalf("expected session provenance in tag sync payload, got %+v", payload.Provenance)
 	}
 }
 
@@ -5177,7 +3961,6 @@ func TestSearchPreferTagsRankFirst(t *testing.T) {
 		Type:      "decision",
 		Title:     "auth decision",
 		Content:   "some architecture note about auth and security concerns",
-		Project:   "mnemo",
 		Tags:      []string{"auth"},
 	}); err != nil {
 		t.Fatalf("AddObservation: %v", err)
@@ -5187,7 +3970,6 @@ func TestSearchPreferTagsRankFirst(t *testing.T) {
 		Type:      "decision",
 		Title:     "general decision",
 		Content:   "some architecture note about the system design",
-		Project:   "mnemo",
 	}); err != nil {
 		t.Fatalf("AddObservation: %v", err)
 	}
@@ -5230,7 +4012,6 @@ func TestRecentObservationsPreferTagsRankFirst(t *testing.T) {
 		Type:      "decision",
 		Title:     "tagged older",
 		Content:   "has auth tag",
-		Project:   "mnemo",
 		Tags:      []string{"auth"},
 	}); err != nil {
 		t.Fatalf("AddObservation: %v", err)
@@ -5240,7 +4021,6 @@ func TestRecentObservationsPreferTagsRankFirst(t *testing.T) {
 		Type:      "decision",
 		Title:     "untagged newer",
 		Content:   "no tags",
-		Project:   "mnemo",
 	}); err != nil {
 		t.Fatalf("AddObservation: %v", err)
 	}
@@ -5281,7 +4061,6 @@ func TestRecentObservationsTopicKeyBoost(t *testing.T) {
 		Type:      "decision",
 		Title:     "unrelated",
 		Content:   "no topic key",
-		Project:   "mnemo",
 	}); err != nil {
 		t.Fatalf("AddObservation: %v", err)
 	}
@@ -5290,7 +4069,6 @@ func TestRecentObservationsTopicKeyBoost(t *testing.T) {
 		Type:      "decision",
 		Title:     "auth jwt observation",
 		Content:   "has topic key",
-		Project:   "mnemo",
 		TopicKey:  "auth/jwt",
 	}); err != nil {
 		t.Fatalf("AddObservation: %v", err)
@@ -6225,7 +5003,7 @@ func TestBackfillAllSyncMutationsDoesNotRequireProjectEnrollment(t *testing.T) {
 		seen[m.Entity+":"+m.EntityKey] = true
 	}
 	if !seen[SyncEntitySession+":cloud-all-session"] || !seen[SyncEntityObservation+":"+obs.SyncID] {
-		t.Fatalf("expected session and observation backfill without enrollment, got %#v", mutations)
+	t.Fatalf("expected session and observation backfill from canonical rows, got %#v", mutations)
 	}
 
 	if err := s.BackfillAllSyncMutations(); err != nil {
@@ -6264,15 +5042,15 @@ func TestApplyPulledMutationPreventsBackfillEcho(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, SyncMutation{Seq: 1, TargetKey: DefaultSyncTargetKey, Entity: SyncEntitySession, EntityKey: "remote-cloud-session", Op: SyncOpUpsert, Payload: string(sessionJSON), Source: SyncSourceRemote, Project: "brain"}); err != nil {
+	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, SyncMutation{Seq: 1, TargetKey: DefaultSyncTargetKey, Entity: SyncEntitySession, EntityKey: "remote-cloud-session", Op: SyncOpUpsert, Payload: string(sessionJSON), Source: SyncSourceRemote}); err != nil {
 		t.Fatalf("ApplyPulledMutation session: %v", err)
 	}
-	obsPayload := syncObservationPayload{SyncID: "remote-cloud-obs", SessionID: "remote-cloud-session", Type: "decision", Title: "Remote", Content: "pulled", Project: &[]string{"brain"}[0], Scope: "project"}
+	obsPayload := syncObservationPayload{SyncID: "remote-cloud-obs", SessionID: "remote-cloud-session", Type: "decision", Title: "Remote", Content: "pulled", Scope: "project"}
 	obsJSON, err := json.Marshal(obsPayload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, SyncMutation{Seq: 2, TargetKey: DefaultSyncTargetKey, Entity: SyncEntityObservation, EntityKey: "remote-cloud-obs", Op: SyncOpUpsert, Payload: string(obsJSON), Source: SyncSourceRemote, Project: "brain"}); err != nil {
+	if err := s.ApplyPulledMutation(DefaultSyncTargetKey, SyncMutation{Seq: 2, TargetKey: DefaultSyncTargetKey, Entity: SyncEntityObservation, EntityKey: "remote-cloud-obs", Op: SyncOpUpsert, Payload: string(obsJSON), Source: SyncSourceRemote}); err != nil {
 		t.Fatalf("ApplyPulledMutation observation: %v", err)
 	}
 	if err := s.BackfillAllSyncMutations(); err != nil {
@@ -6282,8 +5060,10 @@ func TestApplyPulledMutationPreventsBackfillEcho(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAllPendingSyncMutations: %v", err)
 	}
-	if len(pending) != 0 {
-		t.Fatalf("remote-applied rows should not echo as pending local mutations: %#v", pending)
+	for _, mutation := range pending {
+		if mutation.Entity == SyncEntitySession || mutation.Entity == SyncEntityObservation {
+			t.Fatalf("remote-applied rows should not echo as pending local mutations: %#v", pending)
+		}
 	}
 }
 
@@ -6300,14 +5080,14 @@ func TestDeleteObservationSyncPayloadIncludesProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetObservation: %v", err)
 	}
-	if err := s.DeleteObservation(obsID, false); err != nil {
+	if err := s.DeleteObservation(obsID); err != nil {
 		t.Fatalf("DeleteObservation: %v", err)
 	}
-	var payloadProject, rowProject string
-	if err := s.db.QueryRow(`SELECT ifnull(json_extract(payload, '$.project'), ''), project FROM sync_mutations WHERE entity = ? AND op = ? AND entity_key = ? ORDER BY seq DESC LIMIT 1`, SyncEntityObservation, SyncOpDelete, obs.SyncID).Scan(&payloadProject, &rowProject); err != nil {
-		t.Fatalf("read delete mutation: %v", err)
+	var isDeleted int
+	if err := s.db.QueryRow(`SELECT ifnull(json_extract(payload, '$.is_deleted'), 0) FROM sync_mutations WHERE entity = ? AND op = ? AND entity_key = ? ORDER BY seq DESC LIMIT 1`, SyncEntityObservation, SyncOpUpsert, obs.SyncID).Scan(&isDeleted); err != nil {
+		t.Fatalf("read soft-delete mutation: %v", err)
 	}
-	if payloadProject != "brain" || rowProject != "brain" {
-		t.Fatalf("delete mutation project mismatch: payload=%q row=%q", payloadProject, rowProject)
+	if isDeleted != 1 {
+		t.Fatalf("expected soft-delete mutation to carry is_deleted=1, got %d", isDeleted)
 	}
 }

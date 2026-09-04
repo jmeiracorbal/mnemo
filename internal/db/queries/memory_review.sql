@@ -1,15 +1,17 @@
 -- name: ListMemoryReviewCandidates :many
-SELECT o.id, o.type, o.title, ifnull(o.project, '') AS project, o.scope, ifnull(o.topic_key, '') AS topic_key,
+SELECT o.id, o.type, o.title, s.project AS project, o.scope, ifnull(o.topic_key, '') AS topic_key,
        ifnull(o.normalized_hash, '') AS normalized_hash, o.created_at, o.updated_at, o.provenance_id,
        ifnull(r.state, '') AS review_state, ifnull(r.reason, '') AS review_reason, r.superseded_by,
        ifnull(r.reviewed_at, '') AS review_reviewed_at, ifnull(r.updated_at, '') AS review_updated_at
 FROM observations o
+JOIN sessions s ON s.id = o.session_id
 LEFT JOIN observation_reviews r ON r.observation_id = o.id
-WHERE o.deleted_at IS NULL
-  AND (sqlc.arg('project') = '' OR ifnull(o.project, '') = sqlc.arg('project'))
+WHERE o.is_deleted = 0
+  AND ifnull(r.is_deleted, 0) = 0
+  AND (sqlc.arg('project') = '' OR s.project = sqlc.arg('project'))
   AND (sqlc.arg('scope') = '' OR o.scope = sqlc.arg('scope'))
   AND (sqlc.arg('topic_key') = '' OR ifnull(o.topic_key, '') = sqlc.arg('topic_key'))
-ORDER BY ifnull(o.project, ''), o.scope, ifnull(o.topic_key, ''), lower(o.title), o.id;
+ORDER BY s.project, o.scope, ifnull(o.topic_key, ''), lower(o.title), o.id;
 
 -- name: UpsertMemoryReviewState :exec
 INSERT INTO observation_reviews (observation_id, state, reason, superseded_by, reviewed_at, updated_at)
@@ -22,12 +24,15 @@ ON CONFLICT(observation_id) DO UPDATE SET
   reason = excluded.reason,
   superseded_by = excluded.superseded_by,
   reviewed_at = excluded.reviewed_at,
+  is_deleted = 0,
   updated_at = datetime('now');
 
 -- name: ListObservationIDsByTopic :many
-SELECT id FROM observations
-WHERE deleted_at IS NULL
-  AND topic_key = sqlc.arg('topic_key')
-  AND (sqlc.arg('project') = '' OR ifnull(project, '') = sqlc.arg('project'))
-  AND (sqlc.arg('scope') = '' OR scope = sqlc.arg('scope'))
-ORDER BY id ASC;
+SELECT o.id
+FROM observations o
+JOIN sessions s ON s.id = o.session_id
+WHERE o.is_deleted = 0
+  AND o.topic_key = sqlc.arg('topic_key')
+  AND (sqlc.arg('project') = '' OR s.project = sqlc.arg('project'))
+  AND (sqlc.arg('scope') = '' OR o.scope = sqlc.arg('scope'))
+ORDER BY o.id ASC;

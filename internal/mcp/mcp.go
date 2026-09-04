@@ -368,9 +368,6 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 					mcp.Required(),
 					mcp.Description("Observation ID to delete"),
 				),
-				mcp.WithBoolean("hard_delete",
-					mcp.Description("Deprecated; hard deletion is rejected because cloud sync preserves decisions with logical deletion"),
-				),
 			),
 			handleDelete(s),
 		)
@@ -955,11 +952,7 @@ func handleDelete(s *store.Store) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("id is required"), nil
 		}
 
-		hardDelete := boolArg(req, "hard_delete", false)
-		if hardDelete {
-			return mcp.NewToolResultError("hard_delete is not supported; mnemo preserves decisions with logical deletion"), nil
-		}
-		if err := s.DeleteObservation(id, false); err != nil {
+		if err := s.DeleteObservation(id); err != nil {
 			return mcp.NewToolResultError("Failed to delete memory: " + err.Error()), nil
 		}
 
@@ -1458,14 +1451,6 @@ func intArg(req mcp.CallToolRequest, key string, defaultVal int) int {
 		return defaultVal
 	}
 	return int(v)
-}
-
-func boolArg(req mcp.CallToolRequest, key string, defaultVal bool) bool {
-	v, ok := req.GetArguments()[key].(bool)
-	if !ok {
-		return defaultVal
-	}
-	return v
 }
 
 func truncate(s string, max int) string {

@@ -13,10 +13,13 @@ import (
 const countObservationsForSessionProject = `-- name: CountObservationsForSessionProject :one
 SELECT COUNT(*)
 FROM observations o
+JOIN sessions os ON os.id = o.session_id
 JOIN sessions ss ON ss.id = ?1
-WHERE o.project = ss.project
+WHERE ss.is_deleted = 0
+  AND os.is_deleted = 0
+  AND os.project = ss.project
   AND o.created_at >= ss.started_at
-  AND o.deleted_at IS NULL
+  AND o.is_deleted = 0
 `
 
 func (q *Queries) CountObservationsForSessionProject(ctx context.Context, sessionID string) (int64, error) {
@@ -28,7 +31,7 @@ func (q *Queries) CountObservationsForSessionProject(ctx context.Context, sessio
 
 const countSessionObservations = `-- name: CountSessionObservations :one
 SELECT COUNT(*) FROM observations
-WHERE session_id = ? AND deleted_at IS NULL
+WHERE session_id = ? AND is_deleted = 0
 `
 
 func (q *Queries) CountSessionObservations(ctx context.Context, sessionID string) (int64, error) {
@@ -42,7 +45,7 @@ const countSessionObservationsByScope = `-- name: CountSessionObservationsByScop
 SELECT COUNT(*)
 FROM observations o
 WHERE o.session_id = ?1
-  AND o.deleted_at IS NULL
+  AND o.is_deleted = 0
   AND (?2 = '' OR o.scope = ?2)
 `
 
@@ -59,7 +62,7 @@ func (q *Queries) CountSessionObservationsByScope(ctx context.Context, arg Count
 }
 
 const deleteSessionTags = `-- name: DeleteSessionTags :exec
-DELETE FROM session_tags WHERE session_id = ?
+UPDATE session_tags SET is_deleted = 1 WHERE session_id = ?
 `
 
 func (q *Queries) DeleteSessionTags(ctx context.Context, sessionID string) error {
@@ -85,12 +88,22 @@ func (q *Queries) EndSession(ctx context.Context, arg EndSessionParams) error {
 
 const getSession = `-- name: GetSession :one
 SELECT id, project, directory, started_at, ended_at, summary, provenance_id
-FROM sessions WHERE id = ?
+FROM sessions WHERE id = ? AND is_deleted = 0
 `
 
-func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
+type GetSessionRow struct {
+	ID           string         `json:"id"`
+	Project      string         `json:"project"`
+	Directory    string         `json:"directory"`
+	StartedAt    string         `json:"started_at"`
+	EndedAt      sql.NullString `json:"ended_at"`
+	Summary      sql.NullString `json:"summary"`
+	ProvenanceID sql.NullInt64  `json:"provenance_id"`
+}
+
+func (q *Queries) GetSession(ctx context.Context, id string) (GetSessionRow, error) {
 	row := q.db.QueryRowContext(ctx, getSession, id)
-	var i Session
+	var i GetSessionRow
 	err := row.Scan(
 		&i.ID,
 		&i.Project,
@@ -104,7 +117,7 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 }
 
 const getSessionPayload = `-- name: GetSessionPayload :one
-SELECT project, directory, ended_at, summary, provenance_id FROM sessions WHERE id = ?
+SELECT project, directory, ended_at, summary, is_deleted, provenance_id FROM sessions WHERE id = ?
 `
 
 type GetSessionPayloadRow struct {
@@ -112,6 +125,7 @@ type GetSessionPayloadRow struct {
 	Directory    string         `json:"directory"`
 	EndedAt      sql.NullString `json:"ended_at"`
 	Summary      sql.NullString `json:"summary"`
+	IsDeleted    int64          `json:"is_deleted"`
 	ProvenanceID sql.NullInt64  `json:"provenance_id"`
 }
 
@@ -123,13 +137,15 @@ func (q *Queries) GetSessionPayload(ctx context.Context, id string) (GetSessionP
 		&i.Directory,
 		&i.EndedAt,
 		&i.Summary,
+		&i.IsDeleted,
 		&i.ProvenanceID,
 	)
 	return i, err
 }
 
 const insertSessionTag = `-- name: InsertSessionTag :exec
-INSERT OR IGNORE INTO session_tags (session_id, tag) VALUES (?, ?)
+INSERT INTO session_tags (session_id, tag, is_deleted) VALUES (?, ?, 0)
+ON CONFLICT(session_id, tag) DO UPDATE SET is_deleted = 0
 `
 
 type InsertSessionTagParams struct {
@@ -143,7 +159,7 @@ func (q *Queries) InsertSessionTag(ctx context.Context, arg InsertSessionTagPara
 }
 
 const listSessionTags = `-- name: ListSessionTags :many
-SELECT tag FROM session_tags WHERE session_id = ? ORDER BY tag
+SELECT tag FROM session_tags WHERE session_id = ? AND is_deleted = 0 ORDER BY tag
 `
 
 func (q *Queries) ListSessionTags(ctx context.Context, sessionID string) ([]string, error) {
@@ -173,8 +189,9 @@ const listSessions = `-- name: ListSessions :many
 SELECT s.id, s.project, s.started_at, s.ended_at, s.summary, s.provenance_id,
        COUNT(o.id) AS observation_count
 FROM sessions s
-LEFT JOIN observations o ON o.session_id = s.id AND o.deleted_at IS NULL
+LEFT JOIN observations o ON o.session_id = s.id AND o.is_deleted = 0
 WHERE (?1 = '' OR s.project = ?1)
+  AND s.is_deleted = 0
 GROUP BY s.id
 ORDER BY MAX(COALESCE(o.created_at, s.started_at)) DESC
 LIMIT ?2
@@ -232,6 +249,7 @@ VALUES (?, ?, ?, ?4)
 ON CONFLICT(id) DO UPDATE SET
   project = CASE WHEN sessions.project = '' THEN excluded.project ELSE sessions.project END,
   directory = CASE WHEN sessions.directory = '' THEN excluded.directory ELSE sessions.directory END,
+  is_deleted = 0,
   provenance_id = COALESCE(sessions.provenance_id, excluded.provenance_id)
 `
 
