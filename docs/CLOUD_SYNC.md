@@ -71,6 +71,11 @@ fresh or reset cloud database can be rebuilt without creating orphaned
 references. The queue and other local synchronization metadata can be lost and
 reconstructed without losing canonical data.
 
+Opening the store, including MCP startup, does not perform this full queue
+reconciliation. Push operations and explicit sync-status operations perform it
+when synchronization state needs to be rebuilt, keeping agent handshakes
+independent from the size of the local memory database.
+
 Flags available on `run`, `push`, and `pull`:
 
 ```
