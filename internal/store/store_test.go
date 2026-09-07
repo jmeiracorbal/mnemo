@@ -2907,6 +2907,40 @@ func TestTruncateUTF8(t *testing.T) {
 	}
 }
 
+func TestStoreStartupDoesNotRebuildSyncJournal(t *testing.T) {
+	cfg := mustDefaultConfig(t)
+	cfg.DataDir = t.TempDir()
+
+	first, err := New(cfg)
+	if err != nil {
+		t.Fatalf("open initial store: %v", err)
+	}
+	if err := first.CreateSession("startup-session", "startup-project", "/tmp/startup"); err != nil {
+		first.Close()
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := first.db.Exec(`DELETE FROM sync_mutations`); err != nil {
+		first.Close()
+		t.Fatalf("clear sync journal: %v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatalf("close initial store: %v", err)
+	}
+
+	second, err := New(cfg)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer second.Close()
+	var count int
+	if err := second.db.QueryRow(`SELECT COUNT(*) FROM sync_mutations`).Scan(&count); err != nil {
+		t.Fatalf("count sync mutations: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("store startup rebuilt %d sync mutations; sync operations should rebuild the journal explicitly", count)
+	}
+}
+
 func TestListAllPendingSyncMutationsDoesNotRequireProjectColumn(t *testing.T) {
 	s := newTestStore(t)
 
