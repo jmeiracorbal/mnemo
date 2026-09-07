@@ -49,10 +49,10 @@ mnemo setup cloud --non-interactive \
 ## Commands
 
 ```bash
-mnemo sync run          # push then pull (default sync action)
+mnemo sync run          # push then pull (backfills missing queue entries before push)
 mnemo sync push         # backfill all local data and upload pending mutations
 mnemo sync pull         # apply remote mutations locally
-mnemo sync status       # local state only; does not contact cloud
+mnemo sync status       # read-only local state; no cloud contact or queue backfill
 ```
 
 All write commands are idempotent. `sync run` skips rows whose `origin_id` equals this client's `client_id` while still advancing the local pull cursor. The pull cursor is a remote high-water mark, so gaps in visible cloud sequence numbers are valid when filtered rows exist.
@@ -72,9 +72,10 @@ references. The queue and other local synchronization metadata can be lost and
 reconstructed without losing canonical data.
 
 Opening the store, including MCP startup, does not perform this full queue
-reconciliation. Push operations and explicit sync-status operations perform it
-when synchronization state needs to be rebuilt, keeping agent handshakes
-independent from the size of the local memory database.
+reconciliation. Push operations (`sync push`, `sync run`, or MCP sync modes
+`push`/`run`) perform it when synchronization state needs to be rebuilt.
+The CLI and MCP status operations only read the local state and pending queue,
+keeping agent handshakes and status checks independent from queue rebuilding.
 
 Flags available on `run`, `push`, and `pull`:
 
