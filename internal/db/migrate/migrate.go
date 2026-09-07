@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	dbfiles "github.com/jmeiracorbal/mnemo/database"
@@ -205,7 +206,9 @@ func LoadMigrations() ([]Migration, error) {
 		}
 		migrations = append(migrations, Migration{Version: version, Name: strings.TrimSuffix(name, ".sql"), Checksum: checksum(content)})
 	}
-	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Version < migrations[j].Version })
+	sort.Slice(migrations, func(i, j int) bool {
+		return CompareMigrationVersions(migrations[i].Version, migrations[j].Version) < 0
+	})
 	if len(migrations) == 0 {
 		return nil, fmt.Errorf("no embedded migrations found")
 	}
@@ -327,7 +330,7 @@ func readApplied(db *sql.DB) ([]AppliedMigration, error) {
 	if !tableExists(db, "schema_migrations") {
 		return nil, nil
 	}
-	rows, err := db.Query(`SELECT version, name, checksum, dirty, applied_at FROM schema_migrations ORDER BY version`)
+	rows, err := db.Query(`SELECT version, name, checksum, dirty, applied_at FROM schema_migrations`)
 	if err != nil {
 		return nil, fmt.Errorf("read schema_migrations: %w", err)
 	}
@@ -342,7 +345,64 @@ func readApplied(db *sql.DB) ([]AppliedMigration, error) {
 		row.Dirty = dirty != 0
 		applied = append(applied, row)
 	}
+	sort.Slice(applied, func(i, j int) bool {
+		return CompareMigrationVersions(applied[i].Version, applied[j].Version) < 0
+	})
 	return applied, rows.Err()
+}
+
+// CompareMigrationVersions orders the numeric migration components. Bare
+// versions remain between their .0 and .1 successors, so a repair can be
+// inserted before an existing migration without renumbering history.
+func CompareMigrationVersions(a, b string) int {
+	aParts := migrationVersionParts(a)
+	bParts := migrationVersionParts(b)
+	limit := len(aParts)
+	if len(bParts) > limit {
+		limit = len(bParts)
+	}
+	for i := 0; i < limit; i++ {
+		av, bv := 0, 0
+		if i < len(aParts) {
+			av = aParts[i]
+		}
+		if i < len(bParts) {
+			bv = bParts[i]
+		}
+		if av != bv {
+			if av < bv {
+				return -1
+			}
+			return 1
+		}
+	}
+	if len(aParts) == len(bParts) {
+		return 0
+	}
+	// A bare version is the historical point between .0 and .1.
+	if len(aParts) == 1 && len(bParts) == 2 && bParts[1] == 0 {
+		return 1
+	}
+	if len(aParts) == 2 && aParts[1] == 0 && len(bParts) == 1 {
+		return -1
+	}
+	if len(aParts) < len(bParts) {
+		return -1
+	}
+	return 1
+}
+
+func migrationVersionParts(version string) []int {
+	parts := strings.Split(version, ".")
+	values := make([]int, len(parts))
+	for i, part := range parts {
+		value, err := strconv.Atoi(part)
+		if err != nil {
+			panic(fmt.Sprintf("invalid migration version %q: %v", version, err))
+		}
+		values[i] = value
+	}
+	return values
 }
 
 func ValidateCurrent(db *sql.DB) error {
@@ -381,7 +441,7 @@ type tableSpec struct {
 
 var createTablePattern = regexp.MustCompile(`(?is)CREATE\s+TABLE\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*?)\);`)
 var createObjectPattern = regexp.MustCompile(`(?is)CREATE\s+(?:UNIQUE\s+)?(?:VIRTUAL\s+TABLE|INDEX|TRIGGER)\s+([A-Za-z_][A-Za-z0-9_]*)\b`)
-var migrationFilePattern = regexp.MustCompile(`^(\d{4})-([a-z0-9][a-z0-9-]*\.sql)$`)
+var migrationFilePattern = regexp.MustCompile(`^(\d{4}(?:\.\d+)*)-([a-z0-9][a-z0-9-]*\.sql)$`)
 var sqliteIdentifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func parseSchemaSpec(sqlText string) schemaSpec {

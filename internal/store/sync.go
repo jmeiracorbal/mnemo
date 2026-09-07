@@ -230,7 +230,7 @@ func (s *Store) recordAppliedRemoteMutationTx(tx *sql.Tx, targetKey string, muta
 	res, err := s.execHook(tx, `
 		INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, occurred_at, acked_at)
 		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-		targetKey, mutation.Entity, mutation.EntityKey, mutation.Op, mutation.Payload, SyncSourceLocal)
+		targetKey, mutation.Entity, mutation.EntityKey, mutation.Op, mutation.Payload, SyncSourceRemote)
 	if err != nil {
 		return err
 	}
@@ -423,7 +423,7 @@ func (s *Store) BackfillAllSyncMutations() error {
 		}
 		// The canonical tables are the source of truth. The queue is deliberately
 		// reconstructed from every row, including soft-deleted rows.
-		for _, table := range []string{"projects", "sessions", "observations", "user_prompts", "observation_tags", "session_tags", "observation_reviews", "provenance_contexts", "agents", "tools", "models", "source_kinds", "mcp_clients"} {
+		for _, table := range []string{"projects", "agents", "tools", "models", "source_kinds", "mcp_clients", "provenance_contexts", "sessions", "observations", "user_prompts", "observation_tags", "session_tags", "observation_reviews"} {
 			if err := s.backfillCanonicalTableTx(tx, table); err != nil {
 				return err
 			}
@@ -565,20 +565,66 @@ func (s *Store) backfillCanonicalTableTx(tx *sql.Tx, table string) error {
 			}
 			payload = map[string]any{"id": key, "name": name, "version": version, "transport": transport, "is_deleted": int64ToBool(deleted)}
 		}
-		missing, err := s.queryItHook(tx, `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM sync_mutations WHERE target_key = ? AND entity = ? AND entity_key = ? AND source = ?)`, DefaultSyncTargetKey, syncEntityForTable(table), key, SyncSourceLocal)
+		encoded, err := json.Marshal(payload)
 		if err != nil {
 			return err
 		}
-		if missing.Next() {
-			_ = missing.Close()
+		matching, err := s.hasSyncMutationPayloadTx(tx, syncEntityForTable(table), key, string(encoded))
+		if err != nil {
+			return err
+		}
+		if !matching {
 			if err := s.enqueueSyncMutationTx(tx, syncEntityForTable(table), key, SyncOpUpsert, payload); err != nil {
 				return err
 			}
-		} else {
-			_ = missing.Close()
 		}
 	}
 	return rows.Err()
+}
+
+func (s *Store) hasSyncMutationPayloadTx(tx *sql.Tx, entity, entityKey, currentPayload string) (bool, error) {
+	rows, err := s.q.WithTx(tx).ListSyncMutationPayloads(context.Background(), dbgen.ListSyncMutationPayloadsParams{
+		TargetKey: DefaultSyncTargetKey,
+		Entity:    entity,
+		EntityKey: entityKey,
+	})
+	if err != nil {
+		return false, err
+	}
+	staleSeqs := make([]int64, 0)
+	for _, row := range rows {
+		if row.Source == SyncSourceRemote || equivalentJSONPayload(row.Payload, currentPayload) {
+			return true, nil
+		}
+		if row.Source == SyncSourceLocal && !row.AckedAt.Valid {
+			staleSeqs = append(staleSeqs, row.Seq)
+		}
+	}
+	for _, seq := range staleSeqs {
+		if err := s.q.WithTx(tx).AckMutationSeq(context.Background(), dbgen.AckMutationSeqParams{
+			TargetKey: DefaultSyncTargetKey,
+			Seq:       seq,
+		}); err != nil {
+			return false, err
+		}
+		if err := s.q.WithTx(tx).AdvanceSyncAckedSeq(context.Background(), dbgen.AdvanceSyncAckedSeqParams{
+			LastAckedSeq: seq,
+			TargetKey:    DefaultSyncTargetKey,
+		}); err != nil {
+			return false, err
+		}
+	}
+	return false, nil
+}
+
+func equivalentJSONPayload(left, right string) bool {
+	var leftValue, rightValue any
+	if json.Unmarshal([]byte(left), &leftValue) != nil || json.Unmarshal([]byte(right), &rightValue) != nil {
+		return left == right
+	}
+	leftCanonical, leftErr := json.Marshal(leftValue)
+	rightCanonical, rightErr := json.Marshal(rightValue)
+	return leftErr == nil && rightErr == nil && string(leftCanonical) == string(rightCanonical)
 }
 
 func syncEntityForTable(table string) string {
@@ -594,26 +640,28 @@ func (s *Store) ListAllPendingSyncMutations(targetKey string, limit int) ([]Sync
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.queryItHook(s.db, `
-		SELECT seq, target_key, entity, entity_key, op, payload, source, occurred_at, acked_at
-		FROM sync_mutations
-		WHERE target_key = ? AND acked_at IS NULL
-		ORDER BY seq ASC
-		LIMIT ?`, targetKey, limit)
+	rows, err := s.q.ListPendingSyncMutations(context.Background(), dbgen.ListPendingSyncMutationsParams{
+		TargetKey: targetKey,
+		Limit:     int64(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	mutations := make([]SyncMutation, 0)
-	for rows.Next() {
-		var mutation SyncMutation
-		if err := rows.Scan(&mutation.Seq, &mutation.TargetKey, &mutation.Entity, &mutation.EntityKey, &mutation.Op, &mutation.Payload, &mutation.Source, &mutation.OccurredAt, &mutation.AckedAt); err != nil {
-			return nil, err
-		}
-		mutations = append(mutations, mutation)
+	mutations := make([]SyncMutation, 0, len(rows))
+	for _, row := range rows {
+		mutations = append(mutations, SyncMutation{
+			Seq:        row.Seq,
+			TargetKey:  row.TargetKey,
+			Entity:     row.Entity,
+			EntityKey:  row.EntityKey,
+			Op:         row.Op,
+			Payload:    row.Payload,
+			Source:     row.Source,
+			OccurredAt: row.OccurredAt,
+			AckedAt:    nullablePtr(row.AckedAt),
+		})
 	}
-	return mutations, rows.Err()
+	return mutations, nil
 }
 
 // RecordPulledSeq advances the pull cursor without applying a payload. It is used
