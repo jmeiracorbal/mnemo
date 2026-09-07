@@ -7,7 +7,26 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
+
+const advanceSyncAckedSeq = `-- name: AdvanceSyncAckedSeq :exec
+UPDATE sync_state
+SET last_acked_seq = CASE WHEN last_acked_seq < ?1
+    THEN ?1 ELSE last_acked_seq END,
+    updated_at = datetime('now')
+WHERE target_key = ?2
+`
+
+type AdvanceSyncAckedSeqParams struct {
+	LastAckedSeq int64  `json:"last_acked_seq"`
+	TargetKey    string `json:"target_key"`
+}
+
+func (q *Queries) AdvanceSyncAckedSeq(ctx context.Context, arg AdvanceSyncAckedSeqParams) error {
+	_, err := q.db.ExecContext(ctx, advanceSyncAckedSeq, arg.LastAckedSeq, arg.TargetKey)
+	return err
+}
 
 const ensureSyncState = `-- name: EnsureSyncState :exec
 INSERT OR IGNORE INTO sync_state (target_key, sync_type_id, lifecycle, updated_at)
@@ -92,6 +111,114 @@ func (q *Queries) InsertSyncMutation(ctx context.Context, arg InsertSyncMutation
 	var seq int64
 	err := row.Scan(&seq)
 	return seq, err
+}
+
+const listPendingSyncMutations = `-- name: ListPendingSyncMutations :many
+SELECT seq, target_key, entity, entity_key, op, payload, source, occurred_at, acked_at
+FROM sync_mutations
+WHERE target_key = ? AND acked_at IS NULL
+ORDER BY CASE entity
+    WHEN 'project' THEN 10
+    WHEN 'agent' THEN 20
+    WHEN 'tool' THEN 20
+    WHEN 'model' THEN 20
+    WHEN 'source_kind' THEN 20
+    WHEN 'mcp_client' THEN 20
+    WHEN 'provenance_context' THEN 30
+    WHEN 'session' THEN 40
+    WHEN 'observation' THEN 50
+    WHEN 'user_prompt' THEN 50
+    WHEN 'session_tag' THEN 60
+    WHEN 'observation_tag' THEN 60
+    WHEN 'observation_review' THEN 60
+    ELSE 100
+END ASC, seq ASC
+LIMIT ?
+`
+
+type ListPendingSyncMutationsParams struct {
+	TargetKey string `json:"target_key"`
+	Limit     int64  `json:"limit"`
+}
+
+func (q *Queries) ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]SyncMutation, error) {
+	rows, err := q.db.QueryContext(ctx, listPendingSyncMutations, arg.TargetKey, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SyncMutation{}
+	for rows.Next() {
+		var i SyncMutation
+		if err := rows.Scan(
+			&i.Seq,
+			&i.TargetKey,
+			&i.Entity,
+			&i.EntityKey,
+			&i.Op,
+			&i.Payload,
+			&i.Source,
+			&i.OccurredAt,
+			&i.AckedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSyncMutationPayloads = `-- name: ListSyncMutationPayloads :many
+SELECT seq, source, payload, acked_at
+FROM sync_mutations
+WHERE target_key = ? AND entity = ? AND entity_key = ?
+`
+
+type ListSyncMutationPayloadsParams struct {
+	TargetKey string `json:"target_key"`
+	Entity    string `json:"entity"`
+	EntityKey string `json:"entity_key"`
+}
+
+type ListSyncMutationPayloadsRow struct {
+	Seq     int64          `json:"seq"`
+	Source  string         `json:"source"`
+	Payload string         `json:"payload"`
+	AckedAt sql.NullString `json:"acked_at"`
+}
+
+func (q *Queries) ListSyncMutationPayloads(ctx context.Context, arg ListSyncMutationPayloadsParams) ([]ListSyncMutationPayloadsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSyncMutationPayloads, arg.TargetKey, arg.Entity, arg.EntityKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSyncMutationPayloadsRow{}
+	for rows.Next() {
+		var i ListSyncMutationPayloadsRow
+		if err := rows.Scan(
+			&i.Seq,
+			&i.Source,
+			&i.Payload,
+			&i.AckedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateLastEnqueuedSeq = `-- name: UpdateLastEnqueuedSeq :exec

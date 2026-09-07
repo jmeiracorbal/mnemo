@@ -12,6 +12,7 @@ import (
 type Querier interface {
 	AckMutationSeq(ctx context.Context, arg AckMutationSeqParams) error
 	AcquireSyncLease(ctx context.Context, arg AcquireSyncLeaseParams) (int64, error)
+	AdvanceSyncAckedSeq(ctx context.Context, arg AdvanceSyncAckedSeqParams) error
 	ApplySessionPayload(ctx context.Context, arg ApplySessionPayloadParams) error
 	CopyObservationTag(ctx context.Context, arg CopyObservationTagParams) error
 	CopySessionTag(ctx context.Context, arg CopySessionTagParams) error
@@ -70,6 +71,7 @@ type Querier interface {
 	ListObservationTags(ctx context.Context, observationID int64) ([]string, error)
 	ListObservations(ctx context.Context, arg ListObservationsParams) ([]ListObservationsRow, error)
 	ListObservationsAffectedByTag(ctx context.Context, tag string) ([]ListObservationsAffectedByTagRow, error)
+	ListPendingSyncMutations(ctx context.Context, arg ListPendingSyncMutationsParams) ([]SyncMutation, error)
 	ListProjectSummaries(ctx context.Context) ([]ListProjectSummariesRow, error)
 	ListProjects(ctx context.Context) ([]Project, error)
 	ListRecentObservations(ctx context.Context, arg ListRecentObservationsParams) ([]ListRecentObservationsRow, error)
@@ -80,6 +82,7 @@ type Querier interface {
 	ListSessionTags(ctx context.Context, sessionID string) ([]string, error)
 	ListSessions(ctx context.Context, arg ListSessionsParams) ([]ListSessionsRow, error)
 	ListSessionsAffectedByTag(ctx context.Context, tag string) ([]ListSessionsAffectedByTagRow, error)
+	ListSyncMutationPayloads(ctx context.Context, arg ListSyncMutationPayloadsParams) ([]ListSyncMutationPayloadsRow, error)
 	ListTagAggregates(ctx context.Context, project interface{}) ([]ListTagAggregatesRow, error)
 	ListTagsForObservationIDs(ctx context.Context, observationIds []int64) ([]ListTagsForObservationIDsRow, error)
 	ListTimelineAfter(ctx context.Context, arg ListTimelineAfterParams) ([]ListTimelineAfterRow, error)

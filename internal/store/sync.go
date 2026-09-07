@@ -583,47 +583,34 @@ func (s *Store) backfillCanonicalTableTx(tx *sql.Tx, table string) error {
 }
 
 func (s *Store) hasSyncMutationPayloadTx(tx *sql.Tx, entity, entityKey, currentPayload string) (bool, error) {
-	rows, err := s.queryItHook(tx, `
-		SELECT seq, source, payload, acked_at
-		FROM sync_mutations
-		WHERE target_key = ? AND entity = ? AND entity_key = ?`,
-		DefaultSyncTargetKey, entity, entityKey)
+	rows, err := s.q.WithTx(tx).ListSyncMutationPayloads(context.Background(), dbgen.ListSyncMutationPayloadsParams{
+		TargetKey: DefaultSyncTargetKey,
+		Entity:    entity,
+		EntityKey: entityKey,
+	})
 	if err != nil {
 		return false, err
 	}
 	staleSeqs := make([]int64, 0)
-	for rows.Next() {
-		var seq int64
-		var source string
-		var payload string
-		var ackedAt sql.NullString
-		if err := rows.Scan(&seq, &source, &payload, &ackedAt); err != nil {
-			return false, err
-		}
-		if source == SyncSourceRemote || equivalentJSONPayload(payload, currentPayload) {
-			_ = rows.Close()
+	for _, row := range rows {
+		if row.Source == SyncSourceRemote || equivalentJSONPayload(row.Payload, currentPayload) {
 			return true, nil
 		}
-		if source == SyncSourceLocal && !ackedAt.Valid {
-			staleSeqs = append(staleSeqs, seq)
+		if row.Source == SyncSourceLocal && !row.AckedAt.Valid {
+			staleSeqs = append(staleSeqs, row.Seq)
 		}
-	}
-	rowsErr := rows.Err()
-	if err := rows.Close(); err != nil && rowsErr == nil {
-		rowsErr = err
-	}
-	if rowsErr != nil {
-		return false, rowsErr
 	}
 	for _, seq := range staleSeqs {
-		if _, err := s.execHook(tx, `UPDATE sync_mutations SET acked_at = datetime('now') WHERE seq = ?`, seq); err != nil {
+		if err := s.q.WithTx(tx).AckMutationSeq(context.Background(), dbgen.AckMutationSeqParams{
+			TargetKey: DefaultSyncTargetKey,
+			Seq:       seq,
+		}); err != nil {
 			return false, err
 		}
-		if _, err := s.execHook(tx, `
-			UPDATE sync_state
-			SET last_acked_seq = CASE WHEN last_acked_seq < ? THEN ? ELSE last_acked_seq END,
-				updated_at = datetime('now')
-			WHERE target_key = ?`, seq, seq, DefaultSyncTargetKey); err != nil {
+		if err := s.q.WithTx(tx).AdvanceSyncAckedSeq(context.Background(), dbgen.AdvanceSyncAckedSeqParams{
+			LastAckedSeq: seq,
+			TargetKey:    DefaultSyncTargetKey,
+		}); err != nil {
 			return false, err
 		}
 	}
@@ -653,41 +640,28 @@ func (s *Store) ListAllPendingSyncMutations(targetKey string, limit int) ([]Sync
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := s.queryItHook(s.db, `
-			SELECT seq, target_key, entity, entity_key, op, payload, source, occurred_at, acked_at
-			FROM sync_mutations
-			WHERE target_key = ? AND acked_at IS NULL
-			ORDER BY CASE entity
-				WHEN 'project' THEN 10
-				WHEN 'agent' THEN 20
-				WHEN 'tool' THEN 20
-				WHEN 'model' THEN 20
-				WHEN 'source_kind' THEN 20
-				WHEN 'mcp_client' THEN 20
-				WHEN 'provenance_context' THEN 30
-				WHEN 'session' THEN 40
-				WHEN 'observation' THEN 50
-				WHEN 'user_prompt' THEN 50
-				WHEN 'session_tag' THEN 60
-				WHEN 'observation_tag' THEN 60
-				WHEN 'observation_review' THEN 60
-				ELSE 100
-			END ASC, seq ASC
-			LIMIT ?`, targetKey, limit)
+	rows, err := s.q.ListPendingSyncMutations(context.Background(), dbgen.ListPendingSyncMutationsParams{
+		TargetKey: targetKey,
+		Limit:     int64(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	mutations := make([]SyncMutation, 0)
-	for rows.Next() {
-		var mutation SyncMutation
-		if err := rows.Scan(&mutation.Seq, &mutation.TargetKey, &mutation.Entity, &mutation.EntityKey, &mutation.Op, &mutation.Payload, &mutation.Source, &mutation.OccurredAt, &mutation.AckedAt); err != nil {
-			return nil, err
-		}
-		mutations = append(mutations, mutation)
+	mutations := make([]SyncMutation, 0, len(rows))
+	for _, row := range rows {
+		mutations = append(mutations, SyncMutation{
+			Seq:        row.Seq,
+			TargetKey:  row.TargetKey,
+			Entity:     row.Entity,
+			EntityKey:  row.EntityKey,
+			Op:         row.Op,
+			Payload:    row.Payload,
+			Source:     row.Source,
+			OccurredAt: row.OccurredAt,
+			AckedAt:    nullablePtr(row.AckedAt),
+		})
 	}
-	return mutations, rows.Err()
+	return mutations, nil
 }
 
 // RecordPulledSeq advances the pull cursor without applying a payload. It is used
