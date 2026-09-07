@@ -1461,14 +1461,18 @@ func truncate(s string, max int) string {
 	return string(runes[:max]) + "..."
 }
 
-func handleSyncStatus(s *store.Store) server.ToolHandlerFunc {
+// syncStatusStore intentionally exposes only read operations so status cannot
+// reconcile or otherwise mutate the local sync queue.
+type syncStatusStore interface {
+	GetSyncState(targetKey string) (*store.SyncState, error)
+	ListAllPendingSyncMutations(targetKey string, limit int) ([]store.SyncMutation, error)
+}
+
+func handleSyncStatus(s syncStatusStore) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		target, _ := req.GetArguments()["target"].(string)
 		if strings.TrimSpace(target) == "" {
 			target = store.DefaultSyncTargetKey
-		}
-		if err := s.BackfillAllSyncMutations(); err != nil {
-			return mcp.NewToolResultError("Sync backfill failed: " + err.Error()), nil
 		}
 		state, err := s.GetSyncState(target)
 		if err != nil {
