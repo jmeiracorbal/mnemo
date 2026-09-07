@@ -48,6 +48,7 @@ mnemo db migrate --json
 ```
 
 `mnemo doctor` also runs the same read-only schema validator and reports whether the local store is missing, pending, current, or inconsistent. Migration `0021` renames the prompt search index from the legacy `prompts_fts` name to `user_prompts_fts` and recreates the FTS triggers/shadow-table prefix without preserving the old objects.
+Migrations `0022.0` and `0022.0.1` repair legacy project references before and after the project foreign keys are enforced; they create UUID project roots for recoverable references and rewrite empty project references to a recoverable UUID root rather than leaving invalid child rows.
 
 Released mnemo binaries also check for newer releases on interactive CLI use.
 When one exists, mnemo asks before installing. Users can run `mnemo update`
