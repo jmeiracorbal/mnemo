@@ -149,8 +149,14 @@ func newSyncStatusCommand() *cobra.Command {
 	return cmd
 }
 
-func runSyncStatus(s *store.Store, target string, jsonOut bool) error {
-	_ = s.BackfillAllSyncMutations()
+// syncStatusStore intentionally exposes only read operations so status cannot
+// reconcile or otherwise mutate the local sync queue.
+type syncStatusStore interface {
+	GetSyncState(targetKey string) (*store.SyncState, error)
+	ListAllPendingSyncMutations(targetKey string, limit int) ([]store.SyncMutation, error)
+}
+
+func runSyncStatus(s syncStatusStore, target string, jsonOut bool) error {
 	state, err := s.GetSyncState(target)
 	if err != nil {
 		return fmt.Errorf("sync status: %w", err)
