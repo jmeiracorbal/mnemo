@@ -57,6 +57,20 @@ mnemo sync status       # local state only; does not contact cloud
 
 All write commands are idempotent. `sync run` skips rows whose `origin_id` equals this client's `client_id` while still advancing the local pull cursor. The pull cursor is a remote high-water mark, so gaps in visible cloud sequence numbers are valid when filtered rows exist.
 
+## Queue recovery and dependency ordering
+
+The canonical local tables are the source of truth. Before a push, mnemo
+reconciles the local queue with those rows and rebuilds missing or stale queue
+entries, including soft-deleted rows. Each mutation contains one row from one
+canonical table; related rows are not nested into aggregate payloads.
+
+Pending mutations are sent in foreign-key dependency order: projects first,
+then reference metadata and provenance, sessions, observations and prompts,
+and finally tags and reviews. This ordering is applied by every client so a
+fresh or reset cloud database can be rebuilt without creating orphaned
+references. The queue and other local synchronization metadata can be lost and
+reconstructed without losing canonical data.
+
 Flags available on `run`, `push`, and `pull`:
 
 ```
