@@ -230,7 +230,7 @@ func (s *Store) recordAppliedRemoteMutationTx(tx *sql.Tx, targetKey string, muta
 	res, err := s.execHook(tx, `
 		INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload, source, occurred_at, acked_at)
 		VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-		targetKey, mutation.Entity, mutation.EntityKey, mutation.Op, mutation.Payload, SyncSourceLocal)
+		targetKey, mutation.Entity, mutation.EntityKey, mutation.Op, mutation.Payload, SyncSourceRemote)
 	if err != nil {
 		return err
 	}
@@ -423,7 +423,7 @@ func (s *Store) BackfillAllSyncMutations() error {
 		}
 		// The canonical tables are the source of truth. The queue is deliberately
 		// reconstructed from every row, including soft-deleted rows.
-		for _, table := range []string{"projects", "sessions", "observations", "user_prompts", "observation_tags", "session_tags", "observation_reviews", "provenance_contexts", "agents", "tools", "models", "source_kinds", "mcp_clients"} {
+		for _, table := range []string{"projects", "agents", "tools", "models", "source_kinds", "mcp_clients", "provenance_contexts", "sessions", "observations", "user_prompts", "observation_tags", "session_tags", "observation_reviews"} {
 			if err := s.backfillCanonicalTableTx(tx, table); err != nil {
 				return err
 			}
@@ -565,20 +565,79 @@ func (s *Store) backfillCanonicalTableTx(tx *sql.Tx, table string) error {
 			}
 			payload = map[string]any{"id": key, "name": name, "version": version, "transport": transport, "is_deleted": int64ToBool(deleted)}
 		}
-		missing, err := s.queryItHook(tx, `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM sync_mutations WHERE target_key = ? AND entity = ? AND entity_key = ? AND source = ?)`, DefaultSyncTargetKey, syncEntityForTable(table), key, SyncSourceLocal)
+		encoded, err := json.Marshal(payload)
 		if err != nil {
 			return err
 		}
-		if missing.Next() {
-			_ = missing.Close()
+		matching, err := s.hasSyncMutationPayloadTx(tx, syncEntityForTable(table), key, string(encoded))
+		if err != nil {
+			return err
+		}
+		if !matching {
 			if err := s.enqueueSyncMutationTx(tx, syncEntityForTable(table), key, SyncOpUpsert, payload); err != nil {
 				return err
 			}
-		} else {
-			_ = missing.Close()
 		}
 	}
 	return rows.Err()
+}
+
+func (s *Store) hasSyncMutationPayloadTx(tx *sql.Tx, entity, entityKey, currentPayload string) (bool, error) {
+	rows, err := s.queryItHook(tx, `
+		SELECT seq, source, payload, acked_at
+		FROM sync_mutations
+		WHERE target_key = ? AND entity = ? AND entity_key = ?`,
+		DefaultSyncTargetKey, entity, entityKey)
+	if err != nil {
+		return false, err
+	}
+	staleSeqs := make([]int64, 0)
+	for rows.Next() {
+		var seq int64
+		var source string
+		var payload string
+		var ackedAt sql.NullString
+		if err := rows.Scan(&seq, &source, &payload, &ackedAt); err != nil {
+			return false, err
+		}
+		if source == SyncSourceRemote || equivalentJSONPayload(payload, currentPayload) {
+			_ = rows.Close()
+			return true, nil
+		}
+		if source == SyncSourceLocal && !ackedAt.Valid {
+			staleSeqs = append(staleSeqs, seq)
+		}
+	}
+	rowsErr := rows.Err()
+	if err := rows.Close(); err != nil && rowsErr == nil {
+		rowsErr = err
+	}
+	if rowsErr != nil {
+		return false, rowsErr
+	}
+	for _, seq := range staleSeqs {
+		if _, err := s.execHook(tx, `UPDATE sync_mutations SET acked_at = datetime('now') WHERE seq = ?`, seq); err != nil {
+			return false, err
+		}
+		if _, err := s.execHook(tx, `
+			UPDATE sync_state
+			SET last_acked_seq = CASE WHEN last_acked_seq < ? THEN ? ELSE last_acked_seq END,
+				updated_at = datetime('now')
+			WHERE target_key = ?`, seq, seq, DefaultSyncTargetKey); err != nil {
+			return false, err
+		}
+	}
+	return false, nil
+}
+
+func equivalentJSONPayload(left, right string) bool {
+	var leftValue, rightValue any
+	if json.Unmarshal([]byte(left), &leftValue) != nil || json.Unmarshal([]byte(right), &rightValue) != nil {
+		return left == right
+	}
+	leftCanonical, leftErr := json.Marshal(leftValue)
+	rightCanonical, rightErr := json.Marshal(rightValue)
+	return leftErr == nil && rightErr == nil && string(leftCanonical) == string(rightCanonical)
 }
 
 func syncEntityForTable(table string) string {
@@ -595,11 +654,26 @@ func (s *Store) ListAllPendingSyncMutations(targetKey string, limit int) ([]Sync
 		limit = 100
 	}
 	rows, err := s.queryItHook(s.db, `
-		SELECT seq, target_key, entity, entity_key, op, payload, source, occurred_at, acked_at
-		FROM sync_mutations
-		WHERE target_key = ? AND acked_at IS NULL
-		ORDER BY seq ASC
-		LIMIT ?`, targetKey, limit)
+			SELECT seq, target_key, entity, entity_key, op, payload, source, occurred_at, acked_at
+			FROM sync_mutations
+			WHERE target_key = ? AND acked_at IS NULL
+			ORDER BY CASE entity
+				WHEN 'project' THEN 10
+				WHEN 'agent' THEN 20
+				WHEN 'tool' THEN 20
+				WHEN 'model' THEN 20
+				WHEN 'source_kind' THEN 20
+				WHEN 'mcp_client' THEN 20
+				WHEN 'provenance_context' THEN 30
+				WHEN 'session' THEN 40
+				WHEN 'observation' THEN 50
+				WHEN 'user_prompt' THEN 50
+				WHEN 'session_tag' THEN 60
+				WHEN 'observation_tag' THEN 60
+				WHEN 'observation_review' THEN 60
+				ELSE 100
+			END ASC, seq ASC
+			LIMIT ?`, targetKey, limit)
 	if err != nil {
 		return nil, err
 	}

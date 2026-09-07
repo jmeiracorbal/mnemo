@@ -1468,30 +1468,32 @@ func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 		t.Fatalf("expected prompt sync id to be persisted")
 	}
 
-	if mutations[0].Entity != SyncEntityProject || mutations[0].EntityKey != "mnemo" || mutations[0].Op != SyncOpUpsert {
-		t.Fatalf("unexpected project mutation: %+v", mutations[0])
+	findMutation := func(entity, key string, occurrence int) SyncMutation {
+		for _, mutation := range mutations {
+			if mutation.Entity == entity && mutation.EntityKey == key && mutation.Op == SyncOpUpsert {
+				if occurrence == 0 {
+					return mutation
+				}
+				occurrence--
+			}
+		}
+		t.Fatalf("mutation not found: entity=%s key=%s occurrence=%d", entity, key, occurrence)
+		return SyncMutation{}
 	}
-	if mutations[1].Entity != SyncEntitySession || mutations[1].EntityKey != "sync-session" || mutations[1].Op != SyncOpUpsert {
-		t.Fatalf("unexpected session mutation: %+v", mutations[1])
-	}
-	if mutations[2].Entity != SyncEntityObservation || mutations[2].EntityKey != observationSyncID || mutations[2].Op != SyncOpUpsert {
-		t.Fatalf("unexpected observation insert mutation: %+v", mutations[2])
-	}
-	if mutations[3].Entity != SyncEntityObservation || mutations[3].EntityKey != observationSyncID || mutations[3].Op != SyncOpUpsert {
-		t.Fatalf("unexpected observation update mutation: %+v", mutations[3])
-	}
-	if mutations[4].Entity != SyncEntityObservation || mutations[4].EntityKey != observationSyncID || mutations[4].Op != SyncOpUpsert {
-		t.Fatalf("unexpected observation delete mutation: %+v", mutations[4])
-	}
-	if mutations[5].Entity != SyncEntityUserPrompt || mutations[5].EntityKey != promptSyncID || mutations[5].Op != SyncOpUpsert {
-		t.Fatalf("unexpected prompt mutation: %+v", mutations[5])
-	}
-	if mutations[6].Entity != SyncEntitySession || mutations[6].EntityKey != "sync-session" || mutations[6].Op != SyncOpUpsert {
-		t.Fatalf("unexpected end session mutation: %+v", mutations[6])
+	projectMutation := findMutation(SyncEntityProject, "mnemo", 0)
+	sessionMutation := findMutation(SyncEntitySession, "sync-session", 0)
+	endSessionMutation := findMutation(SyncEntitySession, "sync-session", 1)
+	observationInsert := findMutation(SyncEntityObservation, observationSyncID, 0)
+	observationUpdate := findMutation(SyncEntityObservation, observationSyncID, 1)
+	observationDelete := findMutation(SyncEntityObservation, observationSyncID, 2)
+	promptMutation := findMutation(SyncEntityUserPrompt, promptSyncID, 0)
+	if projectMutation.Seq >= sessionMutation.Seq || sessionMutation.Seq >= observationInsert.Seq ||
+		sessionMutation.Seq >= promptMutation.Seq {
+		t.Fatalf("mutations do not respect dependency order: %+v", mutations)
 	}
 
 	var deletedPayload map[string]any
-	if err := json.Unmarshal([]byte(mutations[4].Payload), &deletedPayload); err != nil {
+	if err := json.Unmarshal([]byte(observationDelete.Payload), &deletedPayload); err != nil {
 		t.Fatalf("decode delete payload: %v", err)
 	}
 	if deletedPayload["sync_id"] != observationSyncID {
@@ -1501,14 +1503,14 @@ func TestStoreLocalSyncFoundationEnqueuesCoreMutations(t *testing.T) {
 		t.Fatalf("expected delete payload to mark is_deleted=true, got %#v", deletedPayload["is_deleted"])
 	}
 
-	if err := s.AckSyncMutationSeqs(DefaultSyncTargetKey, []int64{mutations[0].Seq, mutations[1].Seq, mutations[2].Seq, mutations[3].Seq, mutations[4].Seq}); err != nil {
+	if err := s.AckSyncMutationSeqs(DefaultSyncTargetKey, []int64{projectMutation.Seq, sessionMutation.Seq, observationInsert.Seq, observationUpdate.Seq, observationDelete.Seq}); err != nil {
 		t.Fatalf("ack sync mutations: %v", err)
 	}
 	remaining, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 10)
 	if err != nil {
 		t.Fatalf("list remaining sync mutations: %v", err)
 	}
-	if len(remaining) != 2 || remaining[0].Entity != SyncEntityUserPrompt || remaining[1].Entity != SyncEntitySession {
+	if len(remaining) != 2 || remaining[0].Entity != SyncEntitySession || remaining[1].Entity != SyncEntityUserPrompt || remaining[0].Seq != endSessionMutation.Seq {
 		t.Fatalf("expected prompt and end-session mutations to remain pending, got %+v", remaining)
 	}
 }
@@ -2932,6 +2934,72 @@ func TestListAllPendingSyncMutationsDoesNotRequireProjectColumn(t *testing.T) {
 	// There should be mutations (session create + observation create at minimum).
 	if len(mutations) == 0 {
 		t.Fatal("expected at least one pending mutation")
+	}
+}
+
+func TestListAllPendingSyncMutationsOrdersForeignKeyDependenciesFirst(t *testing.T) {
+	s := newTestStore(t)
+	for _, mutation := range []struct {
+		entity  string
+		key     string
+		payload string
+	}{
+		{entity: SyncEntityObservation, key: "obs-1", payload: `{"sync_id":"obs-1","session_id":"sess-1","type":"note","title":"t","content":"c"}`},
+		{entity: SyncEntitySession, key: "sess-1", payload: `{"id":"sess-1","project":"project-1","directory":"/tmp"}`},
+		{entity: SyncEntityProject, key: "project-1", payload: `{"id":"project-1","name":"Project 1"}`},
+	} {
+		if _, err := s.db.Exec(`
+			INSERT INTO sync_mutations (target_key, entity, entity_key, op, payload)
+			VALUES (?, ?, ?, ?, ?)`, DefaultSyncTargetKey, mutation.entity, mutation.key, SyncOpUpsert, mutation.payload); err != nil {
+			t.Fatalf("insert %s mutation: %v", mutation.entity, err)
+		}
+	}
+
+	mutations, err := s.ListAllPendingSyncMutations(DefaultSyncTargetKey, 10)
+	if err != nil {
+		t.Fatalf("list pending mutations: %v", err)
+	}
+	if len(mutations) != 3 {
+		t.Fatalf("pending mutation count = %d, want 3", len(mutations))
+	}
+	for i, want := range []string{SyncEntityProject, SyncEntitySession, SyncEntityObservation} {
+		if mutations[i].Entity != want {
+			t.Fatalf("mutation %d entity = %q, want %q; mutations=%+v", i, mutations[i].Entity, want, mutations)
+		}
+	}
+}
+
+func TestBackfillAllSyncMutationsRefreshesStaleCanonicalPayloads(t *testing.T) {
+	s := newTestStore(t)
+	if err := s.CreateSession("stale-session", "project-a", "/tmp/project-a"); err != nil {
+		t.Fatalf("create initial session: %v", err)
+	}
+	if err := s.CreateSession("other-session", "project-b", "/tmp/project-b"); err != nil {
+		t.Fatalf("create replacement project: %v", err)
+	}
+	if _, err := s.db.Exec(`UPDATE sessions SET project = 'project-b' WHERE id = 'stale-session'`); err != nil {
+		t.Fatalf("update canonical session: %v", err)
+	}
+
+	if err := s.BackfillAllSyncMutations(); err != nil {
+		t.Fatalf("backfill sync mutations: %v", err)
+	}
+	var payload string
+	if err := s.db.QueryRow(`
+		SELECT payload
+		FROM sync_mutations
+		WHERE target_key = ? AND entity = ? AND entity_key = ? AND source = ?
+		ORDER BY seq DESC LIMIT 1`, DefaultSyncTargetKey, SyncEntitySession, "stale-session", SyncSourceLocal).Scan(&payload); err != nil {
+		t.Fatalf("read refreshed session mutation: %v", err)
+	}
+	var decoded struct {
+		Project string `json:"project"`
+	}
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		t.Fatalf("decode refreshed session mutation: %v", err)
+	}
+	if decoded.Project != "project-b" {
+		t.Fatalf("refreshed session project = %q, want project-b", decoded.Project)
 	}
 }
 
@@ -5007,7 +5075,7 @@ func TestBackfillAllSyncMutationsDoesNotRequireProjectEnrollment(t *testing.T) {
 		seen[m.Entity+":"+m.EntityKey] = true
 	}
 	if !seen[SyncEntitySession+":cloud-all-session"] || !seen[SyncEntityObservation+":"+obs.SyncID] {
-	t.Fatalf("expected session and observation backfill from canonical rows, got %#v", mutations)
+		t.Fatalf("expected session and observation backfill from canonical rows, got %#v", mutations)
 	}
 
 	if err := s.BackfillAllSyncMutations(); err != nil {
