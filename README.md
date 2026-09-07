@@ -212,8 +212,8 @@ Credentials are stored in `~/.config/mnemo/cloud.toml` (XDG). Environment variab
 Before pushing, mnemo rebuilds missing queue entries from canonical local rows and sends parent rows before dependent rows, so project and session foreign keys remain valid across clients.
 
 ```bash
-mnemo sync run          # push, then pull
-mnemo sync status       # inspect local sync state without contacting cloud
+mnemo sync run          # push, then pull (rebuilds missing queue entries before push)
+mnemo sync status       # inspect local sync state; read-only, no cloud contact or backfill
 mnemo setup cloud --validate   # test credentials without modifying them
 ```
 

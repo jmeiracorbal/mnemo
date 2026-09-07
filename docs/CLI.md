@@ -18,6 +18,7 @@ mnemo setup AGENT [--home=DIR] [--mnemo-bin=PATH]  Alias for setup refresh --age
 mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for an agent
 mnemo update [--check] [--yes] [--agent=AGENT] [--json]  Check for and install a newer mnemo release
 mnemo db migrate [--data-dir=DIR] [--check] [--json]  Validate or apply database migrations
+mnemo sync run|push|pull|status  Synchronize or inspect local cloud sync state
 mnemo migrate [--path=DIR]              Migrate project identity
 mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
 mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]  Merge one project into another
@@ -159,6 +160,7 @@ Tools are available inside your editor through the `mcp__mnemo__*` namespace.
 | `mem_related_tags` | Find tags that co-occur with a given tag across observations and sessions |
 | `mem_current_project` | Resolve the current project identity from `.mnemo` |
 | `mem_doctor` | Run read-only diagnostics from MCP |
+| `mem_sync_status` | Read local cloud sync state and pending mutations without backfill or cloud contact |
 
 ### Admin profile
 
