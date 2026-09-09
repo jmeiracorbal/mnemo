@@ -12,7 +12,7 @@ import (
 )
 
 // runInit activates mnemo for one or more agents in the current project.
-func runInit(s *store.Store) {
+func runInit() {
 	agent := "claudecode"
 	dir := "."
 	projectRules := true
@@ -40,12 +40,6 @@ func runInit(s *store.Store) {
 		fmt.Fprintf(os.Stderr, "mnemo init: project ID: %v\n", err)
 		os.Exit(1)
 	}
-	name := filepath.Base(root)
-	if err := s.EnsureProject(projectID, name); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo init: register project: %v\n", err)
-		os.Exit(1)
-	}
-
 	agents, err := agentinit.ExpandAgents(agent)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo init: %v\n", err)
