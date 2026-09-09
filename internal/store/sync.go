@@ -12,9 +12,6 @@ import (
 
 func (s *Store) GetSyncState(targetKey string) (*SyncState, error) {
 	targetKey = normalizeSyncTargetKey(targetKey)
-	if err := s.ensureSyncState(targetKey); err != nil {
-		return nil, err
-	}
 	return s.getSyncState(targetKey)
 }
 

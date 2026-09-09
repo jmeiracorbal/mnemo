@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
@@ -172,14 +173,27 @@ func New(cfg Config) (*Store, error) {
 	}
 
 	dbPath := filepath.Join(cfg.DataDir, "memory.db")
-	db, err := openDB("sqlite", dbPath)
+	// modernc.org/sqlite applies _pragma parameters to every physical
+	// connection and applies busy_timeout before the other pragmas. This is
+	// important because database/sql may create more than one connection.
+	db, err := openDB("sqlite", dbPath+"?_pragma=busy_timeout%3d5000")
 	if err != nil {
 		return nil, fmt.Errorf("mnemo: open database: %w", err)
 	}
 
+	var journalMode string
+	if err := db.QueryRow("PRAGMA journal_mode").Scan(&journalMode); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("mnemo: read journal mode: %w", err)
+	}
+	if !strings.EqualFold(journalMode, "wal") {
+		if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("mnemo: pragma %q: %w", "PRAGMA journal_mode = WAL", err)
+		}
+	}
+
 	pragmas := []string{
-		"PRAGMA journal_mode = WAL",
-		"PRAGMA busy_timeout = 5000",
 		"PRAGMA synchronous = NORMAL",
 		"PRAGMA foreign_keys = ON",
 	}

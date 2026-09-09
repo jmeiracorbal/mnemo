@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
 type LocalStore interface {
-	BackfillAllSyncMutations() error
 	GetSyncState(targetKey string) (*store.SyncState, error)
 	ListAllPendingSyncMutations(targetKey string, limit int) ([]store.SyncMutation, error)
 	AckSyncMutationSeqs(targetKey string, seqs []int64) error
@@ -60,9 +61,6 @@ func (e *Engine) Push(ctx context.Context) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err := e.local.BackfillAllSyncMutations(); err != nil {
-		return nil, fmt.Errorf("backfill local sync mutations: %w", err)
-	}
 	res := &Result{TargetKey: e.cfg.TargetKey}
 	for {
 		if err := ctx.Err(); err != nil {
@@ -89,7 +87,9 @@ func (e *Engine) Push(ctx context.Context) (*Result, error) {
 		if push == nil || len(push.AcceptedSeqs) != len(entries) {
 			return res, fmt.Errorf("cloud sync push acknowledged %d of %d mutations", len(push.AcceptedSeqs), len(entries))
 		}
-		if err := e.local.AckSyncMutationSeqs(e.cfg.TargetKey, push.AcceptedSeqs); err != nil {
+		if err := retrySQLiteBusy(ctx, func() error {
+			return e.local.AckSyncMutationSeqs(e.cfg.TargetKey, push.AcceptedSeqs)
+		}); err != nil {
 			return res, fmt.Errorf("ack pushed mutations: %w", err)
 		}
 		res.Pushed += len(push.AcceptedSeqs)
@@ -121,7 +121,9 @@ func (e *Engine) Pull(ctx context.Context) (*Result, error) {
 				continue
 			}
 			if remote.OriginID == e.cfg.ClientID {
-				if err := e.local.RecordPulledSeq(e.cfg.TargetKey, remote.Seq); err != nil {
+				if err := retrySQLiteBusy(ctx, func() error {
+					return e.local.RecordPulledSeq(e.cfg.TargetKey, remote.Seq)
+				}); err != nil {
 					return res, fmt.Errorf("advance own remote seq %d: %w", remote.Seq, err)
 				}
 				res.SkippedOwn++
@@ -133,7 +135,9 @@ func (e *Engine) Pull(ctx context.Context) (*Result, error) {
 				Op: remote.Op, Payload: string(remote.Payload), Source: store.SyncSourceRemote,
 				OccurredAt: remote.OccurredAt,
 			}
-			if err := e.local.ApplyPulledMutation(e.cfg.TargetKey, mutation); err != nil {
+			if err := retrySQLiteBusy(ctx, func() error {
+				return e.local.ApplyPulledMutation(e.cfg.TargetKey, mutation)
+			}); err != nil {
 				return res, fmt.Errorf("apply pulled mutation seq=%d: %w", remote.Seq, err)
 			}
 			res.Pulled++
@@ -149,4 +153,40 @@ func (e *Engine) Pull(ctx context.Context) (*Result, error) {
 		res.Lifecycle = state.Lifecycle
 	}
 	return res, nil
+}
+
+var syncBusyRetryDelays = []time.Duration{
+	100 * time.Millisecond,
+	250 * time.Millisecond,
+	500 * time.Millisecond,
+	1 * time.Second,
+}
+
+func retrySQLiteBusy(ctx context.Context, operation func() error) error {
+	var err error
+	for attempt := 0; ; attempt++ {
+		if err = operation(); err == nil || !isSQLiteBusy(err) {
+			return err
+		}
+		if attempt >= len(syncBusyRetryDelays) {
+			return err
+		}
+		timer := time.NewTimer(syncBusyRetryDelays[attempt])
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func isSQLiteBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "sqlite_busy") || strings.Contains(message, "database is locked")
 }

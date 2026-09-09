@@ -3,6 +3,7 @@ package cloudsync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -10,15 +11,14 @@ import (
 )
 
 type fakeStore struct {
-	state      store.SyncState
-	pending    []store.SyncMutation
-	acked      []int64
-	applied    []store.SyncMutation
-	advanced   []int64
-	backfilled int
+	state           store.SyncState
+	pending         []store.SyncMutation
+	acked           []int64
+	applied         []store.SyncMutation
+	advanced        []int64
+	ackBusyFailures int
 }
 
-func (f *fakeStore) BackfillAllSyncMutations() error { f.backfilled++; return nil }
 func (f *fakeStore) GetSyncState(targetKey string) (*store.SyncState, error) {
 	st := f.state
 	st.TargetKey = targetKey
@@ -38,6 +38,10 @@ func (f *fakeStore) ListAllPendingSyncMutations(targetKey string, limit int) ([]
 	return out, nil
 }
 func (f *fakeStore) AckSyncMutationSeqs(targetKey string, seqs []int64) error {
+	if f.ackBusyFailures > 0 {
+		f.ackBusyFailures--
+		return errors.New("database is locked (5) (SQLITE_BUSY)")
+	}
 	f.acked = append(f.acked, seqs...)
 	return nil
 }
@@ -78,7 +82,7 @@ func (f *fakeBackend) PullMutations(sinceSeq int64, limit int) (*PullResult, err
 	return res, nil
 }
 
-func TestEnginePushBackfillsAndAcksAcceptedSeqs(t *testing.T) {
+func TestEnginePushLoadsBatchesAndAcksAcceptedSeqs(t *testing.T) {
 	local := &fakeStore{pending: []store.SyncMutation{{Seq: 1, Entity: store.SyncEntitySession, EntityKey: "s1", Op: store.SyncOpUpsert, Payload: `{"id":"s1"}`}, {Seq: 2, Entity: store.SyncEntityObservation, EntityKey: "o1", Op: store.SyncOpUpsert, Payload: `{"sync_id":"o1"}`}}}
 	backend := &fakeBackend{}
 	engine, err := NewEngine(local, backend, Config{URL: "libsql://example.turso.io", Key: "publishable", ClientID: "client-a", TargetKey: store.DefaultSyncTargetKey, BatchSize: 100})
@@ -89,10 +93,28 @@ func TestEnginePushBackfillsAndAcksAcceptedSeqs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Pushed != 2 || local.backfilled != 1 {
-		t.Fatalf("unexpected result/backfill: %#v backfilled=%d", res, local.backfilled)
+	if res.Pushed != 2 {
+		t.Fatalf("unexpected result: %#v", res)
 	}
 	if !reflect.DeepEqual(local.acked, []int64{1, 2}) {
+		t.Fatalf("acked seqs = %#v", local.acked)
+	}
+}
+
+func TestEnginePushRetriesBusyAck(t *testing.T) {
+	local := &fakeStore{
+		pending:         []store.SyncMutation{{Seq: 1, Entity: store.SyncEntitySession, EntityKey: "s1", Op: store.SyncOpUpsert, Payload: `{"id":"s1"}`}},
+		ackBusyFailures: 1,
+	}
+	backend := &fakeBackend{}
+	engine, err := NewEngine(local, backend, Config{URL: "libsql://example.turso.io", Key: "publishable", ClientID: "client-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Push(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(local.acked, []int64{1}) {
 		t.Fatalf("acked seqs = %#v", local.acked)
 	}
 }

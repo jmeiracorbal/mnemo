@@ -49,33 +49,36 @@ mnemo setup cloud --non-interactive \
 ## Commands
 
 ```bash
-mnemo sync run          # push then pull (backfills missing queue entries before push)
-mnemo sync push         # backfill all local data and upload pending mutations
+mnemo sync run          # push pending batches, then pull
+mnemo sync push         # upload pending mutations in bounded batches
 mnemo sync pull         # apply remote mutations locally
 mnemo sync status       # read-only local state; no cloud contact or queue backfill
 ```
 
 All write commands are idempotent. `sync run` skips rows whose `origin_id` equals this client's `client_id` while still advancing the local pull cursor. The pull cursor is a remote high-water mark, so gaps in visible cloud sequence numbers are valid when filtered rows exist.
 
-## Queue recovery and dependency ordering
+## Queue and dependency ordering
 
-The canonical local tables are the source of truth. Before a push, mnemo
-reconciles the local queue with those rows and rebuilds missing or stale queue
-entries, including soft-deleted rows. Each mutation contains one row from one
-canonical table; related rows are not nested into aggregate payloads.
+Normal writes enqueue mutations in the same local transaction as the canonical
+row. Push reads the durable pending queue into bounded in-memory batches; cloud
+I/O happens without an open local write transaction, and local acknowledgements
+are persisted only after the cloud confirms the batch. Each mutation contains
+one row from one canonical table; related rows are not nested into aggregate
+payloads.
 
 Pending mutations are sent in foreign-key dependency order: projects first,
 then reference metadata and provenance, sessions, observations and prompts,
-and finally tags and reviews. This ordering is applied by every client so a
-fresh or reset cloud database can be rebuilt without creating orphaned
-references. The queue and other local synchronization metadata can be lost and
-reconstructed without losing canonical data.
+and finally tags and reviews. This ordering prevents orphaned references when
+the pending queue contains related rows. Unacknowledged queue entries remain
+durable until the cloud confirms them, so a process restart safely retries them.
+Full reconciliation of older
+canonical rows that predate queue entries is intentionally not part of normal
+push/run; it belongs to an explicit bounded repair flow.
 
-Opening the store, including MCP startup, does not perform this full queue
-reconciliation. Push operations (`sync push`, `sync run`, or MCP sync modes
-`push`/`run`) perform it when synchronization state needs to be rebuilt.
-The CLI and MCP status operations only read the local state and pending queue,
-keeping agent handshakes and status checks independent from queue rebuilding.
+Opening the store, including MCP startup, does not perform queue
+reconciliation. The CLI and MCP status operations only read the local state and
+pending queue, keeping agent handshakes and status checks independent from
+sync repair work.
 
 Flags available on `run`, `push`, and `pull`:
 

@@ -193,7 +193,7 @@ mnemo setup cloud
 Las credenciales se guardan en `~/.config/mnemo/cloud.toml` (XDG). Las variables de entorno `MNEMO_CLOUD_URL`, `MNEMO_CLOUD_KEY` y `MNEMO_CLOUD_CLIENT_ID` tienen prioridad sobre el archivo. La sincronización es local-first e idempotente — el store SQLite local sigue siendo la copia operativa.
 
 ```bash
-mnemo sync run          # push y después pull (reconstruye la cola antes del push)
+mnemo sync run          # envía lotes pendientes y después hace pull
 mnemo sync status       # estado local; solo lectura, sin nube ni backfill
 mnemo setup cloud --validate   # prueba credenciales sin modificarlas
 ```
