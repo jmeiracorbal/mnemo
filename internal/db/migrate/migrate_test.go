@@ -336,6 +336,36 @@ func TestCheckDataDirReportsPendingForUnversionedDatabase(t *testing.T) {
 	}
 }
 
+func TestCheckDataDirReadsCommittedWALState(t *testing.T) {
+	dataDir := t.TempDir()
+	if _, err := ApplyDataDir(dataDir); err != nil {
+		t.Fatalf("apply current schema: %v", err)
+	}
+
+	db := openTestDB(t, filepath.Join(dataDir, "memory.db"))
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.Exec(`PRAGMA journal_mode = WAL`); err != nil {
+		t.Fatalf("enable WAL: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE schema_migrations SET dirty = 1 WHERE version = '0027'`); err != nil {
+		t.Fatalf("mark migration dirty: %v", err)
+	}
+	if _, err := db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		t.Fatalf("checkpoint dirty state: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE schema_migrations SET dirty = 0 WHERE version = '0027'`); err != nil {
+		t.Fatalf("clear migration dirty in WAL: %v", err)
+	}
+
+	status, err := CheckDataDir(dataDir)
+	if err != nil {
+		t.Fatalf("check current WAL state: %v", err)
+	}
+	if status.State != StateUpToDate {
+		t.Fatalf("status = %+v, want up to date", status)
+	}
+}
+
 func TestApplyRejectsDirtyChecksumAndFutureMigration(t *testing.T) {
 	dataDir := t.TempDir()
 	if _, err := ApplyDataDir(dataDir); err != nil {
