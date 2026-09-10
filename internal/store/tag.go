@@ -321,11 +321,15 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 		}
 		sessCount = len(sessList)
 
-		if err := s.backfillCanonicalTableTx(tx, "observation_tags"); err != nil {
-			return err
+		for _, obs := range obsList {
+			if err := s.enqueueSyncMutationsForObservationTagsTx(tx, obs.id); err != nil {
+				return err
+			}
 		}
-		if err := s.backfillCanonicalTableTx(tx, "session_tags"); err != nil {
-			return err
+		for _, sess := range sessList {
+			if err := s.enqueueSyncMutationsForSessionTagsTx(tx, sess.payload.ID); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -335,10 +339,7 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 
 func (s *Store) SetSessionTags(id string, tags []string) error {
 	return s.withTx(func(tx *sql.Tx) error {
-		if err := s.setTagsForSessionTx(tx, id, tags); err != nil {
-			return err
-		}
-		return s.backfillCanonicalTableTx(tx, "session_tags")
+		return s.setTagsForSessionTx(tx, id, tags)
 	})
 }
 
@@ -365,7 +366,7 @@ func (s *Store) setTagsForObservationTx(tx *sql.Tx, obsID int64, tags []string) 
 			return err
 		}
 	}
-	return s.backfillCanonicalTableTx(tx, "observation_tags")
+	return s.enqueueSyncMutationsForObservationTagsTx(tx, obsID)
 }
 
 func (s *Store) loadTagsForObservations(obs []Observation) error {
@@ -433,7 +434,7 @@ func (s *Store) setTagsForSessionTx(tx *sql.Tx, sessionID string, tags []string)
 			return err
 		}
 	}
-	return s.backfillCanonicalTableTx(tx, "session_tags")
+	return s.enqueueSyncMutationsForSessionTagsTx(tx, sessionID)
 }
 
 func (s *Store) loadTagsForSession(sess *Session) error {
@@ -530,4 +531,46 @@ func tagWeights(tags []TagInfo, topN int) []TagWeight {
 		out[i] = w
 	}
 	return out
+}
+
+func (s *Store) enqueueSyncMutationsForObservationTagsTx(tx *sql.Tx, obsID int64) error {
+	rows, err := s.q.WithTx(tx).ListObservationTagSyncPayloads(context.Background(), obsID)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		syncID := nullablePtr(row.SyncID)
+		if syncID == nil || *syncID == "" {
+			continue
+		}
+		key := *syncID + ":" + row.Tag
+		payload := map[string]any{
+			"observation_sync_id": *syncID,
+			"tag":                 row.Tag,
+			"is_deleted":          int64ToBool(row.IsDeleted),
+		}
+		if err := s.enqueueSyncMutationTx(tx, SyncEntityObservationTag, key, SyncOpUpsert, payload); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) enqueueSyncMutationsForSessionTagsTx(tx *sql.Tx, sessionID string) error {
+	rows, err := s.q.WithTx(tx).ListSessionTagSyncPayloads(context.Background(), sessionID)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		key := sessionID + ":" + row.Tag
+		payload := map[string]any{
+			"session_id": sessionID,
+			"tag":        row.Tag,
+			"is_deleted": int64ToBool(row.IsDeleted),
+		}
+		if err := s.enqueueSyncMutationTx(tx, SyncEntitySessionTag, key, SyncOpUpsert, payload); err != nil {
+			return err
+		}
+	}
+	return nil
 }

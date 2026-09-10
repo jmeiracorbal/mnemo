@@ -92,6 +92,24 @@ The preferred model is:
 
 Do not add skill paths to a hardcoded global list outside the agent spec. The skill surface is part of the concrete agent contract.
 
+### 10. Database migrations: incremental migrations + target schema
+
+The migration system has two components that must always be kept in sync:
+
+- `database/migrations/NNNN-<name>.sql` — incremental scripts applied at runtime to bring existing databases up to date. Every schema change must be expressed as a new numbered migration. Never modify an existing migration file.
+- `database/target_schema.sql` — a snapshot of the **complete expected state** of the database after all migrations have been applied. It is used by `ValidateCurrent` to verify post-migration consistency and by tests to confirm that running all migrations produces an equivalent result.
+
+`target_schema.sql` is NOT the initial schema. It represents the current final state and already includes tables, columns, and indexes added by all past migrations. Fresh installs run all migrations in order — they do not apply `target_schema.sql` directly.
+
+**Required procedure for every schema change:**
+
+1. Add a new migration file `database/migrations/NNNN-<descriptive-name>.sql`.
+2. Update `database/target_schema.sql` to reflect the new final state (add the table, column, index, etc.).
+3. Update the expected version in `internal/db/migrate/migrate_test.go` (`TestApplyDataDirCreatesCurrentSchemaAndIsIdempotent`).
+4. Run `go test ./internal/db/migrate/...` to confirm `TestMigratedSchemaMatchesCanonicalSchemaStructure` passes.
+
+If `target_schema.sql` is not updated, the migration test and `ValidateCurrent` will diverge from the actual migrated state.
+
 ## Pre-commit checklist
 
 Before committing any change that touches hooks, plugin metadata, setup/install flows, versioning, or memory behavior:
