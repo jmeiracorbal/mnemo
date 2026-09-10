@@ -64,7 +64,8 @@ row. Push reads the durable pending queue into bounded in-memory batches; cloud
 I/O happens without an open local write transaction, and local acknowledgements
 are persisted only after the cloud confirms the batch. Each mutation contains
 one row from one canonical table; related rows are not nested into aggregate
-payloads.
+payloads. Tag writes enqueue only the changed observation or session tag rows,
+including soft-deleted relationships; they do not scan unrelated tag data.
 
 Pending mutations are sent in foreign-key dependency order: projects first,
 then reference metadata and provenance, sessions, observations and prompts,

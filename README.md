@@ -209,7 +209,7 @@ mnemo setup cloud
 
 Credentials are stored in `~/.config/mnemo/cloud.toml` (XDG). Environment variables `MNEMO_CLOUD_URL`, `MNEMO_CLOUD_KEY`, and `MNEMO_CLOUD_CLIENT_ID` override the file when set. Sync is local-first and idempotent — the local SQLite store is always the operational copy.
 
-Normal writes enqueue durable mutations in the same local transaction as the canonical row. Sync sends those pending mutations in small in-memory batches and does not hold a local write transaction during cloud I/O or perform a full-table backfill.
+Normal writes enqueue durable mutations in the same local transaction as the canonical row. Sync sends those pending mutations in small in-memory batches and does not hold a local write transaction during cloud I/O or perform a full-table backfill. Tag changes queue only the affected observation or session tag rows, including soft-deleted relationships.
 
 ```bash
 mnemo sync run          # push pending batches, then pull

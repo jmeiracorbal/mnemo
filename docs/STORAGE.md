@@ -12,7 +12,7 @@ The database is created automatically on first use. Project activation markers l
 
 ## Schema and search
 
-The schema uses SQLite with FTS5 for full-text search. The canonical current schema lives in `database/schema.sql`, versioned runtime migrations live in `database/migrations/`, and runtime queries are defined under `internal/db/queries` and compiled into type-safe Go code with sqlc.
+The schema uses SQLite with FTS5 for full-text search. The target schema snapshot lives in `database/target_schema.sql`, versioned runtime migrations live in `database/migrations/`, and runtime queries are defined under `internal/db/queries` and compiled into type-safe Go code with sqlc. The snapshot represents the complete state after every migration, so every schema change adds a new migration and updates `target_schema.sql`; existing migrations are never modified.
 
 Important concepts:
 
