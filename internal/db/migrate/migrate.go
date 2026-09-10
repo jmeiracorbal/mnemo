@@ -623,5 +623,11 @@ func applyPragmas(db *sql.DB) error {
 }
 
 func sqliteReadOnlyDBURI(dbPath string) string {
+	// immutable=1 avoids creating a shared-memory file for an inactive database
+	// in a read-only directory. It must not be used while a WAL exists: immutable
+	// readers ignore the WAL and can report a stale schema after a migration.
+	if _, err := os.Stat(dbPath + "-wal"); err == nil || !errors.Is(err, os.ErrNotExist) {
+		return "file:" + filepath.ToSlash(dbPath) + "?mode=ro"
+	}
 	return "file:" + filepath.ToSlash(dbPath) + "?mode=ro&immutable=1"
 }
