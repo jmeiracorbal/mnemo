@@ -202,6 +202,7 @@ CREATE INDEX idx_provenance_model ON provenance_contexts(model_id);
 CREATE INDEX idx_provenance_mcp_client ON provenance_contexts(mcp_client_id);
 CREATE INDEX idx_sync_mutations_target_seq ON sync_mutations(target_key, seq);
 CREATE INDEX idx_sync_mutations_pending ON sync_mutations(target_key, acked_at, seq);
+CREATE INDEX idx_sync_mutations_entity_key ON sync_mutations(target_key, entity, entity_key);
 CREATE INDEX idx_review_state ON observation_reviews(state);
 CREATE INDEX idx_review_superseded_by ON observation_reviews(superseded_by);
 CREATE INDEX idx_obs_tags_obs ON observation_tags(observation_id);
