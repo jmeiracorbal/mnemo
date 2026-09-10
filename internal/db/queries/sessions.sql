@@ -55,6 +55,9 @@ SELECT project, directory, ended_at, summary, is_deleted, provenance_id FROM ses
 -- name: ListSessionTags :many
 SELECT tag FROM session_tags WHERE session_id = ? AND is_deleted = 0 ORDER BY tag;
 
+-- name: ListSessionTagSyncPayloads :many
+SELECT tag, is_deleted FROM session_tags WHERE session_id = ? ORDER BY tag;
+
 -- name: DeleteSessionTags :exec
 UPDATE session_tags SET is_deleted = 1 WHERE session_id = ?;
 

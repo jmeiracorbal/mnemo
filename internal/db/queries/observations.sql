@@ -116,6 +116,13 @@ ON CONFLICT(observation_id, tag) DO UPDATE SET is_deleted = 0;
 -- name: ListObservationTags :many
 SELECT tag FROM observation_tags WHERE observation_id = ? AND is_deleted = 0 ORDER BY tag;
 
+-- name: ListObservationTagSyncPayloads :many
+SELECT o.sync_id, t.tag, t.is_deleted
+FROM observation_tags t
+JOIN observations o ON o.id = t.observation_id
+WHERE t.observation_id = ?
+ORDER BY t.tag;
+
 -- name: ListTagsForObservationIDs :many
 SELECT observation_id, tag
 FROM observation_tags

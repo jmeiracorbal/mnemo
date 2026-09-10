@@ -158,6 +158,38 @@ func (q *Queries) InsertSessionTag(ctx context.Context, arg InsertSessionTagPara
 	return err
 }
 
+const listSessionTagSyncPayloads = `-- name: ListSessionTagSyncPayloads :many
+SELECT tag, is_deleted FROM session_tags WHERE session_id = ? ORDER BY tag
+`
+
+type ListSessionTagSyncPayloadsRow struct {
+	Tag       string `json:"tag"`
+	IsDeleted int64  `json:"is_deleted"`
+}
+
+func (q *Queries) ListSessionTagSyncPayloads(ctx context.Context, sessionID string) ([]ListSessionTagSyncPayloadsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionTagSyncPayloads, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSessionTagSyncPayloadsRow{}
+	for rows.Next() {
+		var i ListSessionTagSyncPayloadsRow
+		if err := rows.Scan(&i.Tag, &i.IsDeleted); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSessionTags = `-- name: ListSessionTags :many
 SELECT tag FROM session_tags WHERE session_id = ? AND is_deleted = 0 ORDER BY tag
 `

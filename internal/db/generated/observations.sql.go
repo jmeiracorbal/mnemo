@@ -393,6 +393,43 @@ func (q *Queries) InsertObservationTag(ctx context.Context, arg InsertObservatio
 	return err
 }
 
+const listObservationTagSyncPayloads = `-- name: ListObservationTagSyncPayloads :many
+SELECT o.sync_id, t.tag, t.is_deleted
+FROM observation_tags t
+JOIN observations o ON o.id = t.observation_id
+WHERE t.observation_id = ?
+ORDER BY t.tag
+`
+
+type ListObservationTagSyncPayloadsRow struct {
+	SyncID    sql.NullString `json:"sync_id"`
+	Tag       string         `json:"tag"`
+	IsDeleted int64          `json:"is_deleted"`
+}
+
+func (q *Queries) ListObservationTagSyncPayloads(ctx context.Context, observationID int64) ([]ListObservationTagSyncPayloadsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listObservationTagSyncPayloads, observationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListObservationTagSyncPayloadsRow{}
+	for rows.Next() {
+		var i ListObservationTagSyncPayloadsRow
+		if err := rows.Scan(&i.SyncID, &i.Tag, &i.IsDeleted); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listObservationTags = `-- name: ListObservationTags :many
 SELECT tag FROM observation_tags WHERE observation_id = ? AND is_deleted = 0 ORDER BY tag
 `
