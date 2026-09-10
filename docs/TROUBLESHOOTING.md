@@ -30,6 +30,10 @@ mnemo setup status --agent=all
 - `Hooks` reports hook/plugin runtime files, or `n/a` when that agent has no runtime surface to validate.
 - `Instructions` reports whether global mnemo instructions are installed.
 
+`mnemo doctor` and `mnemo db migrate --check` read the current committed SQLite
+WAL state when it exists, so diagnostics reflect a live database rather than a
+stale main-database snapshot.
+
 ## Manual checks
 
 Project activation:
