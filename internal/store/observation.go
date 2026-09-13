@@ -62,7 +62,6 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 		if err != nil {
 			return err
 		}
-		var obs *Observation
 		if topicKey != "" {
 			existingID, err := q.FindObservationByTopic(context.Background(), dbgen.FindObservationByTopicParams{
 				TopicKey: sqlNullString(topicKey), Project: sessionProject, Scope: scope,
@@ -81,11 +80,7 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 						return err
 					}
 				}
-				obs, err = s.getObservationTx(tx, existingID)
-				if err != nil {
-					return err
-				}
-				return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpUpsert, observationPayloadFromObservation(obs))
+				return nil
 			}
 			if err != sql.ErrNoRows {
 				return err
@@ -101,12 +96,8 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 			if err := q.TouchDuplicateObservation(context.Background(), existingID); err != nil {
 				return err
 			}
-			obs, err = s.getObservationTx(tx, existingID)
-			if err != nil {
-				return err
-			}
 			observationID = existingID
-			return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpUpsert, observationPayloadFromObservation(obs))
+			return nil
 		}
 		if err != sql.ErrNoRows {
 			return err
@@ -126,11 +117,7 @@ func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 				return err
 			}
 		}
-		obs, err = s.getObservationTx(tx, observationID)
-		if err != nil {
-			return err
-		}
-		return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpUpsert, observationPayloadFromObservation(obs))
+		return nil
 	})
 	if err != nil {
 		return 0, err
@@ -245,10 +232,7 @@ func (s *Store) UpdateObservation(id int64, p UpdateObservationParams) (*Observa
 			}
 		}
 		updated, err = s.getObservationTx(tx, id)
-		if err != nil {
-			return err
-		}
-		return s.enqueueSyncMutationTx(tx, SyncEntityObservation, updated.SyncID, SyncOpUpsert, observationPayloadFromObservation(updated))
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -262,18 +246,10 @@ func (s *Store) UpdateObservation(id int64, p UpdateObservationParams) (*Observa
 func (s *Store) DeleteObservation(id int64) error {
 	return s.withTx(func(tx *sql.Tx) error {
 		q := s.q.WithTx(tx)
-		obs, err := s.getObservationTx(tx, id)
-		if err == sql.ErrNoRows {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
 		if err := q.SoftDeleteObservation(context.Background(), id); err != nil {
 			return err
 		}
-		obs.IsDeleted = true
-		return s.enqueueSyncMutationTx(tx, SyncEntityObservation, obs.SyncID, SyncOpUpsert, observationPayloadFromObservation(obs))
+		return nil
 	})
 }
 
@@ -419,20 +395,6 @@ func (s *Store) searchFTS(query string, opts SearchOptions, limit int) ([]Search
 	return results, nil
 }
 
-func (s *Store) GetObservationBySyncID(syncID string) (*Observation, error) {
-	row, err := s.q.GetLiveObservationBySyncID(context.Background(), sqlNullString(syncID))
-	if err != nil {
-		return nil, err
-	}
-	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
-		row.ToolName, sqlNullString(row.Project), row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
-		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.IsDeleted)
-	if err := s.attachObservationProvenance(&o, row.ProvenanceID); err != nil {
-		return nil, err
-	}
-	return &o, nil
-}
-
 func (s *Store) AddPrompt(p AddPromptParams) (int64, error) {
 	content := stripPrivateTags(p.Content)
 	if len(content) > s.cfg.MaxObservationLength {
@@ -460,12 +422,7 @@ func (s *Store) AddPrompt(p AddPromptParams) (int64, error) {
 		if err != nil {
 			return err
 		}
-		return s.enqueueSyncMutationTx(tx, SyncEntityUserPrompt, syncID, SyncOpUpsert, syncPromptPayload{
-			SyncID:     syncID,
-			SessionID:  p.SessionID,
-			Content:    content,
-			Provenance: nullableProvenanceInput(p.Provenance),
-		})
+		return nil
 	})
 	if err != nil {
 		return 0, err
@@ -577,34 +534,6 @@ func (s *Store) getObservationTx(tx *sql.Tx, id int64) (*Observation, error) {
 		return nil, err
 	}
 	if err := s.loadTagsForObservationTx(tx, &o); err != nil {
-		return nil, err
-	}
-	return &o, nil
-}
-
-func (s *Store) getObservationBySyncIDTx(tx *sql.Tx, syncID string, includeDeleted bool) (*Observation, error) {
-	q := s.q.WithTx(tx)
-	if includeDeleted {
-		row, err := q.GetObservationBySyncIDIncludingDeleted(context.Background(), sqlNullString(syncID))
-		if err != nil {
-			return nil, err
-		}
-		o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
-			row.ToolName, sqlNullString(row.Project), row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
-			row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.IsDeleted)
-		if err := attachObservationProvenanceTx(q, &o, row.ProvenanceID); err != nil {
-			return nil, err
-		}
-		return &o, nil
-	}
-	row, err := q.GetLiveObservationBySyncID(context.Background(), sqlNullString(syncID))
-	if err != nil {
-		return nil, err
-	}
-	o := observationFromDB(row.ID, row.SyncID, row.SessionID, row.Type, row.Title, row.Content,
-		row.ToolName, sqlNullString(row.Project), row.Scope, row.TopicKey, row.RevisionCount, row.DuplicateCount,
-		row.LastSeenAt, row.CreatedAt, row.UpdatedAt, row.IsDeleted)
-	if err := attachObservationProvenanceTx(q, &o, row.ProvenanceID); err != nil {
 		return nil, err
 	}
 	return &o, nil

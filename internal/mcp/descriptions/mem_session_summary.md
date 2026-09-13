@@ -1,5 +1,7 @@
 Save a comprehensive end-of-session summary. Call this when a session is ending or when significant work is complete. This creates a structured summary that future sessions will use to understand what happened.
 
+Provide the unique `project` identifier and the session's absolute `directory` workspace. The directory is session metadata, not project identity.
+
 FORMAT — use this exact structure in the content field:
 
 ## Goal

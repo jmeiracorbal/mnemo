@@ -5,7 +5,7 @@ import "testing"
 func TestReviewMemoryConflictsDetectsAndResolvesDuplicateTitle(t *testing.T) {
 	s := newTestStore(t)
 	provenance := ProvenanceInput{AgentID: AgentCursor, SourceKindID: SourceMCP, ToolID: ToolMemSave}
-	if err := s.CreateSessionWithProvenance("s-review", "alpha", "/tmp/alpha", provenance); err != nil {
+	if err := s.CreateSession("s-review", "alpha", "/tmp/alpha"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 	firstID, err := s.AddObservation(AddObservationParams{

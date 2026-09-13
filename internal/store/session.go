@@ -10,23 +10,14 @@ import (
 )
 
 func (s *Store) CreateSession(id, project, directory string) error {
-	return s.CreateSessionWithProvenance(id, project, directory, ProvenanceInput{})
+	return s.withTx(func(tx *sql.Tx) error {
+		return s.createSessionTx(tx, id, project, directory, ProvenanceInput{})
+	})
 }
 
 func (s *Store) CreateSessionWithProvenance(id, project, directory string, provenance ProvenanceInput) error {
 	return s.withTx(func(tx *sql.Tx) error {
-		if err := s.createSessionTx(tx, id, project, directory, provenance); err != nil {
-			return err
-		}
-		if err := s.enqueueSyncMutationTx(tx, SyncEntityProject, project, SyncOpUpsert, map[string]any{"id": project, "name": project, "is_deleted": false}); err != nil {
-			return err
-		}
-		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
-			ID:         id,
-			Project:    project,
-			Directory:  directory,
-			Provenance: nullableProvenanceInput(provenance),
-		})
+		return s.createSessionTx(tx, id, project, directory, provenance)
 	})
 }
 
@@ -43,21 +34,7 @@ func (s *Store) EndSession(id string, summary string) error {
 		}); err != nil {
 			return err
 		}
-		stored, err := q.GetSessionPayload(context.Background(), id)
-		if err != nil {
-			return err
-		}
-		endedAt := nullablePtr(stored.EndedAt)
-		storedSummary := nullablePtr(stored.Summary)
-
-		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
-			ID:         id,
-			Project:    stored.Project,
-			Directory:  stored.Directory,
-			EndedAt:    endedAt,
-			Summary:    storedSummary,
-			Provenance: provenanceInputForID(q, stored.ProvenanceID),
-		})
+		return nil
 	})
 }
 
@@ -243,6 +220,9 @@ func (s *Store) createSessionTx(tx *sql.Tx, id, project, directory string, prove
 	if strings.TrimSpace(project) == "" {
 		return fmt.Errorf("project id must not be empty")
 	}
+	if strings.TrimSpace(directory) == "" {
+		return fmt.Errorf("directory must not be empty: pass the project working directory")
+	}
 	if err := s.ensureProjectTx(tx, project); err != nil {
 		return err
 	}
@@ -250,7 +230,7 @@ func (s *Store) createSessionTx(tx *sql.Tx, id, project, directory string, prove
 	if err != nil {
 		return err
 	}
-	return s.q.WithTx(tx).UpsertSession(context.Background(), dbgen.UpsertSessionParams{
+	return s.q.WithTx(tx).InsertSession(context.Background(), dbgen.InsertSessionParams{
 		ID: id, Project: project, Directory: directory, ProvenanceID: provenanceID,
 	})
 }

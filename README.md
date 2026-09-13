@@ -199,26 +199,6 @@ to confirm the Codex hooks are trusted and active. Do not manually copy hashes
 between machines; approve hooks in the Codex UI so the hash matches the local
 hook command.
 
-## Cloud sync
-
-mnemo can replicate local memory to a Turso/libSQL cloud database so multiple machines or agents share the same observations. Configure credentials once:
-
-```bash
-mnemo setup cloud
-```
-
-Credentials are stored in `~/.config/mnemo/cloud.toml` (XDG). Environment variables `MNEMO_CLOUD_URL`, `MNEMO_CLOUD_KEY`, and `MNEMO_CLOUD_CLIENT_ID` override the file when set. Sync is local-first and idempotent — the local SQLite store is always the operational copy.
-
-Normal writes enqueue durable mutations in the same local transaction as the canonical row. Sync sends those pending mutations in small in-memory batches and does not hold a local write transaction during cloud I/O or perform a full-table backfill. Tag changes queue only the affected observation or session tag rows, including soft-deleted relationships.
-
-```bash
-mnemo sync run          # push pending batches, then pull
-mnemo sync status       # inspect local sync state; read-only, no cloud contact or backfill
-mnemo setup cloud --validate   # test credentials without modifying them
-```
-
-See [docs/CLOUD_SYNC.md](docs/CLOUD_SYNC.md) for the full reference.
-
 ## Documentation
 
 | Guide | Contents |

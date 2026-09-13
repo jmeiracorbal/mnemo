@@ -143,6 +143,29 @@ func (q *Queries) GetSessionPayload(ctx context.Context, id string) (GetSessionP
 	return i, err
 }
 
+const insertSession = `-- name: InsertSession :exec
+INSERT INTO sessions (id, project, directory, provenance_id)
+VALUES (?, ?, ?, ?4)
+ON CONFLICT(id) DO NOTHING
+`
+
+type InsertSessionParams struct {
+	ID           string        `json:"id"`
+	Project      string        `json:"project"`
+	Directory    string        `json:"directory"`
+	ProvenanceID sql.NullInt64 `json:"provenance_id"`
+}
+
+func (q *Queries) InsertSession(ctx context.Context, arg InsertSessionParams) error {
+	_, err := q.db.ExecContext(ctx, insertSession,
+		arg.ID,
+		arg.Project,
+		arg.Directory,
+		arg.ProvenanceID,
+	)
+	return err
+}
+
 const insertSessionTag = `-- name: InsertSessionTag :exec
 INSERT INTO session_tags (session_id, tag, is_deleted) VALUES (?, ?, 0)
 ON CONFLICT(session_id, tag) DO UPDATE SET is_deleted = 0
@@ -156,38 +179,6 @@ type InsertSessionTagParams struct {
 func (q *Queries) InsertSessionTag(ctx context.Context, arg InsertSessionTagParams) error {
 	_, err := q.db.ExecContext(ctx, insertSessionTag, arg.SessionID, arg.Tag)
 	return err
-}
-
-const listSessionTagSyncPayloads = `-- name: ListSessionTagSyncPayloads :many
-SELECT tag, is_deleted FROM session_tags WHERE session_id = ? ORDER BY tag
-`
-
-type ListSessionTagSyncPayloadsRow struct {
-	Tag       string `json:"tag"`
-	IsDeleted int64  `json:"is_deleted"`
-}
-
-func (q *Queries) ListSessionTagSyncPayloads(ctx context.Context, sessionID string) ([]ListSessionTagSyncPayloadsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSessionTagSyncPayloads, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListSessionTagSyncPayloadsRow{}
-	for rows.Next() {
-		var i ListSessionTagSyncPayloadsRow
-		if err := rows.Scan(&i.Tag, &i.IsDeleted); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listSessionTags = `-- name: ListSessionTags :many
@@ -273,31 +264,4 @@ func (q *Queries) ListSessions(ctx context.Context, arg ListSessionsParams) ([]L
 		return nil, err
 	}
 	return items, nil
-}
-
-const upsertSession = `-- name: UpsertSession :exec
-INSERT INTO sessions (id, project, directory, provenance_id)
-VALUES (?, ?, ?, ?4)
-ON CONFLICT(id) DO UPDATE SET
-  project = CASE WHEN sessions.project = '' THEN excluded.project ELSE sessions.project END,
-  directory = CASE WHEN sessions.directory = '' THEN excluded.directory ELSE sessions.directory END,
-  is_deleted = 0,
-  provenance_id = COALESCE(sessions.provenance_id, excluded.provenance_id)
-`
-
-type UpsertSessionParams struct {
-	ID           string        `json:"id"`
-	Project      string        `json:"project"`
-	Directory    string        `json:"directory"`
-	ProvenanceID sql.NullInt64 `json:"provenance_id"`
-}
-
-func (q *Queries) UpsertSession(ctx context.Context, arg UpsertSessionParams) error {
-	_, err := q.db.ExecContext(ctx, upsertSession,
-		arg.ID,
-		arg.Project,
-		arg.Directory,
-		arg.ProvenanceID,
-	)
-	return err
 }

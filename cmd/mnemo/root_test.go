@@ -14,7 +14,7 @@ func TestRootCommandContainsEveryMenuCommand(t *testing.T) {
 	want := []string{
 		"mcp", "save", "search", "context", "session", "stats", "export", "import", "capture",
 		"projects", "memories", "doctor", "db", "update", "setup", "init", "install-instructions",
-		"migrate", "sync", "json", "json-merge", "extract-transcript", "version",
+		"migrate", "json", "json-merge", "extract-transcript", "version",
 	}
 	for _, name := range want {
 		if findChild(root, name) == nil {
@@ -31,7 +31,6 @@ func TestRootCommandNestedMenu(t *testing.T) {
 		"projects": {"list", "merge", "rename"},
 		"memories": {"review", "mark-reviewed", "mark-stale", "supersede", "consolidate-topic"},
 		"session":  {"start", "end", "exists", "obs-count", "project-obs-count"},
-		"sync":     {"run", "push", "pull", "status"},
 	}
 	for parentName, children := range checks {
 		parent, _, err := root.Find([]string{parentName})
