@@ -98,7 +98,7 @@ func TestBuildProjectMergePlan(t *testing.T) {
 	if plan.From.ID != "alpha-legacy" || plan.To.ID != "11111111-2222-3333-4444-555555555555" {
 		t.Fatalf("unexpected plan endpoints: %+v", plan)
 	}
-	if plan.Observations != 1 || plan.Sessions != 1 || plan.Prompts != 1 || plan.SyncMutations != 0 {
+	if plan.Observations != 1 || plan.Sessions != 1 || plan.Prompts != 1 {
 		t.Fatalf("unexpected plan counts: %+v", plan)
 	}
 }
@@ -135,7 +135,7 @@ func TestMergeProjectsConsolidatesProjectData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("merge projects: %v", err)
 	}
-	if !result.Merged || result.ObservationsUpdated != 1 || result.SessionsUpdated != 1 || result.PromptsUpdated != 1 || result.SyncMutationsUpdated != 0 {
+	if !result.Merged || result.ObservationsUpdated != 1 || result.SessionsUpdated != 1 || result.PromptsUpdated != 1 {
 		t.Fatalf("unexpected merge result: %+v", result)
 	}
 

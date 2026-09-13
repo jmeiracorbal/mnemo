@@ -1,11 +1,7 @@
--- name: UpsertSession :exec
+-- name: InsertSession :exec
 INSERT INTO sessions (id, project, directory, provenance_id)
 VALUES (?, ?, ?, sqlc.narg('provenance_id'))
-ON CONFLICT(id) DO UPDATE SET
-  project = CASE WHEN sessions.project = '' THEN excluded.project ELSE sessions.project END,
-  directory = CASE WHEN sessions.directory = '' THEN excluded.directory ELSE sessions.directory END,
-  is_deleted = 0,
-  provenance_id = COALESCE(sessions.provenance_id, excluded.provenance_id);
+ON CONFLICT(id) DO NOTHING;
 
 -- name: EndSession :exec
 UPDATE sessions
@@ -54,9 +50,6 @@ SELECT project, directory, ended_at, summary, is_deleted, provenance_id FROM ses
 
 -- name: ListSessionTags :many
 SELECT tag FROM session_tags WHERE session_id = ? AND is_deleted = 0 ORDER BY tag;
-
--- name: ListSessionTagSyncPayloads :many
-SELECT tag, is_deleted FROM session_tags WHERE session_id = ? ORDER BY tag;
 
 -- name: DeleteSessionTags :exec
 UPDATE session_tags SET is_deleted = 1 WHERE session_id = ?;

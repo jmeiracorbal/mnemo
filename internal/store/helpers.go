@@ -112,13 +112,6 @@ func maxInt(a, b int) int {
 	return b
 }
 
-func normalizeSyncTargetKey(targetKey string) string {
-	if strings.TrimSpace(targetKey) == "" {
-		return DefaultSyncTargetKey
-	}
-	return strings.TrimSpace(strings.ToLower(targetKey))
-}
-
 func newSyncID(prefix string) string {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {

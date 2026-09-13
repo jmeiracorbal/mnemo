@@ -12,7 +12,6 @@ import (
 
 const (
 	AgentUnknown    = "unknown"
-	AgentExternal   = "external"
 	AgentCLI        = "cli"
 	AgentCodex      = "codex"
 	AgentClaudeCode = "claudecode"
@@ -29,7 +28,6 @@ const (
 	SourcePassiveCapture = "passive_capture"
 	SourceImport         = "import"
 	SourceSkill          = "skill"
-	SourceSync           = "sync"
 
 	ToolUnknown           = "unknown"
 	ToolMnemoSave         = "mnemo_save"
@@ -41,7 +39,6 @@ const (
 	ToolMemCapturePassive = "mem_capture_passive"
 	ToolMnemoCapture      = "mnemo_capture"
 	ToolMnemoImport       = "mnemo_import"
-	ToolSyncPull          = "sync_pull"
 	ToolHookSessionStart  = "hook_session_start"
 	ToolHookSessionStop   = "hook_session_stop"
 
@@ -80,10 +77,6 @@ func MCPProvenance(tool string) ProvenanceInput {
 
 func HookProvenance(agent, tool string) ProvenanceInput {
 	return ProvenanceInput{AgentID: agent, SourceKindID: SourceHook, ToolID: tool}
-}
-
-func SyncPullProvenance() ProvenanceInput {
-	return ProvenanceInput{AgentID: AgentExternal, SourceKindID: SourceSync, ToolID: ToolSyncPull}
 }
 
 func (s *Store) ensureProvenanceTx(tx *sql.Tx, input ProvenanceInput) (int64, error) {
@@ -369,7 +362,6 @@ func displayName(id string) string {
 		"passive_capture": "Passive Capture",
 		"import":          "Import",
 		"skill":           "Skill",
-		"sync":            "Sync",
 	}
 	if name, ok := names[id]; ok {
 		return name

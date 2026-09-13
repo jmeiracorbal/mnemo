@@ -7,13 +7,14 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
 func runSave(s *store.Store) {
 	args := os.Args[2:]
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: mnemo save <title> <content> [--type TYPE] [--project PROJECT] [--scope SCOPE] [--topic TOPIC_KEY]")
+		fmt.Fprintln(os.Stderr, "usage: mnemo save <title> <content> [--type TYPE] [--project PROJECT] [--dir DIR] [--scope SCOPE] [--topic TOPIC_KEY]")
 		os.Exit(1)
 	}
 
@@ -21,6 +22,7 @@ func runSave(s *store.Store) {
 	content := args[1]
 	typ := "manual"
 	project := ""
+	dir := ""
 	scope := ""
 	topicKey := ""
 
@@ -32,6 +34,9 @@ func runSave(s *store.Store) {
 		case "--project":
 			project = args[i+1]
 			i++
+		case "--dir":
+			dir = args[i+1]
+			i++
 		case "--scope":
 			scope = args[i+1]
 			i++
@@ -41,12 +46,9 @@ func runSave(s *store.Store) {
 		}
 	}
 
-	sessionID := "manual-save"
-	if project != "" {
-		sessionID = "manual-save-" + project
-	}
+	sessionID := uuid.New().String()
 	provenance := store.CLIProvenance(store.ToolMnemoSave)
-	if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
+	if err := s.CreateSession(sessionID, project, dir); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: warning: could not create session: %v\n", err)
 	}
 
@@ -168,7 +170,7 @@ func runSession(s *store.Store) {
 				i++
 			}
 		}
-		if err := s.CreateSessionWithProvenance(id, project, dir, store.CLIProvenance(store.ToolMemSessionStart)); err != nil {
+		if err := s.CreateSession(id, project, dir); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo: session start failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -288,7 +290,7 @@ func runImport(s *store.Store) {
 func runCapture(s *store.Store) {
 	args := os.Args[2:]
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: mnemo capture <content>|- [--session SESSION_ID] [--project PROJECT]")
+		fmt.Fprintln(os.Stderr, "usage: mnemo capture <content>|- [--session SESSION_ID] [--project PROJECT] [--dir DIR]")
 		os.Exit(1)
 	}
 
@@ -305,6 +307,7 @@ func runCapture(s *store.Store) {
 	}
 	sessionID := ""
 	project := ""
+	dir := ""
 
 	for i := 1; i < len(args)-1; i++ {
 		switch args[i] {
@@ -314,17 +317,17 @@ func runCapture(s *store.Store) {
 		case "--project":
 			project = args[i+1]
 			i++
+		case "--dir":
+			dir = args[i+1]
+			i++
 		}
 	}
 
 	if sessionID == "" {
-		sessionID = "manual-save"
-		if project != "" {
-			sessionID = "manual-save-" + project
-		}
+		sessionID = uuid.New().String()
 	}
 	provenance := store.CLIProvenance(store.ToolMnemoCapture)
-	if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
+	if err := s.CreateSession(sessionID, project, dir); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: warning: could not create session: %v\n", err)
 	}
 

@@ -186,29 +186,3 @@ func searchResultFromFTSRow(r dbgen.SearchObservationsFTSRow) SearchResult {
 		Rank: r.Relevance,
 	}
 }
-
-func syncStateFromDB(row dbgen.SyncState) *SyncState {
-	return &SyncState{
-		TargetKey: row.TargetKey, SyncTypeID: row.SyncTypeID, Lifecycle: row.Lifecycle,
-		LastEnqueuedSeq: row.LastEnqueuedSeq, LastAckedSeq: row.LastAckedSeq,
-		LastPulledSeq: row.LastPulledSeq, ConsecutiveFailures: int(row.ConsecutiveFailures),
-		BackoffUntil: nullablePtr(row.BackoffUntil), LeaseOwner: nullablePtr(row.LeaseOwner),
-		LeaseUntil: nullablePtr(row.LeaseUntil), LastError: nullablePtr(row.LastError),
-		UpdatedAt: row.UpdatedAt,
-	}
-}
-
-func observationPayloadFromObservation(obs *Observation) syncObservationPayload {
-	return syncObservationPayload{
-		SyncID:     obs.SyncID,
-		SessionID:  obs.SessionID,
-		Type:       obs.Type,
-		Title:      obs.Title,
-		Content:    obs.Content,
-		ToolName:   obs.ToolName,
-		Scope:      obs.Scope,
-		TopicKey:   obs.TopicKey,
-		IsDeleted:  obs.IsDeleted,
-		Provenance: nullableProvenanceInput(provenanceInputFromStored(obs.Provenance, ProvenanceInput{})),
-	}
-}
