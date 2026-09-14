@@ -12,7 +12,6 @@ import (
 
 const (
 	AgentUnknown    = "unknown"
-	AgentExternal   = "external"
 	AgentCLI        = "cli"
 	AgentCodex      = "codex"
 	AgentClaudeCode = "claudecode"
@@ -29,19 +28,15 @@ const (
 	SourcePassiveCapture = "passive_capture"
 	SourceImport         = "import"
 	SourceSkill          = "skill"
-	SourceSync           = "sync"
 
 	ToolUnknown           = "unknown"
 	ToolMnemoSave         = "mnemo_save"
 	ToolMemSave           = "mem_save"
 	ToolMemSavePrompt     = "mem_save_prompt"
-	ToolMemSessionStart   = "mem_session_start"
-	ToolMemSessionEnd     = "mem_session_end"
 	ToolMemSessionSummary = "mem_session_summary"
 	ToolMemCapturePassive = "mem_capture_passive"
 	ToolMnemoCapture      = "mnemo_capture"
 	ToolMnemoImport       = "mnemo_import"
-	ToolSyncPull          = "sync_pull"
 	ToolHookSessionStart  = "hook_session_start"
 	ToolHookSessionStop   = "hook_session_stop"
 
@@ -80,10 +75,6 @@ func MCPProvenance(tool string) ProvenanceInput {
 
 func HookProvenance(agent, tool string) ProvenanceInput {
 	return ProvenanceInput{AgentID: agent, SourceKindID: SourceHook, ToolID: tool}
-}
-
-func SyncPullProvenance() ProvenanceInput {
-	return ProvenanceInput{AgentID: AgentExternal, SourceKindID: SourceSync, ToolID: ToolSyncPull}
 }
 
 func (s *Store) ensureProvenanceTx(tx *sql.Tx, input ProvenanceInput) (int64, error) {
@@ -262,33 +253,6 @@ func attachObservationProvenanceTx(q *dbgen.Queries, obs *Observation, provenanc
 	return nil
 }
 
-func nullableProvenanceInput(input ProvenanceInput) *ProvenanceInput {
-	if !hasProvenanceInput(input) {
-		return nil
-	}
-	normalized := normalizeProvenance(input)
-	return &normalized
-}
-
-func provenanceInputFromPtr(input *ProvenanceInput) ProvenanceInput {
-	if input == nil {
-		return ProvenanceInput{}
-	}
-	return *input
-}
-
-func provenanceInputForID(q *dbgen.Queries, provenanceID sql.NullInt64) *ProvenanceInput {
-	if !provenanceID.Valid {
-		return nil
-	}
-	row, err := q.GetProvenanceContext(context.Background(), provenanceID.Int64)
-	if err != nil {
-		return nil
-	}
-	provenance := provenanceFromDB(row)
-	return nullableProvenanceInput(provenanceInputFromStored(&provenance, ProvenanceInput{}))
-}
-
 func hasProvenanceInput(input ProvenanceInput) bool {
 	return strings.TrimSpace(input.AgentID) != "" ||
 		strings.TrimSpace(input.SourceKindID) != "" ||
@@ -369,7 +333,6 @@ func displayName(id string) string {
 		"passive_capture": "Passive Capture",
 		"import":          "Import",
 		"skill":           "Skill",
-		"sync":            "Sync",
 	}
 	if name, ok := names[id]; ok {
 		return name

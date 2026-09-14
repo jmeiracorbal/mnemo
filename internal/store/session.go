@@ -7,26 +7,93 @@ import (
 	"strings"
 
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
+	"github.com/google/uuid"
 )
 
-func (s *Store) CreateSession(id, project, directory string) error {
-	return s.CreateSessionWithProvenance(id, project, directory, ProvenanceInput{})
+// ResolveMCPInstanceSession returns this MCP instance's open session for a
+// project, creating it on the first write. The opaque instance ID is generated
+// by the MCP server at startup; mcpPID is diagnostic only and never used for
+// identity or lookup.
+func (s *Store) ResolveMCPInstanceSession(project, directory, instanceID string, mcpPID int) (string, error) {
+	if strings.TrimSpace(project) == "" {
+		return "", fmt.Errorf("project id must not be empty")
+	}
+	if strings.TrimSpace(directory) == "" {
+		return "", fmt.Errorf("directory must not be empty: pass the project working directory")
+	}
+	if strings.TrimSpace(instanceID) == "" {
+		return "", fmt.Errorf("MCP instance id must not be empty")
+	}
+
+	var sessionID string
+	err := s.withTx(func(tx *sql.Tx) error {
+		q := s.q.WithTx(tx)
+		id, err := q.GetOpenSessionByMCPInstance(context.Background(), dbgen.GetOpenSessionByMCPInstanceParams{
+			Project: project, McpInstanceID: sql.NullString{String: instanceID, Valid: true},
+		})
+		if err == nil {
+			sessionID = id
+			return nil
+		}
+		if err != sql.ErrNoRows {
+			return err
+		}
+		if err := s.ensureProjectTx(tx, project); err != nil {
+			return err
+		}
+
+		sessionID = "mcp-" + uuid.NewString()
+		return q.InsertMCPInstanceSession(context.Background(), dbgen.InsertMCPInstanceSessionParams{
+			ID: sessionID, Project: project, Directory: directory,
+			McpPid: sql.NullInt64{Int64: int64(mcpPID), Valid: true}, McpInstanceID: sql.NullString{String: instanceID, Valid: true},
+		})
+	})
+	if err != nil {
+		return "", err
+	}
+	return sessionID, nil
 }
 
-func (s *Store) CreateSessionWithProvenance(id, project, directory string, provenance ProvenanceInput) error {
+// CloseMCPInstanceSessions closes every still-open session owned by an MCP
+// instance when its stdio connection terminates.
+func (s *Store) CloseMCPInstanceSessions(instanceID string) error {
+	if strings.TrimSpace(instanceID) == "" {
+		return fmt.Errorf("MCP instance id must not be empty")
+	}
 	return s.withTx(func(tx *sql.Tx) error {
-		if err := s.createSessionTx(tx, id, project, directory, provenance); err != nil {
+		return s.q.WithTx(tx).CloseMCPInstanceSessions(context.Background(), sql.NullString{String: instanceID, Valid: true})
+	})
+}
+
+func (s *Store) CreateSession(id, project, directory string) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		return s.createSessionTx(tx, id, project, directory, ProvenanceInput{})
+	})
+}
+
+// EnsureSession creates the session if it does not already exist. If it exists,
+// it returns immediately without modifying anything. Use this in tool handlers
+// that may be called before an explicit session start.
+func (s *Store) EnsureSession(id, project, directory string) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		_, err := s.q.WithTx(tx).GetSessionPayload(context.Background(), id)
+		if err == nil {
+			return nil
+		}
+		if err != sql.ErrNoRows {
 			return err
 		}
-		if err := s.enqueueSyncMutationTx(tx, SyncEntityProject, project, SyncOpUpsert, map[string]any{"id": project, "name": project, "is_deleted": false}); err != nil {
-			return err
-		}
-		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
-			ID:         id,
-			Project:    project,
-			Directory:  directory,
-			Provenance: nullableProvenanceInput(provenance),
-		})
+		return s.createSessionTx(tx, id, project, directory, ProvenanceInput{})
+	})
+}
+
+
+// TouchCompact records that the agent compacted its context window for this
+// session. The session_id stays the same across compaction; this is an update,
+// not a new session creation.
+func (s *Store) TouchCompact(id string) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		return s.q.WithTx(tx).TouchSessionCompact(context.Background(), id)
 	})
 }
 
@@ -43,21 +110,7 @@ func (s *Store) EndSession(id string, summary string) error {
 		}); err != nil {
 			return err
 		}
-		stored, err := q.GetSessionPayload(context.Background(), id)
-		if err != nil {
-			return err
-		}
-		endedAt := nullablePtr(stored.EndedAt)
-		storedSummary := nullablePtr(stored.Summary)
-
-		return s.enqueueSyncMutationTx(tx, SyncEntitySession, id, SyncOpUpsert, syncSessionPayload{
-			ID:         id,
-			Project:    stored.Project,
-			Directory:  stored.Directory,
-			EndedAt:    endedAt,
-			Summary:    storedSummary,
-			Provenance: provenanceInputForID(q, stored.ProvenanceID),
-		})
+		return nil
 	})
 }
 
@@ -243,6 +296,9 @@ func (s *Store) createSessionTx(tx *sql.Tx, id, project, directory string, prove
 	if strings.TrimSpace(project) == "" {
 		return fmt.Errorf("project id must not be empty")
 	}
+	if strings.TrimSpace(directory) == "" {
+		return fmt.Errorf("directory must not be empty: pass the project working directory")
+	}
 	if err := s.ensureProjectTx(tx, project); err != nil {
 		return err
 	}
@@ -250,7 +306,7 @@ func (s *Store) createSessionTx(tx *sql.Tx, id, project, directory string, prove
 	if err != nil {
 		return err
 	}
-	return s.q.WithTx(tx).UpsertSession(context.Background(), dbgen.UpsertSessionParams{
+	return s.q.WithTx(tx).InsertSession(context.Background(), dbgen.InsertSessionParams{
 		ID: id, Project: project, Directory: directory, ProvenanceID: provenanceID,
 	})
 }

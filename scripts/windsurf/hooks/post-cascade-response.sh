@@ -1,37 +1,3 @@
 #!/bin/bash
-export MNEMO_AGENT="${MNEMO_AGENT:-windsurf}"
-export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
-# mnemo — post_cascade_response_with_transcript hook for Windsurf
-# Fires after a conversation response. Reads transcript JSONL for passive
-# capture, then closes the mnemo session.
-#
-# Input: {
-#   "agent_action_name": "post_cascade_response_with_transcript",
-#   "trajectory_id": "...", "execution_id": "...", "timestamp": "...",
-#   "tool_info": { "transcript_path": "/path/to/{trajectory_id}.jsonl" }
-# }
-
-INPUT=$(cat)
-TRAJECTORY_ID=$(echo "$INPUT" | mnemo json trajectory_id 2>/dev/null)
-TRANSCRIPT_PATH=$(echo "$INPUT" | mnemo json tool_info transcript_path 2>/dev/null)
-
-[ -z "$TRAJECTORY_ID" ] && exit 0
-
-WORKSPACE="$(pwd)"
-PROJECT_ROOT=$(git -C "$WORKSPACE" rev-parse --show-toplevel 2>/dev/null || echo "$WORKSPACE")
-MNEMO_FILE="${PROJECT_ROOT}/.mnemo"
-[ -f "$MNEMO_FILE" ] && PROJECT=$(mnemo json id < "$MNEMO_FILE" 2>/dev/null)
-[ -z "$PROJECT" ] && exit 0
-
-# Passive capture from transcript if available
-if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-  CONTENT=$(mnemo extract-transcript "$TRANSCRIPT_PATH" 2>/dev/null)
-
-  if [ -n "$CONTENT" ]; then
-    printf '%s' "$CONTENT" | mnemo capture - --session "$TRAJECTORY_ID" --project "$PROJECT" >/dev/null 2>&1 || true
-  fi
-fi
-
-mnemo session end "$TRAJECTORY_ID" >/dev/null 2>&1 || true
-
+# mnemo session lifecycle is owned by the MCP stdio connection.
 exit 0

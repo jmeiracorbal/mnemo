@@ -40,7 +40,6 @@ func newRootCommand() *cobra.Command {
 		storeCommand("projects", "Manage known projects", runProjects),
 		storeCommand("memories", "Review and curate memories", runMemories),
 		storeCommand("session", "Manage memory sessions", runSession),
-		newSyncCommand(),
 		command("json [KEY ...]", "Extract fields from JSON on stdin", runJSON),
 		command("json-merge <file>", "Deep-merge JSON from stdin into a file", runJSONMerge),
 		command("extract-transcript <file>", "Extract assistant text from a JSONL transcript", runExtractTranscript),
@@ -110,7 +109,6 @@ func addCommandTree(root *cobra.Command) {
 		command("print-config AGENT [--home=DIR] [--mnemo-bin=PATH]", "Print manual setup config snippets", runSetupPrintConfig),
 		command("refresh [--agent=AGENT] [--home=DIR] [--mnemo-bin=PATH]", "Refresh installed global setup files", runSetupRefresh),
 		command("uninstall --agent=AGENT [--home=DIR]", "Remove global setup files", runSetupUninstall),
-		command("cloud [--non-interactive] [--validate] [--delete] [--url=URL] [--key=KEY] [--client-id=ID] [--provider=PROVIDER]", "Configure cloud sync credentials", runSetupCloud),
 	)
 	for _, agent := range append(agentinit.SupportedAgents, "all") {
 		addChildren(root, "setup", command(agent, "Alias for setup refresh", runSetup))
@@ -129,6 +127,7 @@ func addCommandTree(root *cobra.Command) {
 	)
 	addChildren(root, "session",
 		storeCommand("start ID", "Register session start", runSession),
+		storeCommand("compact ID", "Record context compaction for an existing session", runSession),
 		storeCommand("end ID", "Mark session completed", runSession),
 		storeCommand("exists ID", "Check whether a session exists", runSession),
 		storeCommand("obs-count ID", "Count session observations", runSession),

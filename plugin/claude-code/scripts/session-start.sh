@@ -19,14 +19,7 @@ MNEMO_FILE="${PROJECT_ROOT}/.mnemo"
 [ -f "$MNEMO_FILE" ] && PROJECT=$(mnemo json id < "$MNEMO_FILE" 2>/dev/null)
 [ -z "$PROJECT" ] && exit 0
 
-IS_RESUME=$(mnemo session exists "$SESSION_ID" 2>/dev/null)
-
-if [ "$IS_RESUME" = "true" ]; then
-  printf "\n[mnemo] Session resumed (project: %s)\n" "$PROJECT"
-else
-  mnemo session start "$SESSION_ID" --project "$PROJECT" --dir "$CWD" >/dev/null 2>&1 || true
-  printf "\n[mnemo] New session started (project: %s)\n" "$PROJECT"
-fi
+printf "\n[mnemo] MCP memory connection active (project: %s)\n" "$PROJECT"
 
 CONTEXT=$(mnemo context "$PROJECT" 2>/dev/null)
 if [ -n "$CONTEXT" ]; then

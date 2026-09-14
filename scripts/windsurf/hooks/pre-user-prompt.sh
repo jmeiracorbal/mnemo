@@ -23,13 +23,8 @@ PROJECT_ROOT=$(git -C "$WORKSPACE" rev-parse --show-toplevel 2>/dev/null || echo
 PROJECT=$(mnemo json id < "${PROJECT_ROOT}/.mnemo" 2>/dev/null)
 [ -z "$PROJECT" ] && exit 0
 
-# Only act on the first prompt of a conversation (session start)
-IS_KNOWN=$(mnemo session exists "$TRAJECTORY_ID" 2>/dev/null)
-[ "$IS_KNOWN" = "true" ] && exit 0
-
-# New conversation — register session and emit general context
-mnemo session start "$TRAJECTORY_ID" --project "$PROJECT" --dir "$WORKSPACE" >/dev/null 2>&1 || true
-printf "\n[mnemo] New session started (project: %s)\n" "$PROJECT"
+# Emit context. MCP owns session creation and closure on its stdio connection.
+printf "\n[mnemo] MCP memory connection active (project: %s)\n" "$PROJECT"
 
 CONTEXT=$(mnemo context "$PROJECT" 2>/dev/null)
 if [ -n "$CONTEXT" ]; then

@@ -226,7 +226,7 @@ func (s *Store) setMemoryReviewState(id int64, state, reason string, supersededB
 		if err := q.UpsertMemoryReviewState(context.Background(), params); err != nil {
 			return fmt.Errorf("set memory review state: %w", err)
 		}
-		return s.backfillCanonicalTableTx(tx, "observation_reviews")
+		return nil
 	})
 }
 

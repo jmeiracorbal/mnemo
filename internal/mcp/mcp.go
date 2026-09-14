@@ -16,11 +16,12 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/internal/cloudsync"
-	"github.com/jmeiracorbal/mnemo/internal/cloudsync/providers/turso"
+	"github.com/google/uuid"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -98,12 +99,6 @@ var memCurrentProjectDescription string
 //go:embed descriptions/mem_doctor.md
 var memDoctorDescription string
 
-//go:embed descriptions/mem_sync_status.md
-var memSyncStatusDescription string
-
-//go:embed descriptions/mem_sync_now.md
-var memSyncNowDescription string
-
 // ─── Tool Profiles ───────────────────────────────────────────────────────────
 
 // ProfileAgent contains the tool names that AI agents need during coding sessions.
@@ -112,8 +107,6 @@ var ProfileAgent = map[string]bool{
 	"mem_search":            true,
 	"mem_context":           true,
 	"mem_session_summary":   true,
-	"mem_session_start":     true,
-	"mem_session_end":       true,
 	"mem_get_observation":   true,
 	"mem_suggest_topic_key": true,
 	"mem_capture_passive":   true,
@@ -125,8 +118,6 @@ var ProfileAgent = map[string]bool{
 	"mem_related_tags":      true,
 	"mem_current_project":   true,
 	"mem_doctor":            true,
-	"mem_sync_status":       true,
-	"mem_sync_now":          true,
 }
 
 // ProfileAdmin contains tools for CLI curation and dashboards.
@@ -184,9 +175,25 @@ func NewServer(s *store.Store, version string) (*server.MCPServer, error) {
 // the allowlist. If allowlist is nil, all tools are registered.
 // version is the binary version advertised to MCP clients; it is required.
 func NewServerWithTools(s *store.Store, version string, allowlist map[string]bool) (*server.MCPServer, error) {
+	srv, _, err := NewServerWithRuntime(s, version, allowlist)
+	return srv, err
+}
+
+// Runtime owns the session identity for one MCP stdio server process. It is
+// intentionally independent from agent-specific hook identifiers.
+type Runtime struct {
+	instanceID string
+	pid        int
+	mu         sync.Mutex
+}
+
+// NewServerWithRuntime creates an MCP server and the runtime that owns its
+// sessions. Call Close after the stdio transport terminates.
+func NewServerWithRuntime(s *store.Store, version string, allowlist map[string]bool) (*server.MCPServer, *Runtime, error) {
 	if strings.TrimSpace(version) == "" {
-		return nil, fmt.Errorf("mcp server version is required")
+		return nil, nil, fmt.Errorf("mcp server version is required")
 	}
+	runtime := &Runtime{instanceID: uuid.NewString(), pid: os.Getpid()}
 
 	srv := server.NewMCPServer(
 		"mnemo",
@@ -195,8 +202,20 @@ func NewServerWithTools(s *store.Store, version string, allowlist map[string]boo
 		server.WithInstructions(strings.TrimSpace(serverInstructions)),
 	)
 
-	registerTools(srv, s, allowlist)
-	return srv, nil
+	registerTools(srv, s, allowlist, runtime)
+	return srv, runtime, nil
+}
+
+// Close releases all open sessions owned by this runtime. It is safe to call
+// after a read-only MCP connection that never created a session.
+func (r *Runtime) Close(s *store.Store) error {
+	return s.CloseMCPInstanceSessions(r.instanceID)
+}
+
+func (r *Runtime) resolveSession(s *store.Store, project, directory string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return s.ResolveMCPInstanceSession(project, directory, r.instanceID, r.pid)
 }
 
 func shouldRegister(name string, allowlist map[string]bool) bool {
@@ -206,7 +225,7 @@ func shouldRegister(name string, allowlist map[string]bool) bool {
 	return allowlist[name]
 }
 
-func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]bool) {
+func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]bool, runtime *Runtime) {
 	// ─── mem_search ─────────────────────────────────────────────────────
 	if shouldRegister("mem_search", allowlist) {
 		srv.AddTool(
@@ -267,11 +286,13 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 				mcp.WithString("type",
 					mcp.Description("Category: decision, architecture, bugfix, pattern, config, discovery, learning (default: manual)"),
 				),
-				mcp.WithString("session_id",
-					mcp.Description("Session ID to associate with (default: manual-save-{project})"),
-				),
 				mcp.WithString("project",
+					mcp.Required(),
 					mcp.Description("Project name"),
+				),
+				mcp.WithString("directory",
+					mcp.Required(),
+					mcp.Description("Project working directory"),
 				),
 				mcp.WithString("scope",
 					mcp.Description("Scope for this observation: project (default) or personal"),
@@ -283,7 +304,7 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 					mcp.Description("Comma-separated tags to attach (e.g. \"auth,backend,decision\")."),
 				),
 			),
-			handleSave(s),
+			handleSave(s, runtime),
 		)
 	}
 
@@ -388,14 +409,16 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 					mcp.Required(),
 					mcp.Description("The user's prompt text"),
 				),
-				mcp.WithString("session_id",
-					mcp.Description("Session ID to associate with (default: manual-save-{project})"),
-				),
 				mcp.WithString("project",
+					mcp.Required(),
 					mcp.Description("Project name"),
 				),
+				mcp.WithString("directory",
+					mcp.Required(),
+					mcp.Description("Project working directory"),
+				),
 			),
-			handleSavePrompt(s),
+			handleSavePrompt(s, runtime),
 		)
 	}
 
@@ -619,68 +642,16 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 					mcp.Required(),
 					mcp.Description("Full session summary using the Goal/Instructions/Discoveries/Accomplished/Files format"),
 				),
-				mcp.WithString("session_id",
-					mcp.Description("Session ID (default: manual-save-{project})"),
-				),
 				mcp.WithString("project",
 					mcp.Required(),
-					mcp.Description("Project name"),
-				),
-			),
-			handleSessionSummary(s),
-		)
-	}
-
-	// ─── mem_session_start (deferred) ───────────────────────────────────
-	if shouldRegister("mem_session_start", allowlist) {
-		srv.AddTool(
-			mcp.NewTool("mem_session_start",
-				mcp.WithDescription("Register the start of a new coding session. Call this at the beginning of a session to track activity."),
-				mcp.WithDeferLoading(true),
-				mcp.WithTitleAnnotation("Start Session"),
-				mcp.WithReadOnlyHintAnnotation(false),
-				mcp.WithDestructiveHintAnnotation(false),
-				mcp.WithIdempotentHintAnnotation(true),
-				mcp.WithOpenWorldHintAnnotation(false),
-				mcp.WithString("id",
-					mcp.Required(),
-					mcp.Description("Unique session identifier"),
-				),
-				mcp.WithString("project",
-					mcp.Required(),
-					mcp.Description("Project name"),
+					mcp.Description("Unique project identifier"),
 				),
 				mcp.WithString("directory",
-					mcp.Description("Working directory"),
-				),
-			),
-			handleSessionStart(s),
-		)
-	}
-
-	// ─── mem_session_end (deferred) ─────────────────────────────────────
-	if shouldRegister("mem_session_end", allowlist) {
-		srv.AddTool(
-			mcp.NewTool("mem_session_end",
-				mcp.WithDescription("Mark a coding session as completed with an optional summary."),
-				mcp.WithDeferLoading(true),
-				mcp.WithTitleAnnotation("End Session"),
-				mcp.WithReadOnlyHintAnnotation(false),
-				mcp.WithDestructiveHintAnnotation(false),
-				mcp.WithIdempotentHintAnnotation(true),
-				mcp.WithOpenWorldHintAnnotation(false),
-				mcp.WithString("id",
 					mcp.Required(),
-					mcp.Description("Session identifier to close"),
-				),
-				mcp.WithString("summary",
-					mcp.Description("Summary of what was accomplished"),
-				),
-				mcp.WithString("tags",
-					mcp.Description("Comma-separated tags for this session (e.g. 'feature,auth,backend')"),
+					mcp.Description("Project working directory"),
 				),
 			),
-			handleSessionEnd(s),
+			handleSessionSummary(s, runtime),
 		)
 	}
 
@@ -699,53 +670,19 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 					mcp.Required(),
 					mcp.Description("The text output containing a '## Key Learnings:' section with numbered or bulleted items"),
 				),
-				mcp.WithString("session_id",
-					mcp.Description("Session ID (default: manual-save-{project})"),
-				),
 				mcp.WithString("project",
+					mcp.Required(),
 					mcp.Description("Project name"),
+				),
+				mcp.WithString("directory",
+					mcp.Required(),
+					mcp.Description("Project working directory"),
 				),
 				mcp.WithString("source",
 					mcp.Description("Source identifier (e.g. 'subagent-stop', 'session-end')"),
 				),
 			),
-			handleCapturePassive(s),
-		)
-	}
-
-	// ─── mem_sync_status ─────────────────────────────────────────────────
-	if shouldRegister("mem_sync_status", allowlist) {
-		srv.AddTool(
-			mcp.NewTool("mem_sync_status",
-				mcp.WithDescription(strings.TrimSpace(memSyncStatusDescription)),
-				mcp.WithTitleAnnotation("Cloud Sync Status"),
-				mcp.WithReadOnlyHintAnnotation(true),
-				mcp.WithDestructiveHintAnnotation(false),
-				mcp.WithIdempotentHintAnnotation(true),
-				mcp.WithOpenWorldHintAnnotation(false),
-				mcp.WithString("target",
-					mcp.Description("Sync target key (default: cloud)"),
-				),
-			),
-			handleSyncStatus(s),
-		)
-	}
-
-	// ─── mem_sync_now ────────────────────────────────────────────────────
-	if shouldRegister("mem_sync_now", allowlist) {
-		srv.AddTool(
-			mcp.NewTool("mem_sync_now",
-				mcp.WithDescription(strings.TrimSpace(memSyncNowDescription)),
-				mcp.WithTitleAnnotation("Sync Memory Cloud"),
-				mcp.WithReadOnlyHintAnnotation(false),
-				mcp.WithDestructiveHintAnnotation(false),
-				mcp.WithIdempotentHintAnnotation(true),
-				mcp.WithOpenWorldHintAnnotation(true),
-				mcp.WithString("mode",
-					mcp.Description("Sync mode: run (push then pull), push, or pull. Default: run."),
-				),
-			),
-			handleSyncNow(s),
+			handleCapturePassive(s, runtime),
 		)
 	}
 
@@ -811,13 +748,13 @@ func handleSearch(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleSave(s *store.Store) server.ToolHandlerFunc {
+func handleSave(s *store.Store, runtime *Runtime) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		title, _ := req.GetArguments()["title"].(string)
 		content, _ := req.GetArguments()["content"].(string)
 		typ, _ := req.GetArguments()["type"].(string)
-		sessionID, _ := req.GetArguments()["session_id"].(string)
 		project, _ := req.GetArguments()["project"].(string)
+		directory, _ := req.GetArguments()["directory"].(string)
 		scope, _ := req.GetArguments()["scope"].(string)
 		topicKey, _ := req.GetArguments()["topic_key"].(string)
 		tagsRaw, _ := req.GetArguments()["tags"].(string)
@@ -826,19 +763,17 @@ func handleSave(s *store.Store) server.ToolHandlerFunc {
 		if typ == "" {
 			typ = "manual"
 		}
-		if sessionID == "" {
-			sessionID = defaultSessionID(project)
-		}
 		suggestedTopicKey := suggestTopicKey(typ, title, content)
 
-		provenance := store.MCPProvenance(store.ToolMemSave)
-		if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
-			return nil, fmt.Errorf("create session: %w", err)
+		sessionID, err := runtime.resolveSession(s, project, directory)
+		if err != nil {
+			return mcp.NewToolResultError("No active session: " + err.Error()), nil
 		}
+		provenance := store.MCPProvenance(store.ToolMemSave)
 
 		truncated := len(content) > s.MaxObservationLength()
 
-		_, err := s.AddObservation(store.AddObservationParams{
+		_, err = s.AddObservation(store.AddObservationParams{
 			SessionID:  sessionID,
 			Type:       typ,
 			Title:      title,
@@ -961,22 +896,19 @@ func handleDelete(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleSavePrompt(s *store.Store) server.ToolHandlerFunc {
+func handleSavePrompt(s *store.Store, runtime *Runtime) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		content, _ := req.GetArguments()["content"].(string)
-		sessionID, _ := req.GetArguments()["session_id"].(string)
 		project, _ := req.GetArguments()["project"].(string)
+		directory, _ := req.GetArguments()["directory"].(string)
 
-		if sessionID == "" {
-			sessionID = defaultSessionID(project)
+		sessionID, err := runtime.resolveSession(s, project, directory)
+		if err != nil {
+			return mcp.NewToolResultError("No active session: " + err.Error()), nil
 		}
-
 		provenance := store.MCPProvenance(store.ToolMemSavePrompt)
-		if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
-			return nil, fmt.Errorf("create session: %w", err)
-		}
 
-		_, err := s.AddPrompt(store.AddPromptParams{
+		_, err = s.AddPrompt(store.AddPromptParams{
 			SessionID:  sessionID,
 			Content:    content,
 			Project:    project,
@@ -1329,22 +1261,19 @@ func handleGetObservation(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleSessionSummary(s *store.Store) server.ToolHandlerFunc {
+func handleSessionSummary(s *store.Store, runtime *Runtime) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		content, _ := req.GetArguments()["content"].(string)
-		sessionID, _ := req.GetArguments()["session_id"].(string)
 		project, _ := req.GetArguments()["project"].(string)
+		directory, _ := req.GetArguments()["directory"].(string)
 
-		if sessionID == "" {
-			sessionID = defaultSessionID(project)
+		sessionID, err := runtime.resolveSession(s, project, directory)
+		if err != nil {
+			return mcp.NewToolResultError("No active session: " + err.Error()), nil
 		}
-
 		provenance := store.MCPProvenance(store.ToolMemSessionSummary)
-		if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
-			return nil, fmt.Errorf("create session: %w", err)
-		}
 
-		_, err := s.AddObservation(store.AddObservationParams{
+		_, err = s.AddObservation(store.AddObservationParams{
 			SessionID:  sessionID,
 			Type:       "session_summary",
 			Title:      fmt.Sprintf("Session summary: %s", project),
@@ -1360,54 +1289,20 @@ func handleSessionSummary(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleSessionStart(s *store.Store) server.ToolHandlerFunc {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		id, _ := req.GetArguments()["id"].(string)
-		project, _ := req.GetArguments()["project"].(string)
-		directory, _ := req.GetArguments()["directory"].(string)
-
-		if err := s.CreateSessionWithProvenance(id, project, directory, store.MCPProvenance(store.ToolMemSessionStart)); err != nil {
-			return mcp.NewToolResultError("Failed to start session: " + err.Error()), nil
-		}
-
-		return mcp.NewToolResultText(fmt.Sprintf("Session %q started for project %q", id, project)), nil
-	}
-}
-
-func handleSessionEnd(s *store.Store) server.ToolHandlerFunc {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		id, _ := req.GetArguments()["id"].(string)
-		summary, _ := req.GetArguments()["summary"].(string)
-		tagsRaw, _ := req.GetArguments()["tags"].(string)
-
-		if err := s.EndSession(id, summary); err != nil {
-			return mcp.NewToolResultError("Failed to end session: " + err.Error()), nil
-		}
-
-		if tags := parseTags(tagsRaw); len(tags) > 0 {
-			if err := s.SetSessionTags(id, tags); err != nil {
-				return mcp.NewToolResultError("Failed to set session tags: " + err.Error()), nil
-			}
-		}
-
-		return mcp.NewToolResultText(fmt.Sprintf("Session %q completed", id)), nil
-	}
-}
-
-func handleCapturePassive(s *store.Store) server.ToolHandlerFunc {
+func handleCapturePassive(s *store.Store, runtime *Runtime) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		content, _ := req.GetArguments()["content"].(string)
-		sessionID, _ := req.GetArguments()["session_id"].(string)
 		project, _ := req.GetArguments()["project"].(string)
+		directory, _ := req.GetArguments()["directory"].(string)
 		source, _ := req.GetArguments()["source"].(string)
 
 		if content == "" {
 			return mcp.NewToolResultError("content is required — include text with a '## Key Learnings:' section"), nil
 		}
 
-		if sessionID == "" {
-			sessionID = defaultSessionID(project)
-			_ = s.CreateSessionWithProvenance(sessionID, project, "", store.MCPProvenance(store.ToolMemCapturePassive))
+		sessionID, err := runtime.resolveSession(s, project, directory)
+		if err != nil {
+			return mcp.NewToolResultError("No active session: " + err.Error()), nil
 		}
 
 		if source == "" {
@@ -1438,12 +1333,6 @@ func handleCapturePassive(s *store.Store) server.ToolHandlerFunc {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-func defaultSessionID(project string) string {
-	if project == "" {
-		return "manual-save"
-	}
-	return "manual-save-" + project
-}
 
 func intArg(req mcp.CallToolRequest, key string, defaultVal int) int {
 	v, ok := req.GetArguments()[key].(float64)
@@ -1459,67 +1348,4 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return string(runes[:max]) + "..."
-}
-
-// syncStatusStore intentionally exposes only read operations so status cannot
-// reconcile or otherwise mutate the local sync queue.
-type syncStatusStore interface {
-	GetSyncState(targetKey string) (*store.SyncState, error)
-	ListAllPendingSyncMutations(targetKey string, limit int) ([]store.SyncMutation, error)
-}
-
-func handleSyncStatus(s syncStatusStore) server.ToolHandlerFunc {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		target, _ := req.GetArguments()["target"].(string)
-		if strings.TrimSpace(target) == "" {
-			target = store.DefaultSyncTargetKey
-		}
-		state, err := s.GetSyncState(target)
-		if err != nil {
-			return mcp.NewToolResultError("Sync status failed: " + err.Error()), nil
-		}
-		pending, err := s.ListAllPendingSyncMutations(target, 1_000_000)
-		if err != nil {
-			return mcp.NewToolResultError("Sync pending query failed: " + err.Error()), nil
-		}
-		return mcp.NewToolResultText(fmt.Sprintf("Sync target: %s\nLifecycle: %s\nPending local mutations: %d\nLast enqueued: %d\nLast acked: %d\nLast pulled: %d",
-			state.TargetKey, state.Lifecycle, len(pending), state.LastEnqueuedSeq, state.LastAckedSeq, state.LastPulledSeq)), nil
-	}
-}
-
-func handleSyncNow(s *store.Store) server.ToolHandlerFunc {
-	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		mode, _ := req.GetArguments()["mode"].(string)
-		if strings.TrimSpace(mode) == "" {
-			mode = "run"
-		}
-		cfg, err := cloudsync.ConfigFromEnv()
-		if err != nil {
-			return mcp.NewToolResultError("Sync config error: " + err.Error()), nil
-		}
-		backend, err := turso.Provider{}.NewBackend(cfg)
-		if err != nil {
-			return mcp.NewToolResultError("Sync backend error: " + err.Error()), nil
-		}
-		engine, err := cloudsync.NewEngine(s, backend, cfg)
-		if err != nil {
-			return mcp.NewToolResultError("Sync engine error: " + err.Error()), nil
-		}
-		var res *cloudsync.Result
-		switch strings.TrimSpace(mode) {
-		case "run":
-			res, err = engine.Sync(ctx)
-		case "push":
-			res, err = engine.Push(ctx)
-		case "pull":
-			res, err = engine.Pull(ctx)
-		default:
-			return mcp.NewToolResultError("mode must be run, push, or pull"), nil
-		}
-		if err != nil {
-			return mcp.NewToolResultError("Sync failed: " + err.Error()), nil
-		}
-		return mcp.NewToolResultText(fmt.Sprintf("Sync %s complete: pushed=%d pulled=%d skipped_own=%d pending=%d latest_seq=%d lifecycle=%s",
-			mode, res.Pushed, res.Pulled, res.SkippedOwn, res.Pending, res.LatestSeq, res.Lifecycle)), nil
-	}
 }

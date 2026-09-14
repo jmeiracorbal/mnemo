@@ -103,14 +103,18 @@ type SchemaMigration struct {
 }
 
 type Session struct {
-	ID           string         `json:"id"`
-	Project      string         `json:"project"`
-	Directory    string         `json:"directory"`
-	StartedAt    string         `json:"started_at"`
-	EndedAt      sql.NullString `json:"ended_at"`
-	Summary      sql.NullString `json:"summary"`
-	IsDeleted    int64          `json:"is_deleted"`
-	ProvenanceID sql.NullInt64  `json:"provenance_id"`
+	ID            string         `json:"id"`
+	Project       string         `json:"project"`
+	Directory     string         `json:"directory"`
+	StartedAt     string         `json:"started_at"`
+	EndedAt       sql.NullString `json:"ended_at"`
+	Summary       sql.NullString `json:"summary"`
+	IsDeleted     int64          `json:"is_deleted"`
+	ProvenanceID  sql.NullInt64  `json:"provenance_id"`
+	LastCompactAt sql.NullString `json:"last_compact_at"`
+	UpdatedAt     sql.NullString `json:"updated_at"`
+	McpPid        sql.NullInt64  `json:"mcp_pid"`
+	McpInstanceID sql.NullString `json:"mcp_instance_id"`
 }
 
 type SessionTag struct {
@@ -124,38 +128,6 @@ type SourceKind struct {
 	DisplayName string `json:"display_name"`
 	IsDeleted   int64  `json:"is_deleted"`
 	CreatedAt   string `json:"created_at"`
-}
-
-type SyncMutation struct {
-	Seq        int64          `json:"seq"`
-	TargetKey  string         `json:"target_key"`
-	Entity     string         `json:"entity"`
-	EntityKey  string         `json:"entity_key"`
-	Op         string         `json:"op"`
-	Payload    string         `json:"payload"`
-	Source     string         `json:"source"`
-	OccurredAt string         `json:"occurred_at"`
-	AckedAt    sql.NullString `json:"acked_at"`
-}
-
-type SyncState struct {
-	TargetKey           string         `json:"target_key"`
-	SyncTypeID          string         `json:"sync_type_id"`
-	Lifecycle           string         `json:"lifecycle"`
-	LastEnqueuedSeq     int64          `json:"last_enqueued_seq"`
-	LastAckedSeq        int64          `json:"last_acked_seq"`
-	LastPulledSeq       int64          `json:"last_pulled_seq"`
-	ConsecutiveFailures int64          `json:"consecutive_failures"`
-	BackoffUntil        sql.NullString `json:"backoff_until"`
-	LeaseOwner          sql.NullString `json:"lease_owner"`
-	LeaseUntil          sql.NullString `json:"lease_until"`
-	LastError           sql.NullString `json:"last_error"`
-	UpdatedAt           string         `json:"updated_at"`
-}
-
-type SyncType struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
 }
 
 type Tool struct {

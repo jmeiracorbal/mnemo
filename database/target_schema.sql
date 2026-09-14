@@ -72,7 +72,11 @@ CREATE TABLE sessions (
     ended_at TEXT,
     summary TEXT,
     is_deleted INTEGER NOT NULL DEFAULT 0,
-    provenance_id INTEGER REFERENCES provenance_contexts(id)
+    provenance_id INTEGER REFERENCES provenance_contexts(id),
+    last_compact_at TEXT,
+    updated_at TEXT,
+    mcp_pid INTEGER,
+    mcp_instance_id TEXT
 );
 
 CREATE TABLE observations (
@@ -105,39 +109,6 @@ CREATE TABLE user_prompts (
     is_deleted INTEGER NOT NULL DEFAULT 0,
     provenance_id INTEGER REFERENCES provenance_contexts(id),
     FOREIGN KEY (session_id) REFERENCES sessions(id)
-);
-
-CREATE TABLE sync_types (
-    id TEXT PRIMARY KEY,
-    display_name TEXT NOT NULL UNIQUE
-);
-
-CREATE TABLE sync_state (
-    target_key TEXT PRIMARY KEY,
-    sync_type_id TEXT NOT NULL REFERENCES sync_types(id),
-    lifecycle TEXT NOT NULL DEFAULT 'idle',
-    last_enqueued_seq INTEGER NOT NULL DEFAULT 0,
-    last_acked_seq INTEGER NOT NULL DEFAULT 0,
-    last_pulled_seq INTEGER NOT NULL DEFAULT 0,
-    consecutive_failures INTEGER NOT NULL DEFAULT 0,
-    backoff_until TEXT,
-    lease_owner TEXT,
-    lease_until TEXT,
-    last_error TEXT,
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE sync_mutations (
-    seq INTEGER PRIMARY KEY AUTOINCREMENT,
-    target_key TEXT NOT NULL,
-    entity TEXT NOT NULL,
-    entity_key TEXT NOT NULL,
-    op TEXT NOT NULL,
-    payload TEXT NOT NULL,
-    source TEXT NOT NULL DEFAULT 'local',
-    occurred_at TEXT NOT NULL DEFAULT (datetime('now')),
-    acked_at TEXT,
-    FOREIGN KEY (target_key) REFERENCES sync_state(target_key)
 );
 
 CREATE TABLE observation_tags (
@@ -195,14 +166,12 @@ CREATE INDEX idx_prompts_sync_id ON user_prompts(sync_id);
 CREATE UNIQUE INDEX ux_user_prompts_sync_id ON user_prompts(sync_id) WHERE sync_id IS NOT NULL AND sync_id <> '';
 CREATE INDEX idx_prompts_provenance ON user_prompts(provenance_id);
 CREATE INDEX idx_sessions_provenance ON sessions(provenance_id);
+CREATE UNIQUE INDEX ux_sessions_open_mcp_instance ON sessions(project, mcp_instance_id) WHERE mcp_instance_id IS NOT NULL AND ended_at IS NULL AND is_deleted = 0;
 CREATE INDEX idx_provenance_agent ON provenance_contexts(agent_id);
 CREATE INDEX idx_provenance_source ON provenance_contexts(source_kind_id);
 CREATE INDEX idx_provenance_tool ON provenance_contexts(tool_id);
 CREATE INDEX idx_provenance_model ON provenance_contexts(model_id);
 CREATE INDEX idx_provenance_mcp_client ON provenance_contexts(mcp_client_id);
-CREATE INDEX idx_sync_mutations_target_seq ON sync_mutations(target_key, seq);
-CREATE INDEX idx_sync_mutations_pending ON sync_mutations(target_key, acked_at, seq);
-CREATE INDEX idx_sync_mutations_entity_key ON sync_mutations(target_key, entity, entity_key);
 CREATE INDEX idx_review_state ON observation_reviews(state);
 CREATE INDEX idx_review_superseded_by ON observation_reviews(superseded_by);
 CREATE INDEX idx_obs_tags_obs ON observation_tags(observation_id);

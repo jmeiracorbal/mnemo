@@ -15,6 +15,7 @@ Before any memory operation:
 2. Read `<root>/.mnemo`.
 3. Continue only when it is valid JSON with a non-empty `id`.
 4. Use that `id` as `project` in every mnemo tool call.
+5. Use the Git repository root (or current workspace) as `directory` in every mnemo write call — `mem_save`, `mem_session_summary`, `mem_save_prompt`, `mem_capture_passive`. The MCP server resolves the active session automatically from the project and directory; do not pass a `session_id`.
 
 If `.mnemo` is missing or invalid, tell the user to run `mnemo init` and stop the memory workflow. If mnemo tools are unavailable, report that integration is incomplete. Never create `MEMORY.md`, write into an agent's native memory directory, or use arbitrary text files as a fallback.
 
@@ -62,7 +63,6 @@ update checks from MCP, hooks, or JSON-output paths.
 ## 2. Recover relevant context
 
 - At session start, resume, or after compaction, call `mem_context` before significant work.
-- When cloud sync is configured (via `mnemo setup cloud` or the environment variables `MNEMO_CLOUD_URL`, `MNEMO_CLOUD_KEY`, `MNEMO_CLOUD_CLIENT_ID`), use `mem_sync_status` to inspect pending local mutations and `mem_sync_now` when the user asks to synchronize or before ending important sessions. Sync is complete-by-default and idempotent; do not decide that individual memories should remain local-only.
 - When the user asks to recall past work, call `mem_context` first, then `mem_search` with focused keywords.
 - Use `mem_get_observation` when a search result is truncated or the full record matters.
 - Search proactively when beginning work that may have prior decisions or when an unfamiliar topic may have been discussed before.
