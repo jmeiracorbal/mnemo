@@ -18,7 +18,6 @@ mnemo setup AGENT [--home=DIR] [--mnemo-bin=PATH]  Alias for setup refresh --age
 mnemo setup uninstall --agent=AGENT [--home=DIR]  Remove global setup files for an agent
 mnemo update [--check] [--yes] [--agent=AGENT] [--json]  Check for and install a newer mnemo release
 mnemo db migrate [--data-dir=DIR] [--check] [--json]  Validate or apply database migrations
-mnemo sync run|push|pull|status  Synchronize or inspect local cloud sync state
 mnemo migrate [--path=DIR]              Migrate project identity
 mnemo projects list [--sort=FIELD] [--asc|--desc] [--unused-since=DURATION|DATE] [--empty] [--json]  List known projects
 mnemo projects merge --from=PROJECT --to=PROJECT (--dry-run|--yes) [--json]  Merge one project into another
@@ -29,10 +28,11 @@ mnemo memories mark-reviewed OBSERVATION_ID [--reason=TEXT]  Mark a memory as re
 mnemo memories mark-stale OBSERVATION_ID [--reason=TEXT]  Mark a memory as stale
 mnemo memories supersede OLD_ID --by=NEW_ID [--reason=TEXT]  Mark a memory as superseded by another
 mnemo memories consolidate-topic --from=TOPIC --to=TOPIC (--dry-run|--yes) [--json]  Consolidate memory topic keys
-mnemo save <title> <content> [--type=TYPE] [--project=PROJECT] [--scope=SCOPE] [--topic=TOPIC]  Save a memory
+mnemo save <title> <content> --session SESSION --project PROJECT --dir DIR [--type TYPE] [--scope SCOPE] [--topic TOPIC]  Save a memory
 mnemo search <query> [--project=PROJECT] [--scope=SCOPE] [--limit=N]  Search memories
 mnemo context [project]              Show context from previous sessions
 mnemo session start <id>             Register session start
+mnemo session compact <id>           Record a manual context compaction
 mnemo session end <id>               Mark session as completed
 mnemo session exists <id>            Check if a session exists (exits 1 if not)
 mnemo session obs-count <id>         Count observations saved in a session
@@ -40,7 +40,7 @@ mnemo session project-obs-count <id> Count project-scoped observations for a ses
 mnemo stats                          Show memory statistics
 mnemo export [file]                  Export all memories to JSON
 mnemo import <file.json>             Import memories from JSON
-mnemo capture <content>|-             Extract learnings from text (passive capture)
+mnemo capture <content>|- --session SESSION --project PROJECT --dir DIR  Extract learnings from text
 mnemo json <key> [key...]            Extract a field from JSON read from stdin (key path, array index supported)
 mnemo json-merge <file>              Deep-merge JSON from stdin into a file
 mnemo extract-transcript <file>      Extract assistant text blocks from a JSONL transcript
@@ -67,7 +67,8 @@ Agents for `mnemo init`, `mnemo install-instructions` and setup commands:
 Save a decision manually:
 
 ```bash
-mnemo save "Use FTS5 for search" "Chose SQLite FTS5 over external search" --type decision --project myapp
+mnemo session start manual-1 --project myapp --dir "$PWD"
+mnemo save "Use FTS5 for search" "Chose SQLite FTS5 over external search" --type decision --session manual-1 --project myapp --dir "$PWD"
 ```
 
 Search memories:
@@ -147,8 +148,6 @@ Tools are available inside your editor through the `mcp__mnemo__*` namespace.
 | `mem_search` | Search memories by text, tags, topic key or any combination |
 | `mem_context` | Retrieve formatted context from previous sessions |
 | `mem_session_summary` | Save an end-of-session summary with goal, discoveries and next steps |
-| `mem_session_start` | Register a new session |
-| `mem_session_end` | Mark a session as completed, optionally with tags |
 | `mem_get_observation` | Retrieve full content of a memory by ID |
 | `mem_suggest_topic_key` | Suggest a topic key for deduplication |
 | `mem_capture_passive` | Extract and save learnings from free-form text |
@@ -160,7 +159,12 @@ Tools are available inside your editor through the `mcp__mnemo__*` namespace.
 | `mem_related_tags` | Find tags that co-occur with a given tag across observations and sessions |
 | `mem_current_project` | Resolve the current project identity from `.mnemo` |
 | `mem_doctor` | Run read-only diagnostics from MCP |
-| `mem_sync_status` | Read local cloud sync state and pending mutations without backfill or cloud contact |
+
+MCP owns agent-session lifecycle. Its write tools require `project` and
+`directory`, but never `session_id`; a session is created for the active MCP
+connection on its first write and closed when that connection ends. The CLI
+commands above are manual operations and therefore require an explicit
+`--session`.
 
 ### Admin profile
 

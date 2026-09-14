@@ -61,33 +61,27 @@ The `.mnemo` file at the project root activates mnemo for a project:
 
 | Hook | Trigger | Action |
 |---|---|---|
-| `SessionStart` (startup/resume/clear) | New session | Registers session, injects memory context and deferred-tool loading protocol |
+| `SessionStart` (startup/resume/clear) | New session | Injects memory context and deferred-tool loading protocol |
 | `UserPromptSubmit` | Each user message | Re-emits ToolSearch on first message; periodic save reminders |
 | `SessionStart` (compact) | After compaction | Recovers context from mnemo after context window reset |
-| `PostCompact` | During compaction | Persists compaction summary to mnemo |
-| `Stop` | Session ends | Marks session completed, warns if nothing was saved |
-| `SubagentStop` | Subagent finishes | Passively captures learnings from subagent output |
 
 ### Cursor
 
 | Hook | Trigger | Action |
 |---|---|---|
-| `beforeSubmitPrompt` | First prompt of a conversation | Registers session, injects memory context and memory authority protocol |
-| `stop` | Conversation ends | Reads transcript JSONL for passive capture, closes session |
+| `beforeSubmitPrompt` | Prompt submission | Injects memory context and memory authority protocol |
 
 ### Windsurf
 
 | Hook | Trigger | Action |
 |---|---|---|
-| `pre_user_prompt` | First prompt of a conversation | Registers session, injects memory context and memory authority protocol |
-| `post_cascade_response_with_transcript` | After response | Reads transcript JSONL for passive capture, closes session |
+| `pre_user_prompt` | Prompt submission | Injects memory context and memory authority protocol |
 
 ### Codex
 
 | Hook | Trigger | Action |
 |---|---|---|
-| `SessionStart` (startup/resume) | Session starts or resumes | Registers session, injects memory context via `systemMessage` |
-| `Stop` | Agent stops | Reads transcript for passive capture, closes session |
+| `SessionStart` (startup/resume) | Session starts or resumes | Injects memory context via `systemMessage` |
 
 ### OpenCode
 
@@ -109,4 +103,4 @@ Pi support uses global `~/.pi/agent/APPEND_SYSTEM.md` instructions, project `AGE
 
 mnemo does not write `.pi/SYSTEM.md` because that file replaces Pi's default system prompt. The managed PI guidance is appended instead, so Pi keeps its default prompt, context files and skills behavior. Pi support does not install hooks because Pi does not expose a stable declarative hook surface for mnemo to rely on.
 
-On session start, every hook resolves the Git root and reads the project identifier from `.mnemo`. This keeps the same identity regardless of which subdirectory the editor opens.
+On session start, hooks resolve the Git root and read the project identifier from `.mnemo`. This keeps the same identity regardless of which subdirectory the editor opens. Hooks are context-only: MCP creates and closes the agent session from its stdio connection.

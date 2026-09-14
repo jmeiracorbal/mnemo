@@ -132,7 +132,7 @@ func TestShippedHooksResolveProjectFromMarker(t *testing.T) {
 	}
 }
 
-func TestShippedHooksSuppressInternalMnemoWriteOutput(t *testing.T) {
+func TestShippedHooksDoNotWriteSessionsDirectly(t *testing.T) {
 	roots := []string{
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts"),
 		filepath.Join("..", "..", "scripts", "cursor", "hooks"),
@@ -142,13 +142,13 @@ func TestShippedHooksSuppressInternalMnemoWriteOutput(t *testing.T) {
 
 	writeCommands := []string{
 		"mnemo session start ",
+		"mnemo session compact ",
 		"mnemo session end ",
 		"mnemo save ",
 		"mnemo capture ",
 		"| mnemo capture ",
 	}
 
-	checked := 0
 	for _, root := range roots {
 		err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
@@ -169,19 +169,7 @@ func TestShippedHooksSuppressInternalMnemoWriteOutput(t *testing.T) {
 					if !strings.Contains(line, command) {
 						continue
 					}
-					checked++
-					terminator := line
-					if !strings.Contains(terminator, "|| true") {
-						for _, nextLine := range lines[i+1:] {
-							terminator = nextLine
-							if strings.Contains(terminator, "|| true") {
-								break
-							}
-						}
-					}
-					if strings.Contains(terminator, "2>/dev/null || true") && !strings.Contains(terminator, ">/dev/null 2>&1") {
-						t.Errorf("%s:%d suppresses stderr only for %q; hook-internal mnemo writes must suppress stdout too", path, i+1, command)
-					}
+					t.Errorf("%s:%d invokes %q; session-associated writes must go through MCP", path, i+1, command)
 				}
 			}
 			return nil
@@ -189,9 +177,6 @@ func TestShippedHooksSuppressInternalMnemoWriteOutput(t *testing.T) {
 		if err != nil {
 			t.Fatalf("walk %s: %v", root, err)
 		}
-	}
-	if checked == 0 {
-		t.Fatal("no hook-internal mnemo write commands were checked")
 	}
 }
 

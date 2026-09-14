@@ -231,94 +231,6 @@ type Provenance struct {
 	CreatedAt          string `json:"created_at"`
 }
 
-const (
-	DefaultSyncTargetKey = "cloud"
-	DefaultSyncTypeID    = "cloud"
-
-	SyncLifecycleIdle     = "idle"
-	SyncLifecyclePending  = "pending"
-	SyncLifecycleRunning  = "running"
-	SyncLifecycleHealthy  = "healthy"
-	SyncLifecycleDegraded = "degraded"
-
-	SyncEntityProject           = "project"
-	SyncEntitySession           = "session"
-	SyncEntityObservation       = "observation"
-	SyncEntityUserPrompt        = "user_prompt"
-	SyncEntityObservationTag    = "observation_tag"
-	SyncEntitySessionTag        = "session_tag"
-	SyncEntityObservationReview = "observation_review"
-	SyncEntityProvenanceContext = "provenance_context"
-	SyncEntityAgent             = "agent"
-	SyncEntityTool              = "tool"
-	SyncEntityModel             = "model"
-	SyncEntitySourceKind        = "source_kind"
-	SyncEntityMCPClient         = "mcp_client"
-
-	SyncOpUpsert = "upsert"
-
-	SyncSourceLocal  = "local"
-	SyncSourceRemote = "remote"
-)
-
-type SyncState struct {
-	TargetKey           string  `json:"target_key"`
-	SyncTypeID          string  `json:"sync_type_id"`
-	Lifecycle           string  `json:"lifecycle"`
-	LastEnqueuedSeq     int64   `json:"last_enqueued_seq"`
-	LastAckedSeq        int64   `json:"last_acked_seq"`
-	LastPulledSeq       int64   `json:"last_pulled_seq"`
-	ConsecutiveFailures int     `json:"consecutive_failures"`
-	BackoffUntil        *string `json:"backoff_until,omitempty"`
-	LeaseOwner          *string `json:"lease_owner,omitempty"`
-	LeaseUntil          *string `json:"lease_until,omitempty"`
-	LastError           *string `json:"last_error,omitempty"`
-	UpdatedAt           string  `json:"updated_at"`
-}
-
-type SyncMutation struct {
-	Seq        int64   `json:"seq"`
-	TargetKey  string  `json:"target_key"`
-	Entity     string  `json:"entity"`
-	EntityKey  string  `json:"entity_key"`
-	Op         string  `json:"op"`
-	Payload    string  `json:"payload"`
-	Source     string  `json:"source"`
-	OccurredAt string  `json:"occurred_at"`
-	AckedAt    *string `json:"acked_at,omitempty"`
-}
-
-type syncSessionPayload struct {
-	ID         string           `json:"id"`
-	Project    string           `json:"project"`
-	Directory  string           `json:"directory"`
-	EndedAt    *string          `json:"ended_at,omitempty"`
-	Summary    *string          `json:"summary,omitempty"`
-	IsDeleted  bool             `json:"is_deleted"`
-	Provenance *ProvenanceInput `json:"provenance,omitempty"`
-}
-
-type syncObservationPayload struct {
-	SyncID     string           `json:"sync_id"`
-	SessionID  string           `json:"session_id"`
-	Type       string           `json:"type"`
-	Title      string           `json:"title"`
-	Content    string           `json:"content"`
-	ToolName   *string          `json:"tool_name,omitempty"`
-	Scope      string           `json:"scope"`
-	TopicKey   *string          `json:"topic_key,omitempty"`
-	IsDeleted  bool             `json:"is_deleted"`
-	Provenance *ProvenanceInput `json:"provenance,omitempty"`
-}
-
-type syncPromptPayload struct {
-	SyncID     string           `json:"sync_id"`
-	SessionID  string           `json:"session_id"`
-	Content    string           `json:"content"`
-	IsDeleted  bool             `json:"is_deleted"`
-	Provenance *ProvenanceInput `json:"provenance,omitempty"`
-}
-
 type ExportData struct {
 	Version      string        `json:"version"`
 	ExportedAt   string        `json:"exported_at"`
@@ -334,11 +246,10 @@ type ImportResult struct {
 }
 
 type MigrateResult struct {
-	Migrated             bool  `json:"migrated"`
-	ObservationsUpdated  int64 `json:"observations_updated"`
-	SessionsUpdated      int64 `json:"sessions_updated"`
-	PromptsUpdated       int64 `json:"prompts_updated"`
-	SyncMutationsUpdated int64 `json:"sync_mutations_updated"`
+	Migrated            bool  `json:"migrated"`
+	ObservationsUpdated int64 `json:"observations_updated"`
+	SessionsUpdated     int64 `json:"sessions_updated"`
+	PromptsUpdated      int64 `json:"prompts_updated"`
 }
 
 type ProjectMergePlan struct {
@@ -347,7 +258,6 @@ type ProjectMergePlan struct {
 	Observations            int64          `json:"observations"`
 	Sessions                int64          `json:"sessions"`
 	Prompts                 int64          `json:"prompts"`
-	SyncMutations           int64          `json:"sync_mutations"`
 	SourceProjectRows       int64          `json:"source_project_rows"`
 	WillDeleteSourceProject bool           `json:"will_delete_source_project"`
 }
@@ -358,7 +268,6 @@ type ProjectMergeResult struct {
 	ObservationsUpdated  int64            `json:"observations_updated"`
 	SessionsUpdated      int64            `json:"sessions_updated"`
 	PromptsUpdated       int64            `json:"prompts_updated"`
-	SyncMutationsUpdated int64            `json:"sync_mutations_updated"`
 	SourceProjectDeleted bool             `json:"source_project_deleted"`
 }
 

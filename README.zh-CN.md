@@ -67,7 +67,8 @@ mnemo doctor --agent=all --path=.
 也可以从 CLI 手动保存和搜索记忆：
 
 ```bash
-mnemo save "使用 SQLite FTS5" "搜索保持本地、快速且依赖很少。" --type decision --project myapp
+mnemo session start manual-1 --project myapp --dir "$PWD"
+mnemo save "使用 SQLite FTS5" "搜索保持本地、快速且依赖很少。" --type decision --session manual-1 --project myapp --dir "$PWD"
 mnemo search "SQLite" --project myapp
 ```
 
@@ -88,9 +89,9 @@ mnemo search "SQLite" --project myapp
 |---|---|
 | **按项目启用** | 全局 hooks 只会在项目包含有效 `.mnemo` 标记时运行。 |
 | **MCP 工具** | 代理可以调用 `mem_save`、`mem_search`、`mem_context`、`mem_current_project`、`mem_doctor` 等工具。 |
-| **会话 hooks** | 记录会话活动、注入上下文，并自动捕获学习内容。 |
+| **MCP 管理的会话** | 每个 MCP 连接会为项目创建和关闭自己的会话；hooks 只负责注入上下文。 |
 | **可移植 Agent Skills** | 教会兼容代理何时以及如何使用 mnemo，而不是回退到原生记忆。 |
-| **被动捕获** | 从 transcript 和子代理输出中提取有价值的学习内容。 |
+| **被动捕获** | MCP 从代理提供的内容中提取有价值的学习。 |
 | **代理溯源** | 对提供相关信息的写入，记录可通过 SQL 查询的代理、来源、工具、模型和 MCP 客户端元数据。 |
 | **诊断** | `mnemo doctor` 检查项目启用、全局配置、MCP、hooks、竞争记忆表面和数据库迁移健康状态。 |
 | **数据库安全** | 安全迁移会自动应用；`mnemo db migrate --check` 可为 CI 或故障排查验证本地存储。 |

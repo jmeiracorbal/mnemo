@@ -1,126 +1,14 @@
 {
-  "description": "mnemo persistent memory hooks — session tracking and passive capture",
+  "description": "mnemo persistent memory hooks — context injection",
   "hooks": {
     "SessionStart": [
-      {
-        "matcher": "startup",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh",
-            "timeout": 10,
-            "statusMessage": "Loading mnemo memory..."
-          }
-        ]
-      },
-      {
-        "matcher": "resume",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh",
-            "timeout": 10,
-            "statusMessage": "Loading mnemo memory..."
-          }
-        ]
-      },
-      {
-        "matcher": "clear",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh",
-            "timeout": 10,
-            "statusMessage": "Loading mnemo memory..."
-          }
-        ]
-      },
-      {
-        "matcher": "compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-compact-resume.sh",
-            "timeout": 10,
-            "statusMessage": "Recovering mnemo context after compaction..."
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/subagent-stop.sh",
-            "timeout": 10,
-            "async": true
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-stop.sh",
-            "timeout": 5,
-            "async": true
-          }
-        ]
-      }
-    ],
-    "PostCompact": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-compact.sh",
-            "timeout": 10,
-            "statusMessage": "Saving mnemo compaction summary..."
-          }
-        ]
-      }
+      {"matcher":"startup","hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh","timeout":10,"statusMessage":"Loading mnemo memory..."}]},
+      {"matcher":"resume","hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh","timeout":10,"statusMessage":"Loading mnemo memory..."}]},
+      {"matcher":"clear","hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh","timeout":10,"statusMessage":"Loading mnemo memory..."}]},
+      {"matcher":"compact","hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/scripts/post-compact-resume.sh","timeout":10,"statusMessage":"Recovering mnemo context after compaction..."}]}
     ],
     "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-file-edit.sh",
-            "timeout": 5,
-            "async": true
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-bash-git.sh",
-            "timeout": 5,
-            "async": true
-          }
-        ]
-      }
+      {"matcher":"","hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit.sh","timeout":5}]}
     ]
   }
 }

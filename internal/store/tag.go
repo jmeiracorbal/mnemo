@@ -268,38 +268,13 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 		if err != nil {
 			return fmt.Errorf("merge: collect observations: %w", err)
 		}
-		type affectedObs struct {
-			id      int64
-			payload syncObservationPayload
-		}
-		obsList := make([]affectedObs, 0, len(obsRows))
-		for _, row := range obsRows {
-			obsList = append(obsList, affectedObs{
-				id: row.ID,
-				payload: syncObservationPayload{
-					SyncID: dbString(row.SyncID), SessionID: row.SessionID, Type: row.Type,
-					Title: row.Title, Content: row.Content, ToolName: nullablePtr(row.ToolName),
-					Scope: row.Scope, TopicKey: nullablePtr(row.TopicKey),
-					Provenance: provenanceInputForID(q, row.ProvenanceID),
-				},
-			})
-		}
+		obsCount = len(obsRows)
 
 		sessRows, err := q.ListSessionsAffectedByTag(context.Background(), from)
 		if err != nil {
 			return fmt.Errorf("merge: collect sessions: %w", err)
 		}
-		type affectedSess struct {
-			payload syncSessionPayload
-		}
-		sessList := make([]affectedSess, 0, len(sessRows))
-		for _, row := range sessRows {
-			sessList = append(sessList, affectedSess{payload: syncSessionPayload{
-				ID: row.ID, Project: row.Project, Directory: row.Directory,
-				EndedAt: nullablePtr(row.EndedAt), Summary: nullablePtr(row.Summary),
-				Provenance: provenanceInputForID(q, row.ProvenanceID),
-			}})
-		}
+		sessCount = len(sessRows)
 
 		if err := q.CopyObservationTag(context.Background(), dbgen.CopyObservationTagParams{
 			ToTag: to, FromTag: from,
@@ -309,8 +284,6 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 		if err := q.DeleteObservationTagByName(context.Background(), from); err != nil {
 			return fmt.Errorf("merge observation_tags delete: %w", err)
 		}
-		obsCount = len(obsList)
-
 		if err := q.CopySessionTag(context.Background(), dbgen.CopySessionTagParams{
 			ToTag: to, FromTag: from,
 		}); err != nil {
@@ -319,19 +292,6 @@ func (s *Store) MergeTags(fromTag, toTag string) (obsCount int, sessCount int, e
 		if err := q.DeleteSessionTagByName(context.Background(), from); err != nil {
 			return fmt.Errorf("merge session_tags delete: %w", err)
 		}
-		sessCount = len(sessList)
-
-		for _, obs := range obsList {
-			if err := s.enqueueSyncMutationsForObservationTagsTx(tx, obs.id); err != nil {
-				return err
-			}
-		}
-		for _, sess := range sessList {
-			if err := s.enqueueSyncMutationsForSessionTagsTx(tx, sess.payload.ID); err != nil {
-				return err
-			}
-		}
-
 		return nil
 	})
 	return obsCount, sessCount, err
@@ -366,7 +326,7 @@ func (s *Store) setTagsForObservationTx(tx *sql.Tx, obsID int64, tags []string) 
 			return err
 		}
 	}
-	return s.enqueueSyncMutationsForObservationTagsTx(tx, obsID)
+	return nil
 }
 
 func (s *Store) loadTagsForObservations(obs []Observation) error {
@@ -434,7 +394,7 @@ func (s *Store) setTagsForSessionTx(tx *sql.Tx, sessionID string, tags []string)
 			return err
 		}
 	}
-	return s.enqueueSyncMutationsForSessionTagsTx(tx, sessionID)
+	return nil
 }
 
 func (s *Store) loadTagsForSession(sess *Session) error {
@@ -531,46 +491,4 @@ func tagWeights(tags []TagInfo, topN int) []TagWeight {
 		out[i] = w
 	}
 	return out
-}
-
-func (s *Store) enqueueSyncMutationsForObservationTagsTx(tx *sql.Tx, obsID int64) error {
-	rows, err := s.q.WithTx(tx).ListObservationTagSyncPayloads(context.Background(), obsID)
-	if err != nil {
-		return err
-	}
-	for _, row := range rows {
-		syncID := nullablePtr(row.SyncID)
-		if syncID == nil || *syncID == "" {
-			continue
-		}
-		key := *syncID + ":" + row.Tag
-		payload := map[string]any{
-			"observation_sync_id": *syncID,
-			"tag":                 row.Tag,
-			"is_deleted":          int64ToBool(row.IsDeleted),
-		}
-		if err := s.enqueueSyncMutationTx(tx, SyncEntityObservationTag, key, SyncOpUpsert, payload); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *Store) enqueueSyncMutationsForSessionTagsTx(tx *sql.Tx, sessionID string) error {
-	rows, err := s.q.WithTx(tx).ListSessionTagSyncPayloads(context.Background(), sessionID)
-	if err != nil {
-		return err
-	}
-	for _, row := range rows {
-		key := sessionID + ":" + row.Tag
-		payload := map[string]any{
-			"session_id": sessionID,
-			"tag":        row.Tag,
-			"is_deleted": int64ToBool(row.IsDeleted),
-		}
-		if err := s.enqueueSyncMutationTx(tx, SyncEntitySessionTag, key, SyncOpUpsert, payload); err != nil {
-			return err
-		}
-	}
-	return nil
 }

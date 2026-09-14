@@ -627,15 +627,14 @@ func printProjectsMergePlans(out io.Writer, plans []store.ProjectMergePlan) {
 		return
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "From\tTo\tObservations\tSessions\tPrompts\tSync")
+	_, _ = fmt.Fprintln(w, "From\tTo\tObservations\tSessions\tPrompts")
 	for _, plan := range plans {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%d\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\n",
 			projectsTableCell(plan.From.ID),
 			projectsTableCell(plan.To.ID),
 			plan.Observations,
 			plan.Sessions,
 			plan.Prompts,
-			plan.SyncMutations,
 		)
 	}
 	_, _ = fmt.Fprintln(w, "\nDry run only. Re-run with --yes to apply.")
@@ -675,15 +674,14 @@ func printProjectsMergeResults(out io.Writer, results []store.ProjectMergeResult
 		return
 	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "From\tTo\tObservations\tSessions\tPrompts\tSync\tSource Project")
+	_, _ = fmt.Fprintln(w, "From\tTo\tObservations\tSessions\tPrompts\tSource Project")
 	for _, result := range results {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%d\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%s\n",
 			projectsTableCell(result.Plan.From.ID),
 			projectsTableCell(result.Plan.To.ID),
 			result.ObservationsUpdated,
 			result.SessionsUpdated,
 			result.PromptsUpdated,
-			result.SyncMutationsUpdated,
 			projectMergeDeletedCell(result.SourceProjectDeleted),
 		)
 	}

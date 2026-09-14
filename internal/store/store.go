@@ -208,9 +208,6 @@ func New(cfg Config) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("mnemo: migration: %w", err)
 	}
-	// Queue reconciliation belongs to sync operations. Store startup is also
-	// used by MCP, where scanning every canonical row would delay the protocol
-	// handshake on large databases.
 	return s, nil
 }
 

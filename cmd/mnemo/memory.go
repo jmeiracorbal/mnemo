@@ -13,7 +13,7 @@ import (
 func runSave(s *store.Store) {
 	args := os.Args[2:]
 	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: mnemo save <title> <content> [--type TYPE] [--project PROJECT] [--scope SCOPE] [--topic TOPIC_KEY]")
+		fmt.Fprintln(os.Stderr, "usage: mnemo save <title> <content> --session SESSION --project PROJECT --dir DIR [--type TYPE] [--scope SCOPE] [--topic TOPIC_KEY]")
 		os.Exit(1)
 	}
 
@@ -21,8 +21,10 @@ func runSave(s *store.Store) {
 	content := args[1]
 	typ := "manual"
 	project := ""
+	dir := ""
 	scope := ""
 	topicKey := ""
+	sessionID := ""
 
 	for i := 2; i < len(args)-1; i++ {
 		switch args[i] {
@@ -32,22 +34,38 @@ func runSave(s *store.Store) {
 		case "--project":
 			project = args[i+1]
 			i++
+		case "--dir":
+			dir = args[i+1]
+			i++
 		case "--scope":
 			scope = args[i+1]
 			i++
 		case "--topic":
 			topicKey = args[i+1]
 			i++
+		case "--session":
+			sessionID = args[i+1]
+			i++
 		}
 	}
 
-	sessionID := "manual-save"
-	if project != "" {
-		sessionID = "manual-save-" + project
+	if project == "" {
+		fmt.Fprintln(os.Stderr, "mnemo: --project is required")
+		os.Exit(1)
 	}
+	if dir == "" {
+		fmt.Fprintln(os.Stderr, "mnemo: --dir is required")
+		os.Exit(1)
+	}
+	if sessionID == "" {
+		fmt.Fprintln(os.Stderr, "mnemo: --session is required")
+		os.Exit(1)
+	}
+
 	provenance := store.CLIProvenance(store.ToolMnemoSave)
-	if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: warning: could not create session: %v\n", err)
+	if err := s.EnsureSession(sessionID, project, dir); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: could not ensure session: %v\n", err)
+		os.Exit(1)
 	}
 
 	id, err := s.AddObservation(store.AddObservationParams{
@@ -146,6 +164,7 @@ func runContext(s *store.Store) {
 func runSession(s *store.Store) {
 	if len(os.Args) < 4 {
 		fmt.Fprintln(os.Stderr, "usage: mnemo session start <id> [--project PROJECT] [--dir DIR]")
+		fmt.Fprintln(os.Stderr, "       mnemo session compact <id>")
 		fmt.Fprintln(os.Stderr, "       mnemo session end <id> [--summary SUMMARY]")
 		os.Exit(1)
 	}
@@ -168,11 +187,18 @@ func runSession(s *store.Store) {
 				i++
 			}
 		}
-		if err := s.CreateSessionWithProvenance(id, project, dir, store.CLIProvenance(store.ToolMemSessionStart)); err != nil {
+		if err := s.CreateSession(id, project, dir); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo: session start failed: %v\n", err)
 			os.Exit(1)
 		}
 		fmt.Printf("Session %q started\n", id)
+
+	case "compact":
+		if err := s.TouchCompact(id); err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo: session compact failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Session %q compact recorded\n", id)
 
 	case "end":
 		summary := ""
@@ -288,7 +314,7 @@ func runImport(s *store.Store) {
 func runCapture(s *store.Store) {
 	args := os.Args[2:]
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: mnemo capture <content>|- [--session SESSION_ID] [--project PROJECT]")
+		fmt.Fprintln(os.Stderr, "usage: mnemo capture <content>|- --session SESSION --project PROJECT --dir DIR")
 		os.Exit(1)
 	}
 
@@ -305,6 +331,7 @@ func runCapture(s *store.Store) {
 	}
 	sessionID := ""
 	project := ""
+	dir := ""
 
 	for i := 1; i < len(args)-1; i++ {
 		switch args[i] {
@@ -314,18 +341,29 @@ func runCapture(s *store.Store) {
 		case "--project":
 			project = args[i+1]
 			i++
+		case "--dir":
+			dir = args[i+1]
+			i++
 		}
 	}
 
-	if sessionID == "" {
-		sessionID = "manual-save"
-		if project != "" {
-			sessionID = "manual-save-" + project
-		}
+	if project == "" {
+		fmt.Fprintln(os.Stderr, "mnemo: --project is required")
+		os.Exit(1)
 	}
+	if dir == "" {
+		fmt.Fprintln(os.Stderr, "mnemo: --dir is required")
+		os.Exit(1)
+	}
+	if sessionID == "" {
+		fmt.Fprintln(os.Stderr, "mnemo: --session is required")
+		os.Exit(1)
+	}
+
 	provenance := store.CLIProvenance(store.ToolMnemoCapture)
-	if err := s.CreateSessionWithProvenance(sessionID, project, "", provenance); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: warning: could not create session: %v\n", err)
+	if err := s.EnsureSession(sessionID, project, dir); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: could not ensure session: %v\n", err)
+		os.Exit(1)
 	}
 
 	result, err := s.PassiveCapture(store.PassiveCaptureParams{

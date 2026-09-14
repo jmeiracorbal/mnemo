@@ -31,14 +31,7 @@ if [ -z "$PROJECT" ]; then
   exit 0
 fi
 
-IS_RESUME=$(mnemo session exists "$SESSION_ID" 2>/dev/null)
-
-if [ "$IS_RESUME" = "true" ]; then
-  STATUS="[mnemo] Session resumed (project: ${PROJECT})"
-else
-  mnemo session start "$SESSION_ID" --project "$PROJECT" --dir "$CWD" >/dev/null 2>&1 || true
-  STATUS="[mnemo] New session started (project: ${PROJECT})"
-fi
+STATUS="[mnemo] MCP memory connection active (project: ${PROJECT})"
 
 CONTEXT=$(mnemo context "$PROJECT" 2>/dev/null)
 PROTOCOL=$(cat "${HOOKS_DIR}/mnemo-protocol.md" 2>/dev/null)

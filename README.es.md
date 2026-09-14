@@ -66,7 +66,8 @@ mnemo doctor --agent=all --path=.
 Guarda y busca memoria manualmente desde CLI:
 
 ```bash
-mnemo save "Usar SQLite FTS5" "La búsqueda queda local, rápida y sin dependencias externas." --type decision --project miapp
+mnemo session start manual-1 --project miapp --dir "$PWD"
+mnemo save "Usar SQLite FTS5" "La búsqueda queda local, rápida y sin dependencias externas." --type decision --session manual-1 --project miapp --dir "$PWD"
 mnemo search "SQLite" --project miapp
 ```
 
@@ -89,9 +90,9 @@ mnemo search "SQLite" --project miapp
 |---|---|
 | **Activación por proyecto** | Los hooks globales solo actúan cuando existe una marca `.mnemo` válida. |
 | **Herramientas MCP** | Los agentes pueden usar `mem_save`, `mem_search`, `mem_context`, `mem_current_project`, `mem_doctor` y más. |
-| **Hooks de sesión** | Registran sesiones, inyectan contexto y capturan aprendizajes automáticamente. |
+| **Sesiones controladas por MCP** | Cada conexión MCP crea y cierra su propia sesión por proyecto; los hooks solo inyectan contexto. |
 | **Agent Skills portables** | Enseñan a los agentes compatibles cuándo y cómo usar mnemo sin recurrir a memoria nativa. |
-| **Captura pasiva** | Extrae aprendizajes útiles de transcripciones y salidas de subagentes. |
+| **Captura pasiva** | MCP extrae aprendizajes del contenido proporcionado por el agente. |
 | **Provenance de agentes** | Registra metadatos consultables en SQL sobre agente, origen, tool, modelo y cliente MCP en escrituras que los aportan. |
 | **Diagnóstico** | `mnemo doctor` comprueba activación, setup global, MCP, hooks, memorias competidoras y salud de migraciones de la base de datos. |
 | **Seguridad de base de datos** | Las migraciones seguras se aplican automáticamente; `mnemo db migrate --check` valida el store local para CI o troubleshooting. |
@@ -181,24 +182,6 @@ recarguen el binario, hooks y skills refrescados. Las comprobaciones se omiten
 en rutas MCP, hooks y salidas JSON para no romper integraciones machine-readable.
 
 <a id="documentacion"></a>
-
-## Sincronización cloud
-
-mnemo puede replicar la memoria local en una base de datos Turso/libSQL en la nube, para que varias máquinas o agentes compartan las mismas observaciones. Configura las credenciales una sola vez:
-
-```bash
-mnemo setup cloud
-```
-
-Las credenciales se guardan en `~/.config/mnemo/cloud.toml` (XDG). Las variables de entorno `MNEMO_CLOUD_URL`, `MNEMO_CLOUD_KEY` y `MNEMO_CLOUD_CLIENT_ID` tienen prioridad sobre el archivo. La sincronización es local-first e idempotente — el store SQLite local sigue siendo la copia operativa.
-
-```bash
-mnemo sync run          # envía lotes pendientes y después hace pull
-mnemo sync status       # estado local; solo lectura, sin nube ni backfill
-mnemo setup cloud --validate   # prueba credenciales sin modificarlas
-```
-
-Consulta [docs/CLOUD_SYNC.md](docs/CLOUD_SYNC.md) para la referencia completa.
 
 ## Documentación
 

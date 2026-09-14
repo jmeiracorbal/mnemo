@@ -2,143 +2,39 @@
 
 ## Purpose
 
-This repository contains two separate but related deliverables:
+This repository ships the `mnemo` Go binary and the Claude Code plugin. They
+are deliberately separate: the plugin provides metadata, hooks and MCP
+integration; the binary performs setup and file changes that the plugin cannot.
 
-1. The `mnemo` Go binary.
-2. The Claude Code plugin metadata and hooks.
+## Core invariants
 
-They are intentionally separate. The plugin cannot replace the binary setup flow. Do not simplify the architecture by merging responsibilities that are separated on purpose.
+- Project identity is only the `id` in `.mnemo`; never derive it from a path.
+- Every MCP memory-writing caller must explicitly pass canonical `project` and
+  session-workspace `directory`. The MCP runtime creates and owns its session;
+  callers never pass, infer or generate a session identifier.
+- Equivalent events must preserve identical memory semantics for every supported
+  agent. Hooks may inject context, but must not create, close or write sessions.
+- Schema changes require a new incremental migration and an updated
+  `database/target_schema.sql`; never edit an existing migration.
+- Binary and plugin version metadata are a single consistency boundary. The MCP
+  server reports the build-injected binary version, never a separate constant.
 
-## Non-negotiable project rules
+## Required reading by change area
 
-### 1. Do not confuse plugin responsibilities with binary responsibilities
+| Before changing… | Read first |
+|---|---|
+| hooks, plugin setup, or an agent integration | [`docs/maintainers/agent-integrations.md`](docs/maintainers/agent-integrations.md) |
+| versions, installer/update behavior, or a release | [`docs/maintainers/releases.md`](docs/maintainers/releases.md) |
+| database schema or sqlc queries | [`docs/maintainers/migrations.md`](docs/maintainers/migrations.md) |
 
-The plugin handles metadata, hooks, and MCP integration. The binary handles setup tasks the plugin cannot perform: environment setup, file modifications, include/protocol installation.
+Do not make an area-specific change until its required guide has been read.
 
-Never report the binary/plugin split as a design bug. Only flag issues when both parts become inconsistent with each other.
+## Verification and reporting
 
-### 2. Before changing hooks, verify real script names and paths
-
-Verify naming consistency between `plugin/claude-code/hooks/hooks.json`, shipped script paths, installer code, and tests. Do not assume similar names are interchangeable.
-
-Known prior failure: `post-compaction.sh` referenced in hook config, real script was `post-compact.sh`. This class of error is critical.
-
-Hook-internal mnemo write/session commands must suppress both stdout and stderr with `>/dev/null 2>&1` to avoid leaking CLI output back into agent conversations. Do not use stderr-only redirection for `mnemo save`, `mnemo capture`, `mnemo session start`, or `mnemo session end`.
-
-### 3. Never change version references partially
-
-The binary version is injected at build time via ldflags — no code change needed. The MCP server must advertise that same binary version; do not hardcode a separate MCP version string. Plugin metadata files contain the version string explicitly and must be updated on every release.
-
-Required files on every version bump:
-
-- `.claude-plugin/marketplace.json` — `plugins[0].version`
-- `plugin/claude-code/.claude-plugin/plugin.json` — `version`
-
-Mandatory procedure:
-
-1. Search for the current version string: `grep -r "0.X.Y" .`
-2. Update every match in the files above.
-3. Confirm no stale version remains.
-4. Only then commit and create the tag.
-
-The release tag and plugin metadata version must always match.
-
-**Note on .mcp.json**: the repo contains two identical `.mcp.json` files — `.mcp.json` at the root (read by Claude Code when working in the repo) and `plugin/claude-code/.mcp.json` (read when a user installs the plugin). They serve different audiences. If the MCP server configuration changes, both must be updated.
-
-### 4. Treat version metadata as a consistency boundary
-
-The binary version and plugin metadata must not silently drift. If a release changes version metadata, verify plugin metadata files, release workflow behavior, and install/update paths are all aligned.
-
-### 5. Apply the post-merge release workflow after every approved PR
-
-When a PR has been approved, merged, and published to `main`, always follow the release workflow:
-
-1. Check out `main`.
-2. Pull the latest `main` changes and tags with fast-forward only.
-3. Update local agent/plugin version metadata for the new release.
-4. Update README/docs for the newly released behavior.
-5. Run the required verification checklist.
-6. Commit the version/docs update.
-7. Create the matching release tag.
-8. Push both the commit and the tag.
-9. Perform a clean release download/install test from the remote installer, using an isolated temporary `HOME` and `MNEMO_INSTALL_DIR` rather than the local git checkout. Verify that the downloaded binary reports the new tag, global setup has no warnings after install, project init/doctor succeeds in a fresh project, and at least one affected command works end-to-end.
-
-Do not tag from a feature branch or from stale local `main`. Do not treat a local rebuild from the git checkout as a substitute for the clean download/install verification.
-
-### 6. Keep documentation accurate about what the plugin really does
-
-Distinguish clearly between binary installation, plugin installation, hook registration, setup-side file modifications, and MCP configuration. If the plugin depends on the binary being in `PATH`, state that explicitly near the install steps.
-
-### 7. Project identity is the `.mnemo` id
-
-In this repository, shipped hooks and plugins must resolve `PROJECT` from the `id` field of `.mnemo`. They must not derive identity from the filesystem path.
-
-Any second identity scheme fragments stored memory. Changing this is a storage compatibility change.
-
-### 8. Tests must validate the shipped plugin, not only installer internals
-
-Tests must cover: hook config references to existing scripts, shipped metadata consistency, filename matches between hook JSON and actual scripts. If a real shipped file can be wrong while tests pass, coverage is insufficient.
-
-### 9. New agent integrations must declare and validate skill discovery
-
-When adding or changing an agent integration, audit that agent's current skill discovery documentation before deciding how mnemo should expose skills.
-
-The preferred model is:
-
-1. Keep the canonical mnemo skill at `~/.agents/skills/mnemo-memory/`.
-2. If the agent directly discovers `~/.agents/skills`, do not create a redundant agent-specific copy or symlink.
-3. If the agent requires its own global skill directory, declare the symlink path in that agent's `AgentSpec` through `AgentSkillSpec.GlobalLinkPath`.
-4. Validate the resulting layout in a clean temporary `HOME`: canonical skill files exist, expected symlinks point to the canonical folder, and agents that use the canonical path do not receive redundant symlinks.
-
-Do not add skill paths to a hardcoded global list outside the agent spec. The skill surface is part of the concrete agent contract.
-
-### 10. Database migrations: incremental migrations + target schema
-
-The migration system has two components that must always be kept in sync:
-
-- `database/migrations/NNNN-<name>.sql` — incremental scripts applied at runtime to bring existing databases up to date. Every schema change must be expressed as a new numbered migration. Never modify an existing migration file.
-- `database/target_schema.sql` — a snapshot of the **complete expected state** of the database after all migrations have been applied. It is used by `ValidateCurrent` to verify post-migration consistency and by tests to confirm that running all migrations produces an equivalent result.
-
-`target_schema.sql` is NOT the initial schema. It represents the current final state and already includes tables, columns, and indexes added by all past migrations. Fresh installs run all migrations in order — they do not apply `target_schema.sql` directly.
-
-**Required procedure for every schema change:**
-
-1. Add a new migration file `database/migrations/NNNN-<descriptive-name>.sql`.
-2. Update `database/target_schema.sql` to reflect the new final state (add the table, column, index, etc.).
-3. Update the expected version in `internal/db/migrate/migrate_test.go` (`TestApplyDataDirCreatesCurrentSchemaAndIsIdempotent`).
-4. Run `go test ./internal/db/migrate/...` to confirm `TestMigratedSchemaMatchesCanonicalSchemaStructure` passes.
-
-If `target_schema.sql` is not updated, the migration test and `ValidateCurrent` will diverge from the actual migrated state.
-
-## Pre-commit checklist
-
-Before committing any change that touches hooks, plugin metadata, setup/install flows, versioning, or memory behavior:
-
-- [ ] Project builds: `go build ./...`
-- [ ] Tests pass: `go test ./...`
-- [ ] Plugin validates: `claude plugin validate plugin/claude-code`
-- [ ] Affected hook or setup flow works end-to-end
-- [ ] Hook filenames in `hooks.json` match actual embedded scripts
-- [ ] Version strings updated in all required metadata files
-- [ ] Shipped hooks resolve PROJECT from `.mnemo` id
-- [ ] New/changed agent integrations validate whether skills are loaded from `~/.agents/skills` directly or via an `AgentSpec` symlink
-- [ ] No previously working path was broken
-
-State what was verified in the commit message. Do not claim completion without verification evidence.
-
-## Anti-patterns to avoid
-
-- Rename scripts without checking all references
-- Update only one version file
-- Trust tests that ignore shipped plugin files
-- Change docs without checking actual implementation
-- Introduce a second way to resolve project identity besides the `.mnemo` id
-- Hardcode an MCP server version separate from the binary version
-- Assume release metadata is centralized if it is not
-
-## Expected output style
-
-When reporting issues or proposing fixes: list exact files, describe the concrete inconsistency, explain user impact, propose the minimal correct fix, distinguish bug from documentation issue from design issue.
+Run `go test ./...`, `go build ./...`, and `git diff --check` for every code
+change. For a changed hook/plugin/setup flow, also follow the relevant guide's
+validation checklist. State exact files, user impact, minimal fix, and evidence
+of verification; distinguish bugs, documentation issues and design decisions.
 
 <!-- mnemo:start -->
 ## mnemo

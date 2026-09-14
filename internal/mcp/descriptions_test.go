@@ -48,11 +48,10 @@ func TestNewServerWithToolsRequiresVersion(t *testing.T) {
 	}
 }
 
-func TestAgentProfileIncludesSyncTools(t *testing.T) {
-	allowlist := ResolveTools("agent")
-	for _, name := range []string{"mem_sync_status", "mem_sync_now"} {
-		if !allowlist[name] {
-			t.Fatalf("agent profile missing %s", name)
+func TestAgentProfileDoesNotExposeSessionLifecycleTools(t *testing.T) {
+	for _, name := range []string{"mem_session_start", "mem_session_end"} {
+		if ProfileAgent[name] {
+			t.Fatalf("agent profile must not expose %s; MCP owns session lifecycle", name)
 		}
 	}
 }
