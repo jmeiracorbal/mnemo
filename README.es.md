@@ -9,7 +9,6 @@
 </p>
 
 <p align="center">
-  Dale a Claude Code, Codex, Cursor, Windsurf, OpenCode, fx y Pi una memoria local compartida que sobrevive a sesiones, compactaciones y cambios de agente.
 </p>
 
 <p align="center">
@@ -78,7 +77,6 @@ mnemo search "SQLite" --project miapp
 | Problema | mnemo aporta |
 |---|---|
 | Los agentes olvidan decisiones entre sesiones | Memoria persistente de proyecto en `~/.mnemo/memory.db` |
-| Cada agente mantiene una memoria distinta | Una capa compartida para Claude Code, Codex, Cursor, Windsurf, OpenCode, fx y Pi |
 | Los archivos markdown de memoria se desordenan | Observaciones estructuradas, tags, topic keys y estados de revisión |
 | Los hooks globales pueden ser peligrosos | Activación opt-in por proyecto mediante `.mnemo`; el resto se ignora |
 | El setup puede fallar en silencio | `mnemo doctor` y `mnemo setup status` explican qué está configurado |
@@ -109,7 +107,6 @@ mnemo search "SQLite" --project miapp
   <img alt="Cursor" src="https://img.shields.io/badge/Cursor-soportado-111111?logo=cursor&logoColor=white">
   <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-soportado-2563EB?logo=windsurf&logoColor=white">
   <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-soportado-F97316?logo=opencode&logoColor=white">
-  <img alt="fx" src="https://img.shields.io/badge/fx-soportado-7C3AED?logo=vercel&logoColor=white">
   <img alt="Pi" src="https://img.shields.io/badge/Pi-soportado-0EA5E9">
 </p>
 
@@ -120,8 +117,7 @@ mnemo search "SQLite" --project miapp
 | Cursor | ✅ | ✅ | ✅ | ✅ | Soportado |
 | Windsurf | ✅ | ✅ | ✅ | ✅ | Soportado |
 | OpenCode | ✅ | ✅ | ✅ | ✅ | Soportado |
-| fx | ✅ | n/a | ✅ | ✅ vía ruta canónica | Soportado |
-| Pi | ✅ vía extensión MCP | n/a | ✅ | ✅ vía `~/.pi/agent/skills/` | Soportado |
+| Pi | ✅ vía extensión MCP | ✅ extensión | ✅ | ✅ vía `~/.pi/agent/skills/` | Soportado |
 
 El setup global se instala una vez. La activación del proyecto sigue siendo local y explícita:
 

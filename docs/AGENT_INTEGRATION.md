@@ -1,16 +1,14 @@
 # Agent integration
 
-mnemo supports Claude Code, Cursor, Windsurf, Codex, OpenCode, fx and Pi through global setup surfaces plus project-local activation.
+mnemo supports Claude Code, Cursor, Windsurf, Codex, OpenCode, and Pi through one MCP memory contract. Agent-specific runtime surfaces may provide context or durable events, but never direct memory writes.
 
 ## Global surfaces
 
-| | Claude Code | Cursor | Windsurf | Codex | OpenCode | fx | Pi |
-|---|---|---|---|---|---|---|---|
-| **Hook scripts** | via plugin or n/a via `install.sh` | `~/.cursor/hooks/` | `~/.codeium/windsurf/hooks/` | `~/.codex/hooks/` | `~/.config/opencode/plugins/` | n/a | n/a |
-| **MCP** | `~/.claude/.mcp.json` | `~/.cursor/mcp.json` | `~/.codeium/windsurf/mcp_config.json` | `~/.codex/config.toml` | `~/.config/opencode/opencode.json` | `~/.fx/mcp.json` | `~/.pi/agent/mcp.json` via MCP extension |
-| **Hook config** | plugin hooks check `.mnemo` | `~/.cursor/hooks.json` | `~/.codeium/windsurf/hooks.json` | `~/.codex/hooks.json` checks `.mnemo` | global plugin checks `.mnemo` | n/a | n/a |
-| **Global protocol** | `~/.claude/CLAUDE.md` | `~/.cursor/rules/mnemo.mdc` | `~/.codeium/windsurf/memories/global_rules.md` | `~/.codex/AGENTS.md` | `~/.config/opencode/AGENTS.md` | `~/.fx/AGENTS.md` | `~/.pi/agent/APPEND_SYSTEM.md` |
-| **Skill access** | symlinks under `~/.claude/skills/` | canonical `~/.agents/skills/` | symlinks under `~/.codeium/windsurf/skills/` | canonical `~/.agents/skills/` | canonical `~/.agents/skills/` | canonical `~/.agents/skills/` | symlink under `~/.pi/agent/skills/` |
+| Surface | Claude Code | Cursor | Windsurf | Codex | OpenCode | Pi |
+|---|---|---|---|---|---|---|
+| **Hook scripts** | via plugin or n/a via `install.sh` | `~/.cursor/hooks/` | `~/.codeium/windsurf/hooks/` | `~/.codex/hooks/` | `~/.config/opencode/plugins/` | `~/.pi/agent/extensions/mnemo.ts` |
+| **Hook config** | plugin hooks check `.mnemo` | `~/.cursor/hooks.json` | `~/.codeium/windsurf/hooks.json` | `~/.codex/hooks.json` checks `.mnemo` | global plugin checks `.mnemo` | `~/.pi/agent/extensions/mnemo.ts` |
+| **Skill access** | symlinks under `~/.claude/skills/` | canonical `~/.agents/skills/` | symlinks under `~/.codeium/windsurf/skills/` | canonical `~/.agents/skills/` | canonical `~/.agents/skills/` | symlink under `~/.pi/agent/skills/` |
 
 All supported agents use global hook/configuration surfaces where available. Their global instructions are conditional: if `.mnemo` is missing or invalid, agents skip mnemo entirely and do not create fallback memory files.
 
@@ -21,7 +19,6 @@ mnemo keeps one canonical global skill copy at `~/.agents/skills/mnemo-memory/`.
 Current behavior:
 
 - Claude Code, Windsurf and Pi receive symlinks from their agent-specific global skill directories to `~/.agents/skills/mnemo-memory/`.
-- Codex, Cursor, OpenCode and fx load `~/.agents/skills/` directly according to their current skill discovery docs, so mnemo does not add redundant agent-specific symlinks for them.
 
 MCP setup records lightweight provenance for supported configurations by setting `MNEMO_AGENT`, `MNEMO_MCP_CLIENT` and `MNEMO_MCP_TRANSPORT` in the generated MCP server entry. mnemo stores that metadata in normalized SQLite tables separate from the project identity in `.mnemo`.
 
@@ -91,11 +88,8 @@ The `.mnemo` file at the project root activates mnemo for a project:
 | `experimental.chat.system.transform` | First prompt of a conversation | Injects memory context into the system prompt |
 | `experimental.session.compacting` | Context compaction | Refreshes context from mnemo, re-arms context injection |
 
-### fx
 
-fx support uses MCP, global `AGENTS.md` instructions and the canonical `mnemo-memory` skill under `~/.agents/skills/`. It does not install hooks because fx does not expose a supported hook surface for mnemo to rely on.
 
-fx also has a native `memory` tool backed by `~/.fx/memories.json`. The mnemo-managed `~/.fx/AGENTS.md` block explicitly disables that native memory surface for repository/project memory whenever a valid `.mnemo` marker exists; agents must use mnemo MCP tools instead.
 
 ### Pi
 
