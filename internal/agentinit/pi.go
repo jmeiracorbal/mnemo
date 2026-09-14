@@ -43,6 +43,14 @@ func piConfigSnippets(home, mnemoBin string) []ConfigSnippet {
 	}}
 }
 
+func piRuntimeAssets() []assetTarget {
+	return []assetTarget{{Asset: "scripts/pi/extensions/mnemo.ts", Path: filepath.Join(".pi", "agent", "extensions", "mnemo.ts"), Mode: 0644}}
+}
+
+func piCheckRuntime(home string) Check {
+	return checkFiles("pi", "runtime_files.pi", "Pi lifecycle extension installed", []string{filepath.Join(home, ".pi", "agent", "extensions", "mnemo.ts")}, false)
+}
+
 func piUninstallConfig(home string) ([]string, error) {
 	path := filepath.Join(home, ".pi", "agent", "mcp.json")
 	changed, err := removeMCPServer(path, "mcpServers", "mnemo")

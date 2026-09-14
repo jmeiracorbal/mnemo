@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/adapters"
 	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
@@ -53,7 +54,7 @@ func runEvents(s *store.Store) {
 		}
 	case "publish":
 		payload := json.RawMessage(values["payload"])
-		event := events.Event{ID: uuid.NewString(), Type: values["type"], Project: project, ExecutionKey: values["execution-key"], Payload: payload, OccurredAt: time.Now().UTC()}
+		event := events.Event{ID: uuid.NewString(), Type: values["type"], Project: project, ExecutionKey: values["execution-key"], Agent: adapters.Agent(values["agent"]), NativeID: values["native-id"], Payload: payload, OccurredAt: time.Now().UTC()}
 		if err := event.Validate(); err != nil {
 			fmt.Fprintln(os.Stderr, "mnemo events:", err)
 			return

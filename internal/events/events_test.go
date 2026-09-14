@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jmeiracorbal/mnemo/adapters"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -69,6 +70,44 @@ func TestControllerAppliesEventExactlyOnceAfterExecutionBinding(t *testing.T) {
 		time.Sleep(25 * time.Millisecond)
 	}
 	t.Fatal("controller did not apply exactly one event before timeout")
+}
+
+func TestControllerDerivesExecutionKeyFromNativeIdentity(t *testing.T) {
+	memory, err := store.New(store.FallbackConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = memory.Close() })
+	cfg := Config{Project: "project-pi", Port: freePort(t), DataDir: t.TempDir()}
+	controller, err := NewController(cfg, memory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(controller.Close)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = controller.Run(ctx) }()
+	event := Event{ID: "pi-start", Type: EventExecutionStarted, Project: "project-pi", Agent: adapters.AgentPi, NativeID: "native-pi-session", Payload: []byte(`{"directory":"/tmp/pi-project"}`), OccurredAt: time.Now().UTC()}
+	if err := Publish(context.Background(), cfg, event); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := memory.GetSession("execution-" + mustExecution(t, event)); err == nil {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal("controller did not create execution session")
+}
+
+func mustExecution(t *testing.T, event Event) string {
+	t.Helper()
+	identity, err := adapters.NewIdentity(event.Agent, event.Project, event.NativeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return identity.Execution
 }
 
 func TestLoadConfigRequiresExplicitProjectPort(t *testing.T) {
