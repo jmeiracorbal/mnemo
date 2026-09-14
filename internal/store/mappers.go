@@ -16,14 +16,6 @@ func nullablePtr(v sql.NullString) *string {
 	return &value
 }
 
-func nullableInt64(v sql.NullInt64) *int64 {
-	if !v.Valid {
-		return nil
-	}
-	value := v.Int64
-	return &value
-}
-
 func sqlNullString(value string) sql.NullString {
 	return sql.NullString{String: value, Valid: value != ""}
 }
