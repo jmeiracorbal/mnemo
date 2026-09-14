@@ -11,6 +11,8 @@ import (
 )
 
 const (
+	EventExecutionStarted     = "execution.started"
+	EventExecutionClosed      = "execution.closed"
 	EventSessionCompacted     = "session.compacted"
 	EventWorkspaceFileChanged = "workspace.file_changed"
 	EventGitCommitCreated     = "git.commit_created"
@@ -79,15 +81,28 @@ ON CONFLICT(id) DO NOTHING`, event.ID, event.Type, event.Project, event.Executio
 			return nil
 		}
 
+		q := s.q.WithTx(tx)
+		if event.Type == EventExecutionStarted {
+			var payload struct {
+				Directory string `json:"directory"`
+			}
+			if err := json.Unmarshal(event.Payload, &payload); err != nil || strings.TrimSpace(payload.Directory) == "" {
+				return fmt.Errorf("%s payload requires directory", event.Type)
+			}
+			sessionID := "execution-" + event.ExecutionKey
+			if err := s.createSessionTx(tx, sessionID, event.Project, payload.Directory, ProvenanceInput{}); err != nil {
+				return err
+			}
+			_, err := s.execHook(tx, `INSERT INTO execution_sessions (project, execution_key, session_id) VALUES (?, ?, ?) ON CONFLICT(project, execution_key) DO UPDATE SET session_id = excluded.session_id`, event.Project, event.ExecutionKey, sessionID)
+			return err
+		}
 		var sessionID string
-		if err := tx.QueryRow(`
-SELECT session_id FROM execution_sessions
-WHERE project = ? AND execution_key = ?`, event.Project, event.ExecutionKey).Scan(&sessionID); err != nil {
+		if err := tx.QueryRow(`SELECT session_id FROM execution_sessions WHERE project = ? AND execution_key = ?`, event.Project, event.ExecutionKey).Scan(&sessionID); err != nil {
 			return fmt.Errorf("resolve event session: %w", err)
 		}
-
-		q := s.q.WithTx(tx)
 		switch event.Type {
+		case EventExecutionClosed:
+			return q.EndSession(context.Background(), dbgen.EndSessionParams{ID: sessionID})
 		case EventSessionCompacted:
 			if !json.Valid(event.Payload) {
 				return fmt.Errorf("invalid %s payload", event.Type)

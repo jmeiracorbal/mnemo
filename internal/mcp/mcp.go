@@ -182,9 +182,10 @@ func NewServerWithTools(s *store.Store, version string, allowlist map[string]boo
 // Runtime owns the session identity for one MCP stdio server process. It is
 // intentionally independent from agent-specific hook identifiers.
 type Runtime struct {
-	instanceID string
-	pid        int
-	mu         sync.Mutex
+	instanceID   string
+	pid          int
+	executionKey string
+	mu           sync.Mutex
 }
 
 // NewServerWithRuntime creates an MCP server and the runtime that owns its
@@ -193,7 +194,11 @@ func NewServerWithRuntime(s *store.Store, version string, allowlist map[string]b
 	if strings.TrimSpace(version) == "" {
 		return nil, nil, fmt.Errorf("mcp server version is required")
 	}
-	runtime := &Runtime{instanceID: uuid.NewString(), pid: os.Getpid()}
+	runtime := &Runtime{
+		instanceID:   uuid.NewString(),
+		pid:          os.Getpid(),
+		executionKey: strings.TrimSpace(os.Getenv("MNEMO_EXECUTION_KEY")),
+	}
 
 	srv := server.NewMCPServer(
 		"mnemo",
@@ -215,7 +220,17 @@ func (r *Runtime) Close(s *store.Store) error {
 func (r *Runtime) resolveSession(s *store.Store, project, directory string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return s.ResolveMCPInstanceSession(project, directory, r.instanceID, r.pid)
+	sessionID, err := s.ResolveMCPInstanceSession(project, directory, r.instanceID, r.pid)
+	if err != nil {
+		return "", err
+	}
+	if r.executionKey == "" {
+		return sessionID, nil
+	}
+	if err := s.BindExecutionSession(project, r.executionKey, sessionID); err != nil {
+		return "", err
+	}
+	return sessionID, nil
 }
 
 func shouldRegister(name string, allowlist map[string]bool) bool {
@@ -1332,7 +1347,6 @@ func handleCapturePassive(s *store.Store, runtime *Runtime) server.ToolHandlerFu
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
 
 func intArg(req mcp.CallToolRequest, key string, defaultVal int) int {
 	v, ok := req.GetArguments()[key].(float64)

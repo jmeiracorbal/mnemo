@@ -25,7 +25,6 @@ const (
 	AgentCursor     Agent = "cursor"
 	AgentWindsurf   Agent = "windsurf"
 	AgentOpenCode   Agent = "opencode"
-	AgentFx         Agent = "fx"
 	AgentPi         Agent = "pi"
 )
 
@@ -45,8 +44,6 @@ type Capabilities struct {
 	NativeExecutionID bool
 	JSONHookPayload   bool
 }
-
-var ErrExecutionIdentityUnsupported = errors.New("agent does not expose a native execution identity")
 
 // Adapter is the common contract for every agent integration. It converts a
 // native execution identifier explicitly supplied by that agent into mnemo's
@@ -107,24 +104,13 @@ func (a directAdapter) Identity(project, nativeID string) (Identity, error) {
 	return deriveIdentity(a.agent, project, nativeID)
 }
 
-type unavailableAdapter struct{ agent Agent }
-
-func (a unavailableAdapter) Agent() Agent { return a.agent }
-
-func (a unavailableAdapter) Capabilities() Capabilities { return Capabilities{} }
-
-func (a unavailableAdapter) Identity(string, string) (Identity, error) {
-	return Identity{}, fmt.Errorf("%s: %w", a.agent, ErrExecutionIdentityUnsupported)
-}
-
 var adapters = map[Agent]Adapter{
 	AgentClaudeCode: jsonAdapter{agent: AgentClaudeCode, field: "session_id"},
 	AgentCodex:      jsonAdapter{agent: AgentCodex, field: "session_id"},
 	AgentCursor:     jsonAdapter{agent: AgentCursor, field: "conversation_id"},
 	AgentWindsurf:   jsonAdapter{agent: AgentWindsurf, field: "trajectory_id"},
 	AgentOpenCode:   directAdapter{agent: AgentOpenCode},
-	AgentFx:         unavailableAdapter{agent: AgentFx},
-	AgentPi:         unavailableAdapter{agent: AgentPi},
+	AgentPi:         directAdapter{agent: AgentPi},
 }
 
 // AdapterFor returns an adapter only where the integration has an explicit
@@ -145,9 +131,8 @@ func HookAdapterFor(agent Agent) (HookAdapter, bool) {
 }
 
 // Supports reports whether an adapter can currently correlate a native
-// execution identity. Fx and Pi deliberately return false until their
-// platforms expose one; they must not be approximated from a PID, path or
-// recent session.
+// execution identity. Unsupported platforms deliberately return false; they
+// must not be approximated from a PID, path or recent session.
 func Supports(agent Agent) bool {
 	adapter, ok := AdapterFor(agent)
 	return ok && adapter.Capabilities().NativeExecutionID

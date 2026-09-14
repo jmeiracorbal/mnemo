@@ -60,6 +60,12 @@ func (s *Store) MaxObservationLength() int {
 	return s.cfg.MaxObservationLength
 }
 
+// DataDir returns the store-owned data directory. Controllers use it to keep
+// JetStream persistence beside the database without exposing database handles.
+func (s *Store) DataDir() string {
+	return s.cfg.DataDir
+}
+
 // ─── Store ───────────────────────────────────────────────────────────────────
 
 type Store struct {

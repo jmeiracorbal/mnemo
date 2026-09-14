@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/adapters"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
@@ -25,6 +26,8 @@ const (
 	streamName     = "MNEMO_EVENTS"
 	consumerName   = "mnemo-controller"
 
+	EventExecutionStarted     = store.EventExecutionStarted
+	EventExecutionClosed      = store.EventExecutionClosed
 	EventSessionCompacted     = store.EventSessionCompacted
 	EventWorkspaceFileChanged = store.EventWorkspaceFileChanged
 	EventGitCommitCreated     = store.EventGitCommitCreated
@@ -35,7 +38,9 @@ type Event struct {
 	ID           string          `json:"id"`
 	Type         string          `json:"type"`
 	Project      string          `json:"project"`
-	ExecutionKey string          `json:"execution_key"`
+	ExecutionKey string          `json:"execution_key,omitempty"`
+	Agent        adapters.Agent  `json:"agent,omitempty"`
+	NativeID     string          `json:"native_id,omitempty"`
 	Payload      json.RawMessage `json:"payload"`
 	OccurredAt   time.Time       `json:"occurred_at"`
 }
@@ -53,8 +58,11 @@ func (e Event) Validate() error {
 	if strings.TrimSpace(e.ID) == "" || strings.TrimSpace(e.Type) == "" {
 		return fmt.Errorf("event id and type are required")
 	}
-	if strings.TrimSpace(e.Project) == "" || strings.TrimSpace(e.ExecutionKey) == "" {
-		return fmt.Errorf("event project and execution key are required")
+	if strings.TrimSpace(e.Project) == "" {
+		return fmt.Errorf("event project is required")
+	}
+	if strings.TrimSpace(e.ExecutionKey) == "" && (strings.TrimSpace(string(e.Agent)) == "" || strings.TrimSpace(e.NativeID) == "") {
+		return fmt.Errorf("event execution key or agent and native id are required")
 	}
 	if !json.Valid(e.Payload) {
 		return fmt.Errorf("event payload must be valid JSON")
@@ -207,6 +215,14 @@ func (c *Controller) Run(ctx context.Context) error {
 			processErr := json.Unmarshal(msg.Data, &event)
 			if processErr == nil {
 				processErr = event.Validate()
+			}
+			if processErr == nil && event.ExecutionKey == "" {
+				identity, err := adapters.NewIdentity(event.Agent, event.Project, event.NativeID)
+				if err != nil {
+					processErr = err
+				} else {
+					event.ExecutionKey = identity.Execution
+				}
 			}
 			if processErr == nil {
 				processErr = c.store.ApplyDurableEvent(store.DurableEvent{ID: event.ID, Type: event.Type, Project: event.Project, ExecutionKey: event.ExecutionKey, Payload: event.Payload})
