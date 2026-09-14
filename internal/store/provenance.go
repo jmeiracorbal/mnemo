@@ -253,33 +253,6 @@ func attachObservationProvenanceTx(q *dbgen.Queries, obs *Observation, provenanc
 	return nil
 }
 
-func nullableProvenanceInput(input ProvenanceInput) *ProvenanceInput {
-	if !hasProvenanceInput(input) {
-		return nil
-	}
-	normalized := normalizeProvenance(input)
-	return &normalized
-}
-
-func provenanceInputFromPtr(input *ProvenanceInput) ProvenanceInput {
-	if input == nil {
-		return ProvenanceInput{}
-	}
-	return *input
-}
-
-func provenanceInputForID(q *dbgen.Queries, provenanceID sql.NullInt64) *ProvenanceInput {
-	if !provenanceID.Valid {
-		return nil
-	}
-	row, err := q.GetProvenanceContext(context.Background(), provenanceID.Int64)
-	if err != nil {
-		return nil
-	}
-	provenance := provenanceFromDB(row)
-	return nullableProvenanceInput(provenanceInputFromStored(&provenance, ProvenanceInput{}))
-}
-
 func hasProvenanceInput(input ProvenanceInput) bool {
 	return strings.TrimSpace(input.AgentID) != "" ||
 		strings.TrimSpace(input.SourceKindID) != "" ||

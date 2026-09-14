@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -125,21 +124,6 @@ func normalizeExistingSyncID(existing, prefix string) string {
 		return existing
 	}
 	return newSyncID(prefix)
-}
-
-func decodeSyncPayload(payload []byte, dest any) error {
-	trimmed := strings.TrimSpace(string(payload))
-	if trimmed == "" {
-		return fmt.Errorf("empty payload")
-	}
-	if trimmed[0] != '"' {
-		return json.Unmarshal([]byte(trimmed), dest)
-	}
-	var encoded string
-	if err := json.Unmarshal([]byte(trimmed), &encoded); err != nil {
-		return err
-	}
-	return json.Unmarshal([]byte(encoded), dest)
 }
 
 func hasAny(text string, words ...string) bool {
