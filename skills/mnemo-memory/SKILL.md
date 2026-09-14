@@ -15,6 +15,7 @@ Before any memory operation:
 2. Read `<root>/.mnemo`.
 3. Continue only when it is valid JSON with a non-empty `id`.
 4. Use that `id` as `project` in every mnemo tool call.
+5. Use the Git repository root (or current workspace) as `directory` in every mnemo write call — `mem_save`, `mem_session_summary`, `mem_save_prompt`, `mem_capture_passive`. The MCP server resolves the active session automatically from the project and directory; do not pass a `session_id`.
 
 If `.mnemo` is missing or invalid, tell the user to run `mnemo init` and stop the memory workflow. If mnemo tools are unavailable, report that integration is incomplete. Never create `MEMORY.md`, write into an agent's native memory directory, or use arbitrary text files as a fallback.
 

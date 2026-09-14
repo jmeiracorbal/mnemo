@@ -1,7 +1,6 @@
 -- name: InsertSession :exec
 INSERT INTO sessions (id, project, directory, provenance_id)
-VALUES (?, ?, ?, sqlc.narg('provenance_id'))
-ON CONFLICT(id) DO NOTHING;
+VALUES (?, ?, ?, sqlc.narg('provenance_id'));
 
 -- name: EndSession :exec
 UPDATE sessions
@@ -57,3 +56,26 @@ UPDATE session_tags SET is_deleted = 1 WHERE session_id = ?;
 -- name: InsertSessionTag :exec
 INSERT INTO session_tags (session_id, tag, is_deleted) VALUES (?, ?, 0)
 ON CONFLICT(session_id, tag) DO UPDATE SET is_deleted = 0;
+
+-- name: TouchSessionCompact :exec
+UPDATE sessions
+SET last_compact_at = datetime('now'), updated_at = datetime('now')
+WHERE id = ?;
+
+-- name: GetOpenSessionByMCPInstance :one
+SELECT id FROM sessions
+WHERE project = sqlc.arg('project')
+  AND mcp_instance_id = sqlc.arg('mcp_instance_id')
+  AND ended_at IS NULL
+  AND is_deleted = 0;
+
+-- name: InsertMCPInstanceSession :exec
+INSERT INTO sessions (id, project, directory, mcp_pid, mcp_instance_id)
+VALUES (sqlc.arg('id'), sqlc.arg('project'), sqlc.arg('directory'), sqlc.narg('mcp_pid'), sqlc.arg('mcp_instance_id'));
+
+-- name: CloseMCPInstanceSessions :exec
+UPDATE sessions
+SET ended_at = datetime('now')
+WHERE mcp_instance_id = sqlc.arg('mcp_instance_id')
+  AND ended_at IS NULL
+  AND is_deleted = 0;

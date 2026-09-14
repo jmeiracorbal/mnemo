@@ -18,11 +18,16 @@ func runMCP(s *store.Store) {
 	}
 
 	allowlist := mcpserver.ResolveTools(tools)
-	srv, err := mcpserver.NewServerWithTools(s, version, allowlist)
+	srv, runtime, err := mcpserver.NewServerWithRuntime(s, version, allowlist)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: mcp server: %v\n", err)
 		os.Exit(1)
 	}
+	defer func() {
+		if err := runtime.Close(s); err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo: close MCP sessions: %v\n", err)
+		}
+	}()
 
 	if err := server.ServeStdio(srv); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: mcp server error: %v\n", err)

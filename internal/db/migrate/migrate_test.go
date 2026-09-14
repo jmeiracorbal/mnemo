@@ -155,8 +155,8 @@ func TestApplyDataDirCreatesCurrentSchemaAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
-	if first.LatestVersion != "0028" {
-		t.Fatalf("latest version = %q, want 0028", first.LatestVersion)
+	if first.LatestVersion != "0032" {
+		t.Fatalf("latest version = %q, want 0032", first.LatestVersion)
 	}
 	second, err := ApplyDataDir(dataDir)
 	if err != nil {
@@ -347,13 +347,13 @@ func TestCheckDataDirReadsCommittedWALState(t *testing.T) {
 	if _, err := db.Exec(`PRAGMA journal_mode = WAL`); err != nil {
 		t.Fatalf("enable WAL: %v", err)
 	}
-	if _, err := db.Exec(`UPDATE schema_migrations SET dirty = 1 WHERE version = '0028'`); err != nil {
+	if _, err := db.Exec(`UPDATE schema_migrations SET dirty = 1 WHERE version = '0032'`); err != nil {
 		t.Fatalf("mark migration dirty: %v", err)
 	}
 	if _, err := db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
 		t.Fatalf("checkpoint dirty state: %v", err)
 	}
-	if _, err := db.Exec(`UPDATE schema_migrations SET dirty = 0 WHERE version = '0028'`); err != nil {
+	if _, err := db.Exec(`UPDATE schema_migrations SET dirty = 0 WHERE version = '0032'`); err != nil {
 		t.Fatalf("clear migration dirty in WAL: %v", err)
 	}
 

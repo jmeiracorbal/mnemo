@@ -10,6 +10,19 @@ import (
 	"database/sql"
 )
 
+const closeMCPInstanceSessions = `-- name: CloseMCPInstanceSessions :exec
+UPDATE sessions
+SET ended_at = datetime('now')
+WHERE mcp_instance_id = ?1
+  AND ended_at IS NULL
+  AND is_deleted = 0
+`
+
+func (q *Queries) CloseMCPInstanceSessions(ctx context.Context, mcpInstanceID sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, closeMCPInstanceSessions, mcpInstanceID)
+	return err
+}
+
 const countObservationsForSessionProject = `-- name: CountObservationsForSessionProject :one
 SELECT COUNT(*)
 FROM observations o
@@ -86,6 +99,26 @@ func (q *Queries) EndSession(ctx context.Context, arg EndSessionParams) error {
 	return err
 }
 
+const getOpenSessionByMCPInstance = `-- name: GetOpenSessionByMCPInstance :one
+SELECT id FROM sessions
+WHERE project = ?1
+  AND mcp_instance_id = ?2
+  AND ended_at IS NULL
+  AND is_deleted = 0
+`
+
+type GetOpenSessionByMCPInstanceParams struct {
+	Project       string         `json:"project"`
+	McpInstanceID sql.NullString `json:"mcp_instance_id"`
+}
+
+func (q *Queries) GetOpenSessionByMCPInstance(ctx context.Context, arg GetOpenSessionByMCPInstanceParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, getOpenSessionByMCPInstance, arg.Project, arg.McpInstanceID)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getSession = `-- name: GetSession :one
 SELECT id, project, directory, started_at, ended_at, summary, provenance_id
 FROM sessions WHERE id = ? AND is_deleted = 0
@@ -143,10 +176,33 @@ func (q *Queries) GetSessionPayload(ctx context.Context, id string) (GetSessionP
 	return i, err
 }
 
+const insertMCPInstanceSession = `-- name: InsertMCPInstanceSession :exec
+INSERT INTO sessions (id, project, directory, mcp_pid, mcp_instance_id)
+VALUES (?1, ?2, ?3, ?4, ?5)
+`
+
+type InsertMCPInstanceSessionParams struct {
+	ID            string         `json:"id"`
+	Project       string         `json:"project"`
+	Directory     string         `json:"directory"`
+	McpPid        sql.NullInt64  `json:"mcp_pid"`
+	McpInstanceID sql.NullString `json:"mcp_instance_id"`
+}
+
+func (q *Queries) InsertMCPInstanceSession(ctx context.Context, arg InsertMCPInstanceSessionParams) error {
+	_, err := q.db.ExecContext(ctx, insertMCPInstanceSession,
+		arg.ID,
+		arg.Project,
+		arg.Directory,
+		arg.McpPid,
+		arg.McpInstanceID,
+	)
+	return err
+}
+
 const insertSession = `-- name: InsertSession :exec
 INSERT INTO sessions (id, project, directory, provenance_id)
 VALUES (?, ?, ?, ?4)
-ON CONFLICT(id) DO NOTHING
 `
 
 type InsertSessionParams struct {
@@ -264,4 +320,15 @@ func (q *Queries) ListSessions(ctx context.Context, arg ListSessionsParams) ([]L
 		return nil, err
 	}
 	return items, nil
+}
+
+const touchSessionCompact = `-- name: TouchSessionCompact :exec
+UPDATE sessions
+SET last_compact_at = datetime('now'), updated_at = datetime('now')
+WHERE id = ?
+`
+
+func (q *Queries) TouchSessionCompact(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, touchSessionCompact, id)
+	return err
 }

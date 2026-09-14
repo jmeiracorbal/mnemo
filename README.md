@@ -64,7 +64,8 @@ mnemo doctor --agent=all --path=.
 Save and search memory manually from the CLI:
 
 ```bash
-mnemo save "Use SQLite FTS5" "Search stays local, fast and dependency-light." --type decision --project myapp
+mnemo session start manual-1 --project myapp --dir "$PWD"
+mnemo save "Use SQLite FTS5" "Search stays local, fast and dependency-light." --type decision --session manual-1 --project myapp --dir "$PWD"
 mnemo search "SQLite" --project myapp
 ```
 
@@ -85,13 +86,12 @@ mnemo search "SQLite" --project myapp
 |---|---|
 | **Project-scoped activation** | Global hooks only run when a project contains a valid `.mnemo` marker. |
 | **MCP tools** | Agents can call `mem_save`, `mem_search`, `mem_context`, `mem_current_project`, `mem_doctor` and more. |
-| **Session hooks** | Session start/end hooks register activity, inject context and capture learnings automatically. |
+| **MCP-owned sessions** | Each MCP connection creates and closes its own per-project session; hooks only inject context. |
 | **Portable Agent Skills** | Skills teach compatible agents when and how to use mnemo without falling back to native memory. |
-| **Passive capture** | Extracts useful learnings from transcripts and subagent output. |
+| **Passive capture** | MCP extracts useful learnings from agent-provided output. |
 | **Agent provenance** | Records SQL-queryable agent, source, tool, model and MCP client metadata for writes that provide it. |
 | **Diagnostics** | `mnemo doctor` checks project activation, global setup, MCP, hooks, competing memory surfaces and database migration health. |
 | **Database safety** | Safe schema migrations run automatically; `mnemo db migrate --check` validates the local store for CI or troubleshooting. |
-| **Canonical synchronization queue** | Synchronizable rows are queued independently, with soft deletes replicated as row state; FTS indexes and local sync metadata remain local and are rebuilt when needed. |
 | **Self-update** | Released binaries check for newer releases on interactive CLI use and can confirm, download and install with `mnemo update`. |
 | **Programmable CLI** | Cobra-generated help keeps the command menu and nested subcommands aligned with the executable. |
 | **Project maintenance** | `mnemo projects list`, `mnemo projects merge` and `mnemo projects rename` help curate duplicate or unclear project identities. |

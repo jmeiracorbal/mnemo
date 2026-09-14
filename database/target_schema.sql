@@ -72,7 +72,11 @@ CREATE TABLE sessions (
     ended_at TEXT,
     summary TEXT,
     is_deleted INTEGER NOT NULL DEFAULT 0,
-    provenance_id INTEGER REFERENCES provenance_contexts(id)
+    provenance_id INTEGER REFERENCES provenance_contexts(id),
+    last_compact_at TEXT,
+    updated_at TEXT,
+    mcp_pid INTEGER,
+    mcp_instance_id TEXT
 );
 
 CREATE TABLE observations (
@@ -162,6 +166,7 @@ CREATE INDEX idx_prompts_sync_id ON user_prompts(sync_id);
 CREATE UNIQUE INDEX ux_user_prompts_sync_id ON user_prompts(sync_id) WHERE sync_id IS NOT NULL AND sync_id <> '';
 CREATE INDEX idx_prompts_provenance ON user_prompts(provenance_id);
 CREATE INDEX idx_sessions_provenance ON sessions(provenance_id);
+CREATE UNIQUE INDEX ux_sessions_open_mcp_instance ON sessions(project, mcp_instance_id) WHERE mcp_instance_id IS NOT NULL AND ended_at IS NULL AND is_deleted = 0;
 CREATE INDEX idx_provenance_agent ON provenance_contexts(agent_id);
 CREATE INDEX idx_provenance_source ON provenance_contexts(source_kind_id);
 CREATE INDEX idx_provenance_tool ON provenance_contexts(tool_id);

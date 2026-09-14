@@ -30,7 +30,7 @@ func TestRootCommandNestedMenu(t *testing.T) {
 		"setup":    {"status", "print-config", "refresh", "uninstall", "codex", "all"},
 		"projects": {"list", "merge", "rename"},
 		"memories": {"review", "mark-reviewed", "mark-stale", "supersede", "consolidate-topic"},
-		"session":  {"start", "end", "exists", "obs-count", "project-obs-count"},
+		"session":  {"start", "compact", "end", "exists", "obs-count", "project-obs-count"},
 	}
 	for parentName, children := range checks {
 		parent, _, err := root.Find([]string{parentName})

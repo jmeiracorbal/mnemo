@@ -33,8 +33,6 @@ const (
 	ToolMnemoSave         = "mnemo_save"
 	ToolMemSave           = "mem_save"
 	ToolMemSavePrompt     = "mem_save_prompt"
-	ToolMemSessionStart   = "mem_session_start"
-	ToolMemSessionEnd     = "mem_session_end"
 	ToolMemSessionSummary = "mem_session_summary"
 	ToolMemCapturePassive = "mem_capture_passive"
 	ToolMnemoCapture      = "mnemo_capture"
