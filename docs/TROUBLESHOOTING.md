@@ -27,7 +27,7 @@ mnemo setup status --agent=all
 
 - `Detected` means the agent's user-level configuration directory exists.
 - `MCP` reports whether mnemo's MCP server is configured.
-- `Hooks` reports hook/plugin runtime files, or `n/a` when that agent has no runtime surface to validate.
+- `Hooks` reports hook/plugin runtime files. `review` means Codex has installed its hooks but requires its own interactive trust approval. `n/a` means there is no runtime surface to validate.
 - `Instructions` reports whether global mnemo instructions are installed.
 
 `mnemo doctor` and `mnemo db migrate --check` read the current committed SQLite
@@ -49,7 +49,6 @@ grep "mnemo:start" ~/.codex/AGENTS.md ~/.claude/CLAUDE.md 2>/dev/null
 head -3 ~/.cursor/rules/mnemo.mdc   # should have: alwaysApply: true
 grep "mnemo:start" ~/.codeium/windsurf/memories/global_rules.md 2>/dev/null
 grep "mnemo:start" ~/.config/opencode/AGENTS.md 2>/dev/null
-grep "mnemo:start" ~/.fx/AGENTS.md 2>/dev/null
 ```
 
 Global hooks/config:
@@ -57,7 +56,6 @@ Global hooks/config:
 ```bash
 grep "mnemo" ~/.cursor/hooks.json ~/.codeium/windsurf/hooks.json ~/.codex/hooks.json 2>/dev/null
 ls ~/.config/opencode/plugins/mnemo.ts ~/.config/opencode/plugins/mnemo-protocol.md
-grep "mnemo" ~/.fx/mcp.json ~/.pi/agent/APPEND_SYSTEM.md ~/.pi/agent/mcp.json 2>/dev/null
 ```
 
 Canonical Agent Skill and symlinks:
@@ -69,7 +67,6 @@ ls -l ~/.claude/skills/mnemo-memory \
   ~/.pi/agent/skills/mnemo-memory
 ```
 
-Only symlinks for selected agent-specific consumers are expected to exist. Codex, Cursor, OpenCode and fx use the canonical `.agents/skills` path directly. Pi uses a symlink under `~/.pi/agent/skills`.
 
 ## Claude Code plugin validation
 
