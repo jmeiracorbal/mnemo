@@ -47,3 +47,11 @@ func TestNewServerWithToolsRequiresVersion(t *testing.T) {
 		t.Fatal("expected error when version is whitespace")
 	}
 }
+
+func TestAgentProfileDoesNotExposeSessionLifecycleTools(t *testing.T) {
+	for _, name := range []string{"mem_session_start", "mem_session_end"} {
+		if ProfileAgent[name] {
+			t.Fatalf("agent profile must not expose %s; MCP owns session lifecycle", name)
+		}
+	}
+}

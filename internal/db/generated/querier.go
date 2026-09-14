@@ -10,6 +10,7 @@ import (
 )
 
 type Querier interface {
+	CloseMCPInstanceSessions(ctx context.Context, mcpInstanceID sql.NullString) error
 	CopyObservationTag(ctx context.Context, arg CopyObservationTagParams) error
 	CopySessionTag(ctx context.Context, arg CopySessionTagParams) error
 	CountLiveObservations(ctx context.Context) (int64, error)
@@ -42,6 +43,7 @@ type Querier interface {
 	GetLiveObservationBySyncID(ctx context.Context, syncID sql.NullString) (GetLiveObservationBySyncIDRow, error)
 	GetObservation(ctx context.Context, id int64) (GetObservationRow, error)
 	GetObservationBySyncIDIncludingDeleted(ctx context.Context, syncID sql.NullString) (GetObservationBySyncIDIncludingDeletedRow, error)
+	GetOpenSessionByMCPInstance(ctx context.Context, arg GetOpenSessionByMCPInstanceParams) (string, error)
 	GetProjectByID(ctx context.Context, id string) (Project, error)
 	GetProvenanceContext(ctx context.Context, id int64) (GetProvenanceContextRow, error)
 	GetProvenanceContextID(ctx context.Context, arg GetProvenanceContextIDParams) (int64, error)
@@ -50,6 +52,7 @@ type Querier interface {
 	ImportObservation(ctx context.Context, arg ImportObservationParams) (int64, error)
 	ImportPrompt(ctx context.Context, arg ImportPromptParams) error
 	ImportSession(ctx context.Context, arg ImportSessionParams) (int64, error)
+	InsertMCPInstanceSession(ctx context.Context, arg InsertMCPInstanceSessionParams) error
 	InsertObservation(ctx context.Context, arg InsertObservationParams) (int64, error)
 	InsertObservationTag(ctx context.Context, arg InsertObservationTagParams) error
 	InsertPrompt(ctx context.Context, arg InsertPromptParams) (int64, error)
@@ -83,6 +86,7 @@ type Querier interface {
 	SearchPromptsFTS(ctx context.Context, arg SearchPromptsFTSParams) ([]SearchPromptsFTSRow, error)
 	SoftDeleteObservation(ctx context.Context, id int64) error
 	TouchDuplicateObservation(ctx context.Context, id int64) error
+	TouchSessionCompact(ctx context.Context, id string) error
 	UpdateObservationByTopic(ctx context.Context, arg UpdateObservationByTopicParams) error
 	UpdateObservationFields(ctx context.Context, arg UpdateObservationFieldsParams) error
 	UpdatePrompt(ctx context.Context, arg UpdatePromptParams) error

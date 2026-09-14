@@ -9,11 +9,11 @@ integration; the binary performs setup and file changes that the plugin cannot.
 ## Core invariants
 
 - Project identity is only the `id` in `.mnemo`; never derive it from a path.
-- Every memory-writing caller must explicitly pass canonical `project`,
-  session-workspace `directory`, and agent lifecycle `session_id`. Never infer
-  them from a path, current directory, recent session or generated fallback.
+- Every MCP memory-writing caller must explicitly pass canonical `project` and
+  session-workspace `directory`. The MCP runtime creates and owns its session;
+  callers never pass, infer or generate a session identifier.
 - Equivalent events must preserve identical memory semantics for every supported
-  agent. Native event IDs may differ, but each maps explicitly to `session_id`.
+  agent. Hooks may inject context, but must not create, close or write sessions.
 - Schema changes require a new incremental migration and an updated
   `database/target_schema.sql`; never edit an existing migration.
 - Binary and plugin version metadata are a single consistency boundary. The MCP

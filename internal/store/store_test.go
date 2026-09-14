@@ -2306,23 +2306,77 @@ func TestCreateSessionRejectsEmptyProject(t *testing.T) {
 	}
 }
 
-func TestCreateSessionIgnoresDuplicateID(t *testing.T) {
+func TestCreateSessionRejectsDuplicateID(t *testing.T) {
 	s := newTestStore(t)
 
 	if err := s.CreateSession("sess-unique", "projectA", "/tmp/a"); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 
-	if err := s.CreateSession("sess-unique", "projectB", "/tmp/b"); err != nil {
-		t.Fatalf("duplicate create session: %v", err)
+	if err := s.CreateSession("sess-unique", "projectB", "/tmp/b"); err == nil {
+		t.Fatal("expected error on duplicate session ID, got nil")
+	}
+}
+
+func TestEnsureSessionIsIdempotent(t *testing.T) {
+	s := newTestStore(t)
+
+	if err := s.EnsureSession("sess-ensure", "projectA", "/tmp/a"); err != nil {
+		t.Fatalf("first ensure: %v", err)
+	}
+	if err := s.EnsureSession("sess-ensure", "projectB", "/tmp/b"); err != nil {
+		t.Fatalf("second ensure must not fail: %v", err)
 	}
 
-	sess, err := s.GetSession("sess-unique")
+	sess, err := s.GetSession("sess-ensure")
 	if err != nil {
 		t.Fatalf("get session: %v", err)
 	}
 	if sess.Project != "projectA" || sess.Directory != "/tmp/a" {
-		t.Fatalf("duplicate create changed session: %+v", sess)
+		t.Fatalf("ensure must preserve original data, got: %+v", sess)
+	}
+}
+
+func TestResolveMCPInstanceSessionOwnsSessionLifecycle(t *testing.T) {
+	s := newTestStore(t)
+
+	first, err := s.ResolveMCPInstanceSession("projectA", "/tmp/a", "instance-a", 1001)
+	if err != nil {
+		t.Fatalf("first resolve: %v", err)
+	}
+	second, err := s.ResolveMCPInstanceSession("projectA", "/different", "instance-a", 1001)
+	if err != nil {
+		t.Fatalf("second resolve: %v", err)
+	}
+	if first != second {
+		t.Fatalf("same MCP instance got %q then %q", first, second)
+	}
+
+	other, err := s.ResolveMCPInstanceSession("projectA", "/tmp/a", "instance-b", 1002)
+	if err != nil {
+		t.Fatalf("other instance resolve: %v", err)
+	}
+	if other == first {
+		t.Fatal("different MCP instances must not share a session")
+	}
+
+	if err := s.CloseMCPInstanceSessions("instance-a"); err != nil {
+		t.Fatalf("close instance sessions: %v", err)
+	}
+	closed, err := s.GetSession(first)
+	if err != nil {
+		t.Fatalf("get closed session: %v", err)
+	}
+	if closed.EndedAt == nil {
+		t.Fatal("MCP session was not closed")
+	}
+
+	reopened, err := s.ResolveMCPInstanceSession("projectA", "/tmp/a", "instance-a", 1001)
+	if err != nil {
+		t.Fatalf("resolve after close: %v", err)
+	}
+	if reopened == first {
+		t.Fatal("closed MCP instance session was reused")
 	}
 }
 

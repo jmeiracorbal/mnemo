@@ -127,6 +127,7 @@ func addCommandTree(root *cobra.Command) {
 	)
 	addChildren(root, "session",
 		storeCommand("start ID", "Register session start", runSession),
+		storeCommand("compact ID", "Record context compaction for an existing session", runSession),
 		storeCommand("end ID", "Mark session completed", runSession),
 		storeCommand("exists ID", "Check whether a session exists", runSession),
 		storeCommand("obs-count ID", "Count session observations", runSession),

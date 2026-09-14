@@ -3,21 +3,19 @@
 Read this guide before changing a hook, plugin metadata, setup flow or supported
 agent integration.
 
-## Canonical write contract
+## Canonical MCP write contract
 
-Every memory-writing command must explicitly receive:
+Every memory-writing MCP call must explicitly receive:
 
 - `project`: the unique identifier in `.mnemo`.
 - `directory`: the workspace of that session, not project identity.
-- `session_id`: the ID provided by the agent lifecycle event.
 
-Do not recover values from paths, the working directory, a recent session or a
-generated fallback. If the host agent cannot provide a required value, fail
-clearly and fix its integration instead of adding best-effort behavior.
+The MCP runtime creates and owns the session using an opaque per-process
+instance ID. It is the only session authority; callers must not provide,
+recover or generate session IDs.
 
-Claude and Codex `session_id`, Cursor `conversation_id`, and Windsurf
-`trajectory_id` must be explicitly mapped to the same canonical `session_id`.
-Their payload extraction may differ; their memory semantics must not.
+Every supported agent therefore has the same session semantics without mapping
+its native lifecycle IDs.
 
 ## Hooks and plugin boundaries
 
@@ -30,9 +28,8 @@ Before changing hooks, verify names and paths across
 tests. A prior critical defect referenced `post-compaction.sh` while the actual
 script was `post-compact.sh`.
 
-Hook-internal `mnemo save`, `mnemo capture`, `mnemo session start` and
-`mnemo session end` commands must suppress both streams with
-`>/dev/null 2>&1`.
+Hooks are context-only. They must not invoke `mnemo save`, `mnemo capture`,
+`mnemo session start`, `mnemo session compact` or `mnemo session end`.
 
 Shipped hooks and plugins resolve `PROJECT` exclusively from `.mnemo.id`.
 They must never use a filesystem-derived identity.
@@ -48,7 +45,7 @@ isolated `HOME`.
 ## Required validation
 
 - Test shipped hook configuration against real script paths and filenames.
-- Test that every write hook passes `project`, `directory` and `session_id`.
+- Test that hooks contain no direct session-associated writes.
 - Test metadata consistency and the affected hook/setup flow end to end.
 - Run `claude plugin validate plugin/claude-code` when the Claude plugin changes.
 - Update user documentation whenever installation, plugin or MCP behavior changes.

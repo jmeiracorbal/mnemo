@@ -103,14 +103,18 @@ type SchemaMigration struct {
 }
 
 type Session struct {
-	ID           string         `json:"id"`
-	Project      string         `json:"project"`
-	Directory    string         `json:"directory"`
-	StartedAt    string         `json:"started_at"`
-	EndedAt      sql.NullString `json:"ended_at"`
-	Summary      sql.NullString `json:"summary"`
-	IsDeleted    int64          `json:"is_deleted"`
-	ProvenanceID sql.NullInt64  `json:"provenance_id"`
+	ID            string         `json:"id"`
+	Project       string         `json:"project"`
+	Directory     string         `json:"directory"`
+	StartedAt     string         `json:"started_at"`
+	EndedAt       sql.NullString `json:"ended_at"`
+	Summary       sql.NullString `json:"summary"`
+	IsDeleted     int64          `json:"is_deleted"`
+	ProvenanceID  sql.NullInt64  `json:"provenance_id"`
+	LastCompactAt sql.NullString `json:"last_compact_at"`
+	UpdatedAt     sql.NullString `json:"updated_at"`
+	McpPid        sql.NullInt64  `json:"mcp_pid"`
+	McpInstanceID sql.NullString `json:"mcp_instance_id"`
 }
 
 type SessionTag struct {

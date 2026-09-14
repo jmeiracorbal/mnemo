@@ -11,7 +11,7 @@ Global hooks are intentionally inert outside projects with a valid `.mnemo` mark
 
 The `mnemo` binary must be in your `PATH` before any agent integration will work. This applies to Claude Code, Cursor, Windsurf, Codex, OpenCode, fx and Pi regardless of how the integration is installed.
 
-The hooks that fire on session start, session end and passive capture call `mnemo` directly. The MCP server is also the `mnemo` binary. Without it in PATH, hooks and MCP cannot start.
+Context hooks and the MCP server both execute the `mnemo` binary. Session-associated agent writes are controlled by MCP; hooks do not write directly. Without the binary in `PATH`, neither surface can start.
 
 ## Install from the release installer
 
