@@ -268,3 +268,26 @@ func (c *Controller) Close() {
 // LocalAddress is exposed for diagnostics and tests only; event listeners are
 // always loopback-bound and are not a remote API.
 func (c *Controller) LocalAddress() net.Addr { return c.server.Addr() }
+
+// EnsureController connects to the global controller when one is already
+// running, or starts it in this process. It never falls back to SQLite: a
+// publisher can proceed only after a JetStream controller is reachable.
+func EnsureController(ctx context.Context, cfg Config, memory *store.Store) (*Controller, error) {
+	if nc, err := nats.Connect(cfg.URL(), nats.Timeout(250*time.Millisecond)); err == nil {
+		defer nc.Close()
+		if _, err := nc.JetStream(); err == nil {
+			return nil, nil
+		}
+	}
+	controller, err := NewController(cfg, memory)
+	if err != nil {
+		// A concurrent MCP instance may have become the controller.
+		if nc, connectErr := nats.Connect(cfg.URL(), nats.Timeout(time.Second)); connectErr == nil {
+			nc.Close()
+			return nil, nil
+		}
+		return nil, err
+	}
+	go func() { _ = controller.Run(ctx) }()
+	return controller, nil
+}
