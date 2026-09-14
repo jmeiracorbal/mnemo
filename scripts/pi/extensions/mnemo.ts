@@ -18,5 +18,6 @@ export default function (pi: ExtensionAPI) {
   }
   pi.on("session_start", async (_event, ctx) => publish("execution.started", ctx, { directory: ctx.cwd }));
   pi.on("session_shutdown", async (_event, ctx) => publish("execution.closed", ctx, {}));
+  pi.on("session_compact", async (_event, ctx) => publish("session.compacted", ctx, {}));
   pi.on("tool_result", async (event, ctx) => publish("agent.tool_result", ctx, { tool: event.toolName }));
 }
