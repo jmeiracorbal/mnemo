@@ -50,6 +50,22 @@ func TestBuildSetupStatusReportReportsConfiguredCodex(t *testing.T) {
 	}
 }
 
+func TestBuildSetupStatusReportReportsCodexHookReview(t *testing.T) {
+	home := t.TempDir()
+
+	if _, err := agentinit.Refresh(home, "/bin/mnemo", "codex"); err != nil {
+		t.Fatalf("refresh codex: %v", err)
+	}
+
+	report := buildSetupStatusReport(setupStatusOptions{Agent: "codex", Home: home})
+	if report.Status != "warning" || report.Summary.Warnings != 1 {
+		t.Fatalf("unexpected report: %+v", report)
+	}
+	if got := report.Rows[0].Hooks; got != "review" {
+		t.Fatalf("hooks = %q, want review", got)
+	}
+}
+
 func TestBuildSetupStatusReportWarnsOnMissingMCPProvenanceEnv(t *testing.T) {
 	home := t.TempDir()
 
@@ -85,23 +101,6 @@ func TestBuildSetupStatusReportReportsMissingAgent(t *testing.T) {
 	}
 }
 
-func TestBuildSetupStatusReportReportsConfiguredFx(t *testing.T) {
-	home := t.TempDir()
-
-	if _, err := agentinit.Refresh(home, "/bin/mnemo", "fx"); err != nil {
-		t.Fatalf("refresh fx: %v", err)
-	}
-
-	report := buildSetupStatusReport(setupStatusOptions{Agent: "fx", Home: home})
-	if report.Status != "ok" {
-		t.Fatalf("status = %q, want ok", report.Status)
-	}
-	row := report.Rows[0]
-	if row.Agent != "fx" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "n/a" || row.Instructions != "yes" {
-		t.Fatalf("unexpected row: %+v", row)
-	}
-}
-
 func TestBuildSetupStatusReportReportsConfiguredPi(t *testing.T) {
 	home := t.TempDir()
 
@@ -114,7 +113,7 @@ func TestBuildSetupStatusReportReportsConfiguredPi(t *testing.T) {
 		t.Fatalf("status = %q, want ok", report.Status)
 	}
 	row := report.Rows[0]
-	if row.Agent != "Pi" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "n/a" || row.Instructions != "yes" {
+	if row.Agent != "Pi" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "yes" || row.Instructions != "yes" {
 		t.Fatalf("unexpected row: %+v", row)
 	}
 }

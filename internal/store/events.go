@@ -66,6 +66,9 @@ func (s *Store) ApplyDurableEvent(event DurableEvent) error {
 	}
 
 	return s.withTx(func(tx *sql.Tx) error {
+		if err := s.ensureProjectTx(tx, event.Project); err != nil {
+			return err
+		}
 		result, err := s.execHook(tx, `
 INSERT INTO processed_events (id, event_type, project, execution_key)
 VALUES (?, ?, ?, ?)

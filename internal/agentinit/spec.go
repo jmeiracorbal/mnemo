@@ -190,28 +190,6 @@ var agentSpecs = []AgentSpec{
 		Supports: AgentSpecCapabilities{MCP: true, Instructions: true, Hooks: true},
 	},
 	{
-		ID:     AgentFx,
-		Label:  fxLabel(),
-		Detect: detectFromPaths(fxDetectionPaths),
-		MCP: MCPConfigSpec{
-			Snippets:  fxConfigSnippets,
-			Uninstall: fxUninstallConfig,
-			Check:     fxCheckMCP,
-		},
-		Instructions: []InstructionSpec{{
-			Scope:   InstructionScopeGlobal,
-			Path:    fxInstructionPath,
-			Install: fxInstallInstructions,
-			Remove:  fxRemoveInstructions,
-			Check:   fxCheckInstructions,
-		}},
-		Hooks: []HookSpec{{
-			RuntimeAssets: fxRuntimeAssets,
-			Check:         fxCheckRuntime,
-		}},
-		Supports: AgentSpecCapabilities{MCP: true, Instructions: true, Skills: true},
-	},
-	{
 		ID:     AgentPi,
 		Label:  piLabel(),
 		Detect: detectFromPaths(piDetectionPaths),
@@ -231,8 +209,9 @@ var agentSpecs = []AgentSpec{
 			Path:    piProjectInstructionPath,
 			Install: piInstallProjectInstructions,
 		}},
+		Hooks:    []HookSpec{{RuntimeAssets: piRuntimeAssets, Check: piCheckRuntime}},
 		Skill:    AgentSkillSpec{GlobalLinkPath: piSkillLinkPath},
-		Supports: AgentSpecCapabilities{MCP: true, MCPConditional: true, Instructions: true, Skills: true},
+		Supports: AgentSpecCapabilities{MCP: true, MCPConditional: true, Instructions: true, Skills: true, Hooks: true, SessionLifecycle: true},
 	},
 }
 
