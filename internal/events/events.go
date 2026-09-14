@@ -73,54 +73,67 @@ func (e Event) Validate() error {
 	return nil
 }
 
-type tomlProjectConfig struct {
-	Mnemo struct {
-		Events struct {
-			Port int `toml:"port"`
-		} `toml:"events"`
-	} `toml:"mnemo"`
+type tomlGlobalConfig struct {
+	Events struct {
+		Port int `toml:"port"`
+	} `toml:"events"`
 }
 
-// Config is deliberately project-scoped. A project must explicitly configure
-// its port; silently sharing a default port would make controllers interfere.
+// Config is global because mnemo's SQLite store is global; one controller owns
+// every project's durable stream.
 type Config struct {
-	Project string
 	Port    int
 	DataDir string
 }
 
-func LoadConfig(project, directory, dataDir string) (Config, error) {
-	if strings.TrimSpace(project) == "" {
-		return Config{}, fmt.Errorf("project id must not be empty")
+// EnsureConfig creates the global controller configuration exactly once. The
+// listener port is technical infrastructure; users may subsequently change it.
+func EnsureConfig(dataDir string) (string, error) {
+	if !filepath.IsAbs(dataDir) {
+		return "", fmt.Errorf("event data directory must be absolute")
 	}
-	if !filepath.IsAbs(directory) || !filepath.IsAbs(dataDir) {
-		return Config{}, fmt.Errorf("event directory and data directory must be absolute")
+	path := filepath.Join(dataDir, configFilename)
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
+	} else if !os.IsNotExist(err) {
+		return "", err
 	}
-	content, err := os.ReadFile(filepath.Join(directory, configFilename))
-	if err != nil {
-		return Config{}, fmt.Errorf("read project config.toml: %w", err)
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		return "", err
 	}
-	var file tomlProjectConfig
-	if err := toml.Unmarshal(content, &file); err != nil {
-		return Config{}, fmt.Errorf("parse project config.toml: %w", err)
+	if err := os.WriteFile(path, []byte("[events]\nport = 4222\n"), 0600); err != nil {
+		return "", err
 	}
-	if file.Mnemo.Events.Port < 1 || file.Mnemo.Events.Port > 65535 {
-		return Config{}, fmt.Errorf("config.toml [mnemo.events].port must be between 1 and 65535")
-	}
-	return Config{Project: project, Port: file.Mnemo.Events.Port, DataDir: filepath.Join(dataDir, "events", project)}, nil
+	return path, nil
 }
 
-func (c Config) URL() string     { return fmt.Sprintf("nats://127.0.0.1:%d", c.Port) }
-func (c Config) subject() string { return "mnemo.events." + c.Project }
+func LoadConfig(dataDir string) (Config, error) {
+	if !filepath.IsAbs(dataDir) {
+		return Config{}, fmt.Errorf("event data directory must be absolute")
+	}
+	content, err := os.ReadFile(filepath.Join(dataDir, configFilename))
+	if err != nil {
+		return Config{}, fmt.Errorf("read global config.toml: %w", err)
+	}
+	var file tomlGlobalConfig
+	if err := toml.Unmarshal(content, &file); err != nil {
+		return Config{}, fmt.Errorf("parse global config.toml: %w", err)
+	}
+	if file.Events.Port < 1 || file.Events.Port > 65535 {
+		return Config{}, fmt.Errorf("config.toml [events].port must be between 1 and 65535")
+	}
+	return Config{Port: file.Events.Port, DataDir: filepath.Join(dataDir, "events")}, nil
+}
+
+func (c Config) URL() string                          { return fmt.Sprintf("nats://127.0.0.1:%d", c.Port) }
+func (c Config) subject() string                      { return "mnemo.events.>" }
+func (c Config) publishSubject(project string) string { return "mnemo.events." + project }
 
 // Publish durably appends an event. A missing controller is an explicit error:
 // it is never converted into an in-memory or SQLite fallback.
 func Publish(ctx context.Context, cfg Config, event Event) error {
 	if err := event.Validate(); err != nil {
 		return err
-	}
-	if event.Project != cfg.Project {
-		return fmt.Errorf("event project does not match configured controller")
 	}
 	nc, err := nats.Connect(cfg.URL(), nats.Timeout(2*time.Second))
 	if err != nil {
@@ -135,7 +148,7 @@ func Publish(ctx context.Context, cfg Config, event Event) error {
 	if err != nil {
 		return fmt.Errorf("encode event: %w", err)
 	}
-	if _, err := js.PublishMsg(&nats.Msg{Subject: cfg.subject(), Data: body}, nats.Context(ctx)); err != nil {
+	if _, err := js.PublishMsg(&nats.Msg{Subject: cfg.publishSubject(event.Project), Data: body}, nats.Context(ctx)); err != nil {
 		return fmt.Errorf("publish event: %w", err)
 	}
 	return nil

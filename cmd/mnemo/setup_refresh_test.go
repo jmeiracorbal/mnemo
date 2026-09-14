@@ -35,8 +35,8 @@ func TestRefreshSetupWritesCodexFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refresh setup: %v", err)
 	}
-	if len(updated) != 10 {
-		t.Fatalf("updated paths = %d, want 10 (%v)", len(updated), updated)
+	if len(updated) != 11 {
+		t.Fatalf("updated paths = %d, want 11 (%v)", len(updated), updated)
 	}
 
 	config := readTestFile(t, filepath.Join(home, ".codex", "config.toml"))
@@ -45,6 +45,9 @@ func TestRefreshSetupWritesCodexFiles(t *testing.T) {
 	}
 	if !strings.Contains(config, "experimental_compact_prompt_file") {
 		t.Fatalf("codex config missing compact prompt file:\n%s", config)
+	}
+	if config := readTestFile(t, filepath.Join(home, ".mnemo", "config.toml")); !strings.Contains(config, "[events]") || !strings.Contains(config, "port = 4222") {
+		t.Fatalf("global event config missing: %s", config)
 	}
 	if !agentinit.GlobalSkillInstalled(home) {
 		t.Fatal("global skill not installed by setup refresh")
@@ -67,6 +70,9 @@ func TestRefreshSetupScopesAgentSpecificSkillLinks(t *testing.T) {
 		t.Fatalf("refresh setup: %v", err)
 	}
 
+	if config := readTestFile(t, filepath.Join(home, ".mnemo", "config.toml")); !strings.Contains(config, "[events]") || !strings.Contains(config, "port = 4222") {
+		t.Fatalf("global event config missing: %s", config)
+	}
 	if !agentinit.GlobalSkillInstalled(home) {
 		t.Fatal("canonical global skill not installed")
 	}

@@ -29,7 +29,7 @@ func TestControllerAppliesEventExactlyOnceAfterExecutionBinding(t *testing.T) {
 		t.Fatalf("bind execution session: %v", err)
 	}
 
-	cfg := Config{Project: project, Port: freePort(t), DataDir: t.TempDir()}
+	cfg := Config{Port: freePort(t), DataDir: t.TempDir()}
 	controller, err := NewController(cfg, memory)
 	if err != nil {
 		t.Fatalf("start controller: %v", err)
@@ -78,7 +78,7 @@ func TestControllerDerivesExecutionKeyFromNativeIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = memory.Close() })
-	cfg := Config{Project: "project-pi", Port: freePort(t), DataDir: t.TempDir()}
+	cfg := Config{Port: freePort(t), DataDir: t.TempDir()}
 	controller, err := NewController(cfg, memory)
 	if err != nil {
 		t.Fatal(err)
@@ -110,15 +110,15 @@ func mustExecution(t *testing.T, event Event) string {
 	return identity.Execution
 }
 
-func TestLoadConfigRequiresExplicitProjectPort(t *testing.T) {
+func TestLoadConfigRequiresExplicitGlobalPort(t *testing.T) {
 	directory := t.TempDir()
-	if _, err := LoadConfig("project", directory, t.TempDir()); err == nil {
+	if _, err := LoadConfig(directory); err == nil {
 		t.Fatal("missing config.toml must fail")
 	}
-	if err := os.WriteFile(filepath.Join(directory, "config.toml"), []byte("[mnemo.events]\nport = 4222\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "config.toml"), []byte("[events]\nport = 4222\n"), 0600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	cfg, err := LoadConfig("project", directory, t.TempDir())
+	cfg, err := LoadConfig(directory)
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
