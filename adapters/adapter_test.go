@@ -1,9 +1,6 @@
 package adapters
 
-import (
-	"errors"
-	"testing"
-)
+import "testing"
 
 func TestAdaptersExtractOnlyDocumentedNativeIDs(t *testing.T) {
 	project := "project-uuid"
@@ -77,27 +74,15 @@ func TestAdaptersRejectMissingIdentityWithoutFallback(t *testing.T) {
 	if _, err := adapter.ParseHook([]byte(`{"generation_id":"g"}`), "project"); err == nil {
 		t.Fatal("missing native id accepted")
 	}
-	if _, err := NewIdentity(AgentPi, "project", "native"); err == nil {
-		t.Fatal("unsupported agent accepted")
-	}
 }
 
 func TestSupportIsExplicit(t *testing.T) {
-	for _, agent := range []Agent{AgentClaudeCode, AgentCodex, AgentCursor, AgentWindsurf, AgentOpenCode} {
+	for _, agent := range []Agent{AgentClaudeCode, AgentCodex, AgentCursor, AgentWindsurf, AgentOpenCode, AgentPi} {
 		if !Supports(agent) {
 			t.Fatalf("%s should have an explicit execution contract", agent)
 		}
 	}
-	for _, agent := range []Agent{AgentFx, AgentPi} {
-		adapter, ok := AdapterFor(agent)
-		if !ok || adapter.Agent() != agent {
-			t.Fatalf("%s must have its own adapter", agent)
-		}
-		if Supports(agent) {
-			t.Fatalf("%s must not be approximated", agent)
-		}
-		if _, err := adapter.Identity("project", "native"); !errors.Is(err, ErrExecutionIdentityUnsupported) {
-			t.Fatalf("%s error = %v, want ErrExecutionIdentityUnsupported", agent, err)
-		}
+	if _, err := NewIdentity(Agent("missing"), "project", "native"); err == nil {
+		t.Fatal("unknown adapter accepted")
 	}
 }
