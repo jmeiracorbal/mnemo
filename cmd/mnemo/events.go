@@ -33,7 +33,7 @@ func runEvents(s *store.Store) {
 		fmt.Fprintln(os.Stderr, "mnemo events: --project and --directory are required")
 		return
 	}
-	cfg, err := events.LoadConfig(project, directory, s.DataDir())
+	cfg, err := events.LoadConfig(s.DataDir())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "mnemo events:", err)
 		return
