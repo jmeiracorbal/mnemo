@@ -203,3 +203,12 @@ func assertExecutable(t *testing.T, path string) {
 		t.Fatalf("%s is not executable: %v", path, info.Mode())
 	}
 }
+
+func TestControllerLaunchAgentPlist(t *testing.T) {
+	content := controllerLaunchAgentPlist("/home/test", "/bin/mnemo")
+	for _, want := range []string{"com.jmeiracorbal.mnemo.controller", "/bin/mnemo", "controller", "serve", "KeepAlive"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("service file missing %q", want)
+		}
+	}
+}
