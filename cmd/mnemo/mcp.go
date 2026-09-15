@@ -17,13 +17,9 @@ func runMCP(s *store.Store) {
 		fmt.Fprintf(os.Stderr, "mnemo: event config: %v\n", err)
 		os.Exit(1)
 	}
-	controller, err := events.EnsureController(context.Background(), cfg, s)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: event controller: %v\n", err)
+	if err := events.CheckHealth(context.Background(), cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: global controller unavailable: %v\n", err)
 		os.Exit(1)
-	}
-	if controller != nil {
-		defer controller.Close()
 	}
 	tools := ""
 	for _, arg := range os.Args[2:] {

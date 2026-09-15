@@ -269,25 +269,16 @@ func (c *Controller) Close() {
 // always loopback-bound and are not a remote API.
 func (c *Controller) LocalAddress() net.Addr { return c.server.Addr() }
 
-// EnsureController connects to the global controller when one is already
-// running, or starts it in this process. It never falls back to SQLite: a
-// publisher can proceed only after a JetStream controller is reachable.
-func EnsureController(ctx context.Context, cfg Config, memory *store.Store) (*Controller, error) {
-	if nc, err := nats.Connect(cfg.URL(), nats.Timeout(250*time.Millisecond)); err == nil {
-		defer nc.Close()
-		if _, err := nc.JetStream(); err == nil {
-			return nil, nil
-		}
-	}
-	controller, err := NewController(cfg, memory)
+// CheckHealth verifies that the singleton controller configured for this
+// installation is reachable. MCP processes must call this; they never create it.
+func CheckHealth(ctx context.Context, cfg Config) error {
+	nc, err := nats.Connect(cfg.URL(), nats.Timeout(time.Second))
 	if err != nil {
-		// A concurrent MCP instance may have become the controller.
-		if nc, connectErr := nats.Connect(cfg.URL(), nats.Timeout(time.Second)); connectErr == nil {
-			nc.Close()
-			return nil, nil
-		}
-		return nil, err
+		return fmt.Errorf("connect global event controller: %w", err)
 	}
-	go func() { _ = controller.Run(ctx) }()
-	return controller, nil
+	defer nc.Close()
+	if _, err := nc.JetStream(nats.Context(ctx)); err != nil {
+		return fmt.Errorf("open global event controller: %w", err)
+	}
+	return nil
 }
