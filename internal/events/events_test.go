@@ -101,6 +101,43 @@ func TestControllerDerivesExecutionKeyFromNativeIdentity(t *testing.T) {
 	t.Fatal("controller did not create execution session")
 }
 
+func TestControllerExecutesMCPMutationsThroughDurableCommands(t *testing.T) {
+	memory, err := store.New(store.FallbackConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = memory.Close() })
+	cfg := Config{Port: freePort(t), DataDir: t.TempDir()}
+	controller, err := NewController(cfg, memory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(controller.Close)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = controller.Run(ctx) }()
+
+	var sessionID string
+	if err := Call(context.Background(), cfg, "resolve_session", struct {
+		Project    string `json:"project"`
+		Directory  string `json:"directory"`
+		InstanceID string `json:"instance_id"`
+		PID        int    `json:"pid"`
+	}{"project-rpc", t.TempDir(), "instance-rpc", 7}, &sessionID); err != nil {
+		t.Fatalf("resolve durable MCP session: %v", err)
+	}
+	var observationID int64
+	if err := Call(context.Background(), cfg, "add_observation", store.AddObservationParams{SessionID: sessionID, Type: "manual", Title: "Through controller", Content: "The MCP process did not open SQLite.", Project: "project-rpc"}, &observationID); err != nil {
+		t.Fatalf("save durable MCP observation: %v", err)
+	}
+	if observationID == 0 {
+		t.Fatal("durable command returned no observation ID")
+	}
+	if _, err := memory.GetObservation(observationID); err != nil {
+		t.Fatalf("controller did not persist observation: %v", err)
+	}
+}
+
 func mustExecution(t *testing.T, event Event) string {
 	t.Helper()
 	identity, err := adapters.NewIdentity(event.Agent, event.Project, event.NativeID)

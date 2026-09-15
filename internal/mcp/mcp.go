@@ -47,7 +47,7 @@ func parseTags(s string) []string {
 	return out
 }
 
-var loadMCPStats = func(s *store.Store) (*store.Stats, error) {
+var loadMCPStats = func(s MemoryBackend) (*store.Stats, error) {
 	return s.Stats()
 }
 
@@ -167,14 +167,14 @@ func ResolveTools(input string) map[string]bool {
 }
 
 // NewServer creates an MCP server with ALL tools registered.
-func NewServer(s *store.Store, version string) (*server.MCPServer, error) {
+func NewServer(s MemoryBackend, version string) (*server.MCPServer, error) {
 	return NewServerWithTools(s, version, nil)
 }
 
 // NewServerWithTools creates an MCP server registering only the tools in
 // the allowlist. If allowlist is nil, all tools are registered.
 // version is the binary version advertised to MCP clients; it is required.
-func NewServerWithTools(s *store.Store, version string, allowlist map[string]bool) (*server.MCPServer, error) {
+func NewServerWithTools(s MemoryBackend, version string, allowlist map[string]bool) (*server.MCPServer, error) {
 	srv, _, err := NewServerWithRuntime(s, version, allowlist)
 	return srv, err
 }
@@ -190,7 +190,7 @@ type Runtime struct {
 
 // NewServerWithRuntime creates an MCP server and the runtime that owns its
 // sessions. Call Close after the stdio transport terminates.
-func NewServerWithRuntime(s *store.Store, version string, allowlist map[string]bool) (*server.MCPServer, *Runtime, error) {
+func NewServerWithRuntime(s MemoryBackend, version string, allowlist map[string]bool) (*server.MCPServer, *Runtime, error) {
 	if strings.TrimSpace(version) == "" {
 		return nil, nil, fmt.Errorf("mcp server version is required")
 	}
@@ -213,11 +213,11 @@ func NewServerWithRuntime(s *store.Store, version string, allowlist map[string]b
 
 // Close releases all open sessions owned by this runtime. It is safe to call
 // after a read-only MCP connection that never created a session.
-func (r *Runtime) Close(s *store.Store) error {
+func (r *Runtime) Close(s MemoryBackend) error {
 	return s.CloseMCPInstanceSessions(r.instanceID)
 }
 
-func (r *Runtime) resolveSession(s *store.Store, project, directory string) (string, error) {
+func (r *Runtime) resolveSession(s MemoryBackend, project, directory string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	sessionID, err := s.ResolveMCPInstanceSession(project, directory, r.instanceID, r.pid)
@@ -240,7 +240,7 @@ func shouldRegister(name string, allowlist map[string]bool) bool {
 	return allowlist[name]
 }
 
-func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]bool, runtime *Runtime) {
+func registerTools(srv *server.MCPServer, s MemoryBackend, allowlist map[string]bool, runtime *Runtime) {
 	// ─── mem_search ─────────────────────────────────────────────────────
 	if shouldRegister("mem_search", allowlist) {
 		srv.AddTool(
@@ -706,7 +706,7 @@ func registerTools(srv *server.MCPServer, s *store.Store, allowlist map[string]b
 
 // ─── Tool Handlers ───────────────────────────────────────────────────────────
 
-func handleSearch(s *store.Store) server.ToolHandlerFunc {
+func handleSearch(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		query, _ := req.GetArguments()["query"].(string)
 		typ, _ := req.GetArguments()["type"].(string)
@@ -763,7 +763,7 @@ func handleSearch(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleSave(s *store.Store, runtime *Runtime) server.ToolHandlerFunc {
+func handleSave(s MemoryBackend, runtime *Runtime) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		title, _ := req.GetArguments()["title"].(string)
 		content, _ := req.GetArguments()["content"].(string)
@@ -842,7 +842,7 @@ func handleSuggestTopicKey() server.ToolHandlerFunc {
 	}
 }
 
-func handleUpdate(s *store.Store) server.ToolHandlerFunc {
+func handleUpdate(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id := int64(intArg(req, "id", 0))
 		if id == 0 {
@@ -895,7 +895,7 @@ func handleUpdate(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleDelete(s *store.Store) server.ToolHandlerFunc {
+func handleDelete(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id := int64(intArg(req, "id", 0))
 		if id == 0 {
@@ -911,7 +911,7 @@ func handleDelete(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleSavePrompt(s *store.Store, runtime *Runtime) server.ToolHandlerFunc {
+func handleSavePrompt(s MemoryBackend, runtime *Runtime) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		content, _ := req.GetArguments()["content"].(string)
 		project, _ := req.GetArguments()["project"].(string)
@@ -937,7 +937,7 @@ func handleSavePrompt(s *store.Store, runtime *Runtime) server.ToolHandlerFunc {
 	}
 }
 
-func handleContext(s *store.Store) server.ToolHandlerFunc {
+func handleContext(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		project, _ := req.GetArguments()["project"].(string)
 		scope, _ := req.GetArguments()["scope"].(string)
@@ -973,7 +973,7 @@ func handleContext(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleListTags(s *store.Store) server.ToolHandlerFunc {
+func handleListTags(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		project, _ := req.GetArguments()["project"].(string)
 
@@ -1003,7 +1003,7 @@ func handleListTags(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleTagStats(s *store.Store) server.ToolHandlerFunc {
+func handleTagStats(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		project, _ := req.GetArguments()["project"].(string)
 		unusedSinceStr, _ := req.GetArguments()["unused_since"].(string)
@@ -1073,7 +1073,7 @@ func handleTagStats(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleMergeTags(s *store.Store) server.ToolHandlerFunc {
+func handleMergeTags(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		from, _ := req.GetArguments()["from"].(string)
 		to, _ := req.GetArguments()["to"].(string)
@@ -1094,7 +1094,7 @@ func handleMergeTags(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleRelatedTags(s *store.Store) server.ToolHandlerFunc {
+func handleRelatedTags(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		tag, _ := req.GetArguments()["tag"].(string)
 		if strings.TrimSpace(tag) == "" {
@@ -1168,7 +1168,7 @@ func handleRelatedTags(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleStats(s *store.Store) server.ToolHandlerFunc {
+func handleStats(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		stats, err := loadMCPStats(s)
 		if err != nil {
@@ -1189,7 +1189,7 @@ func handleStats(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleTimeline(s *store.Store) server.ToolHandlerFunc {
+func handleTimeline(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		observationID := int64(intArg(req, "observation_id", 0))
 		if observationID == 0 {
@@ -1237,7 +1237,7 @@ func handleTimeline(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleGetObservation(s *store.Store) server.ToolHandlerFunc {
+func handleGetObservation(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id := int64(intArg(req, "id", 0))
 		if id == 0 {
@@ -1276,7 +1276,7 @@ func handleGetObservation(s *store.Store) server.ToolHandlerFunc {
 	}
 }
 
-func handleSessionSummary(s *store.Store, runtime *Runtime) server.ToolHandlerFunc {
+func handleSessionSummary(s MemoryBackend, runtime *Runtime) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		content, _ := req.GetArguments()["content"].(string)
 		project, _ := req.GetArguments()["project"].(string)
@@ -1304,7 +1304,7 @@ func handleSessionSummary(s *store.Store, runtime *Runtime) server.ToolHandlerFu
 	}
 }
 
-func handleCapturePassive(s *store.Store, runtime *Runtime) server.ToolHandlerFunc {
+func handleCapturePassive(s MemoryBackend, runtime *Runtime) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		content, _ := req.GetArguments()["content"].(string)
 		project, _ := req.GetArguments()["project"].(string)

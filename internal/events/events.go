@@ -22,9 +22,12 @@ import (
 )
 
 const (
-	configFilename = "config.toml"
-	streamName     = "MNEMO_EVENTS"
-	consumerName   = "mnemo-controller"
+	configFilename      = "config.toml"
+	streamName          = "MNEMO_EVENTS"
+	consumerName        = "mnemo-controller"
+	commandStreamName   = "MNEMO_COMMANDS"
+	commandConsumerName = "mnemo-controller-commands"
+	commandSubject      = "mnemo.commands"
 
 	EventExecutionStarted     = store.EventExecutionStarted
 	EventExecutionClosed      = store.EventExecutionClosed
@@ -204,17 +207,41 @@ func (c *Controller) ensureStream() error {
 	if err != nil && !errors.Is(err, nats.ErrStreamNameAlreadyInUse) {
 		return fmt.Errorf("create event stream: %w", err)
 	}
+	_, err = c.js.AddStream(&nats.StreamConfig{Name: commandStreamName, Subjects: []string{commandSubject}, Storage: nats.FileStorage, Retention: nats.LimitsPolicy})
+	if err != nil && !errors.Is(err, nats.ErrStreamNameAlreadyInUse) {
+		return fmt.Errorf("create command stream: %w", err)
+	}
 	return nil
 }
 
 func (c *Controller) Run(ctx context.Context) error {
+	if _, err := c.nc.Subscribe(rpcSubject, c.handleRPC); err != nil {
+		return fmt.Errorf("subscribe controller RPC: %w", err)
+	}
+	if err := c.nc.Flush(); err != nil {
+		return fmt.Errorf("flush controller RPC subscription: %w", err)
+	}
 	sub, err := c.js.PullSubscribe(c.cfg.subject(), consumerName, nats.BindStream(streamName))
 	if err != nil {
 		return fmt.Errorf("subscribe event stream: %w", err)
 	}
+	commandSub, err := c.js.PullSubscribe(commandSubject, commandConsumerName, nats.BindStream(commandStreamName))
+	if err != nil {
+		return fmt.Errorf("subscribe command stream: %w", err)
+	}
+	commandErr := make(chan error, 1)
+	go func() { commandErr <- c.runCommands(ctx, commandSub) }()
 	for {
 		if err := ctx.Err(); err != nil {
+			if commandRunErr := <-commandErr; commandRunErr != nil {
+				return commandRunErr
+			}
 			return nil
+		}
+		select {
+		case err := <-commandErr:
+			return err
+		default:
 		}
 		messages, err := sub.Fetch(1, nats.MaxWait(time.Second))
 		if err == nats.ErrTimeout {
@@ -252,6 +279,78 @@ func (c *Controller) Run(ctx context.Context) error {
 				return fmt.Errorf("ack durable event: %w", err)
 			}
 		}
+	}
+}
+
+func (c *Controller) runCommands(ctx context.Context, sub *nats.Subscription) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil
+		}
+		messages, err := sub.Fetch(1, nats.MaxWait(time.Second))
+		if err == nats.ErrTimeout {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("fetch durable command: %w", err)
+		}
+		for _, msg := range messages {
+			var command Command
+			if err := json.Unmarshal(msg.Data, &command); err != nil {
+				return c.rejectCommand(msg, "", err)
+			}
+			if err := command.Validate(); err != nil {
+				return c.rejectCommand(msg, command.Reply, err)
+			}
+			payload, err := c.store.ExecuteMCPAction(context.Background(), command.Action, command.Payload)
+			if err != nil {
+				return c.rejectCommand(msg, command.Reply, err)
+			}
+			c.replyTo(command.Reply, RPCResponse{Payload: payload})
+			if err := msg.Ack(); err != nil {
+				return fmt.Errorf("ack durable command: %w", err)
+			}
+		}
+	}
+}
+
+func (c *Controller) rejectCommand(msg *nats.Msg, reply string, processErr error) error {
+	c.replyTo(reply, RPCResponse{Error: processErr.Error()})
+	if err := msg.Ack(); err != nil {
+		return fmt.Errorf("ack rejected durable command: %w", err)
+	}
+	return nil
+}
+
+func (c *Controller) handleRPC(message *nats.Msg) {
+	var request RPCRequest
+	if err := json.Unmarshal(message.Data, &request); err != nil {
+		c.replyRPC(message, RPCResponse{Error: "decode request: " + err.Error()})
+		return
+	}
+	if strings.TrimSpace(request.Action) == "" {
+		c.replyRPC(message, RPCResponse{Error: "action is required"})
+		return
+	}
+	payload, err := c.store.ExecuteMCPAction(context.Background(), request.Action, request.Payload)
+	if err != nil {
+		c.replyRPC(message, RPCResponse{Error: err.Error()})
+		return
+	}
+	c.replyRPC(message, RPCResponse{Payload: payload})
+}
+
+func (c *Controller) replyRPC(request *nats.Msg, response RPCResponse) {
+	c.replyTo(request.Reply, response)
+}
+
+func (c *Controller) replyTo(subject string, response RPCResponse) {
+	if subject == "" {
+		return
+	}
+	payload, err := json.Marshal(response)
+	if err == nil {
+		_ = c.nc.Publish(subject, payload)
 	}
 }
 
