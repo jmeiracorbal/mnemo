@@ -60,6 +60,14 @@ The controller acknowledges an event only after one SQLite transaction records
 its idempotency key and applies its effect. A failed or unbound event remains in
 JetStream for retry; no event is silently downgraded to a direct write.
 
+## MCP boundary
+
+`mnemo mcp` does not open the SQLite store. Read operations are forwarded to
+the controller over local NATS request/reply. Mutating operations are published
+to the durable `MNEMO_COMMANDS` JetStream stream and the controller replies
+only after it has applied the operation. This keeps the MCP process, agent
+hooks and extensions on the same local controller boundary.
+
 ## Event types
 
 - `execution.started` — creates and binds the controller-owned session.

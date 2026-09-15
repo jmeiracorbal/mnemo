@@ -36,7 +36,7 @@ func newRootCommand() *cobra.Command {
 		storeCommand("capture <content>|-", "Extract learnings from text", runCapture),
 		command("init [--agent=AGENT] [--path=DIR] [--no-project-rules]", "Activate mnemo in the current project", runInit),
 		storeCommand("migrate", "Migrate project identity", runMigrateProjects),
-		storeCommand("mcp", "Start MCP server (stdio)", runMCP),
+		command("mcp", "Start MCP server (stdio)", runMCP),
 		storeCommand("projects", "Manage known projects", runProjects),
 		storeCommand("memories", "Review and curate memories", runMemories),
 		storeCommand("session", "Manage memory sessions", runSession),
