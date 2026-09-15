@@ -1,75 +1,76 @@
-# Durable hook events
+# Durable event controller
 
-mnemo can carry typed agent-hook events through a local, embedded NATS
-JetStream controller. This is an opt-in transport boundary: hook publishers do
-not open SQLite, and SQLite writes happen only in the controller after a
-durable event is consumed.
+mnemo uses one installation-wide, local NATS JetStream controller for durable
+agent events. Publishers never open SQLite. The controller is the only process
+that consumes events and applies their SQLite transactions.
 
-## Project configuration
+## Configuration and lifecycle
 
-Create the project-root `config.toml` with an explicit local port:
+`mnemo setup refresh` creates the global configuration on first run:
 
 ```toml
-[mnemo.events]
+# ~/.mnemo/config.toml
+[events]
 port = 4222
 ```
 
-There is deliberately no implicit shared port. Two project controllers cannot
-silently bind the same address, and a missing or invalid configuration fails
-before a hook can publish. The listener is always `127.0.0.1`; it is not a
-remote API.
+The port is a technical infrastructure setting; users can change it in that
+file. The controller always binds to `127.0.0.1` and stores JetStream data in
+`~/.mnemo/events/`. It is not a remote API and does not require Redis or a
+separate NATS installation.
 
-JetStream data is held under `~/.mnemo/events/<project-id>/`. This is required
-for durable delivery: no-loss delivery cannot be achieved with an in-memory
-queue. The user does not need to install Redis or NATS separately; the server
-is embedded in the `mnemo` binary.
+The same setup command registers the singleton controller with the native
+per-user service manager:
 
-## Lifecycle
+| System | Registration |
+| --- | --- |
+| macOS | launchd `com.jmeiracorbal.mnemo.controller` LaunchAgent |
+| Linux | systemd user unit `mnemo-controller.service` |
+| Windows | Task Scheduler task `MnemoController` |
 
-Start one controller for the active project before starting its agent:
+Each service starts `mnemo controller serve` at login and restarts it after a
+failure. An MCP process only verifies that this controller is healthy; it never
+starts another controller. If the service is unavailable, MCP startup and event
+publication fail explicitly. Run `mnemo setup refresh --agent=all` after an
+upgrade to install or refresh the service, and `mnemo setup uninstall` to stop
+and remove it along with the selected agent setup.
 
-```bash
-mnemo events serve --project "$PROJECT_ID" --directory "$PWD"
-```
+## Publisher contract
 
-The agent-launch adapter generates one opaque `MNEMO_EXECUTION_KEY` for its
-execution and passes it to both the MCP subprocess and supported hooks. MCP
-binds that key to its private session ID. The hook event contains the key, not
-the private session ID.
-
-The controller only acknowledges an event after the same SQLite transaction
-both records its idempotency key and applies its effect. If the session binding
-does not exist yet or SQLite fails, JetStream retains the event for retry.
-
-## Event contract
-
-The supported initial event types are:
-
-- `session.compacted` — updates the bound session compaction timestamp.
-- `workspace.file_changed` — payload requires `path` and `action`; creates a
-  `file_change` observation.
-- `git.commit_created` — payload requires `hash` and `message`; creates a
-  `decision` observation.
-
-For diagnostics, a publisher can be invoked directly:
+Hook and extension publishers use the non-writing command below. It reads only
+the global controller configuration and publishes to JetStream; it does not
+open, migrate or write SQLite.
 
 ```bash
 mnemo events publish \
   --project "$PROJECT_ID" \
   --directory "$PWD" \
-  --execution-key "$MNEMO_EXECUTION_KEY" \
-  --type workspace.file_changed \
-  --payload '{"path":"README.md","action":"modified"}'
+  --agent pi \
+  --native-id "$NATIVE_EXECUTION_ID" \
+  --type execution.started \
+  --payload "{\"directory\":\"$PWD\"}"
 ```
 
-An event whose controller is unavailable fails explicitly. It is never routed
-to direct SQLite, a temporary file, a PID lookup, a path-derived session, or a
-"latest session" fallback.
+The event includes either an existing `execution_key` or the adapter's
+`agent` + `native_id`. Only the Go controller derives the canonical execution
+key. TypeScript hooks and extensions must not calculate identifiers or use a
+path, PID, latest session, temporary file or direct SQLite fallback.
 
-## Adapter rollout
+The controller acknowledges an event only after one SQLite transaction records
+its idempotency key and applies its effect. A failed or unbound event remains in
+JetStream for retry; no event is silently downgraded to a direct write.
 
-`adapters/` defines a concrete identity adapter for every supported agent. The
-transport is ready for launch adapters to use, but existing shipped hooks stay
-context-only until each agent can receive the same execution key in its hook
-and MCP subprocess. This avoids enabling partial delivery semantics for only
-some agents.
+## Event types
+
+- `execution.started` — creates and binds the controller-owned session.
+- `execution.closed` — closes the bound session.
+- `session.compacted` — records compaction for the bound session.
+- `workspace.file_changed` — creates a `file_change` observation.
+- `git.commit_created` — creates a `decision` observation.
+
+## Adapter rule
+
+Every supported agent has an adapter under `adapters/`. An agent can publish
+only events for which its adapter exposes a native execution identity. Missing
+adapter capability is a configuration error, not a reason to add an
+agent-specific fallback.

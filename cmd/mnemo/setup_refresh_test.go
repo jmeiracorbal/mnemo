@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/xml"
 	"os"
 	"path/filepath"
 	"strings"
@@ -205,17 +206,20 @@ func assertExecutable(t *testing.T, path string) {
 }
 
 func TestControllerLaunchAgentPlist(t *testing.T) {
-	content := controllerLaunchAgentPlist("/home/test", "/bin/mnemo")
-	for _, want := range []string{"com.jmeiracorbal.mnemo.controller", "/bin/mnemo", "controller", "serve", "KeepAlive"} {
+	content := controllerLaunchAgentPlist("/home/test & user", "/bin/mnemo & controller")
+	for _, want := range []string{"com.jmeiracorbal.mnemo.controller", "/bin/mnemo &amp; controller", "controller", "serve", "KeepAlive"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("service file missing %q", want)
 		}
 	}
+	if err := xml.Unmarshal([]byte(content), new(struct{})); err != nil {
+		t.Fatalf("launchd plist is not valid XML: %v", err)
+	}
 }
 
 func TestControllerSystemdUnit(t *testing.T) {
-	content := controllerSystemdUnit("/home/test", "/bin/mnemo")
-	for _, want := range []string{"ExecStart=/bin/mnemo controller serve", "Environment=HOME=/home/test", "Restart=on-failure", "WantedBy=default.target"} {
+	content := controllerSystemdUnit("/home/test user", "/bin/mnemo controller")
+	for _, want := range []string{`ExecStart="/bin/mnemo controller" controller serve`, `Environment="HOME=/home/test user"`, "Restart=on-failure", "WantedBy=default.target"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("unit missing %q", want)
 		}
@@ -223,10 +227,16 @@ func TestControllerSystemdUnit(t *testing.T) {
 }
 
 func TestControllerWindowsTaskXML(t *testing.T) {
-	content := controllerWindowsTaskXML(`C:\mnemo.exe`)
-	for _, want := range []string{"controller serve", "LogonTrigger", "RestartOnFailure", "MultipleInstancesPolicy"} {
+	content := controllerWindowsTaskXML(`C:\Program Files\mnemo & tools\mnemo.exe`)
+	for _, want := range []string{"controller serve", "LogonTrigger", "RestartOnFailure", "MultipleInstancesPolicy", `C:\Program Files\mnemo &amp; tools\mnemo.exe`} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("task XML missing %q", want)
 		}
+	}
+	if !strings.Contains(controllerWindowsTaskTemplate, "{{MNEMO_BIN}}") {
+		t.Fatal("Windows task template does not provide the binary placeholder")
+	}
+	if err := xml.Unmarshal([]byte(content), new(struct{})); err != nil {
+		t.Fatalf("Windows task XML is not valid: %v", err)
 	}
 }
