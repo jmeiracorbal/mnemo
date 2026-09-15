@@ -78,6 +78,17 @@ func refreshSetup(opts setupRefreshOptions) ([]string, error) {
 		return nil, fmt.Errorf("event config: %w", err)
 	}
 	updated = append(updated, configPath)
+	actualHome, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		return nil, fmt.Errorf("resolve service home: %w", homeErr)
+	}
+	if filepath.Clean(opts.Home) == filepath.Clean(actualHome) {
+		servicePath, err := installControllerService(opts.Home, opts.MnemoBin)
+		if err != nil {
+			return nil, fmt.Errorf("controller service: %w", err)
+		}
+		updated = append(updated, servicePath)
+	}
 
 	skillFiles, err := agentinit.InstallGlobalSkillForAgents(opts.Home, agents)
 	if err != nil {
