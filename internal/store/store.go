@@ -69,10 +69,11 @@ func (s *Store) DataDir() string {
 // ─── Store ───────────────────────────────────────────────────────────────────
 
 type Store struct {
-	db    *sql.DB
-	q     *dbgen.Queries
-	cfg   Config
-	hooks storeHooks
+	db       *sql.DB
+	q        *dbgen.Queries
+	cfg      Config
+	hooks    storeHooks
+	activeTx *sql.Tx
 }
 
 type execer interface {
@@ -229,6 +230,9 @@ func (s *Store) migrate() error {
 }
 
 func (s *Store) withTx(fn func(tx *sql.Tx) error) error {
+	if s.activeTx != nil {
+		return fn(s.activeTx)
+	}
 	tx, err := s.beginTxHook()
 	if err != nil {
 		return err

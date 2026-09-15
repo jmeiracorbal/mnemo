@@ -2,9 +2,41 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 )
+
+// ApplyMCPCommand executes one durable MCP mutation and stores its serialized
+// result in the same SQLite transaction. A JetStream redelivery therefore
+// receives the original result without applying the mutation again.
+func (s *Store) ApplyMCPCommand(id, action string, payload json.RawMessage) (json.RawMessage, error) {
+	var result json.RawMessage
+	err := s.withTx(func(tx *sql.Tx) error {
+		var prior string
+		err := tx.QueryRow(`SELECT result_json FROM processed_mcp_commands WHERE id = ?`, id).Scan(&prior)
+		if err == nil {
+			result = json.RawMessage(prior)
+			return nil
+		}
+		if err != sql.ErrNoRows {
+			return err
+		}
+		transactional := *s
+		transactional.activeTx = tx
+		transactional.q = s.q.WithTx(tx)
+		computed, err := transactional.ExecuteMCPAction(context.Background(), action, payload)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`INSERT INTO processed_mcp_commands (id, action, result_json) VALUES (?, ?, ?)`, id, action, string(computed)); err != nil {
+			return err
+		}
+		result = computed
+		return nil
+	})
+	return result, err
+}
 
 // ExecuteMCPAction is the controller-only RPC surface for MCP operations.
 // Keeping this dispatch next to Store makes the controller the only process
