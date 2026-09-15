@@ -302,7 +302,7 @@ func (c *Controller) runCommands(ctx context.Context, sub *nats.Subscription) er
 			if err := command.Validate(); err != nil {
 				return c.rejectCommand(msg, command.Reply, err)
 			}
-			payload, err := c.store.ExecuteMCPAction(context.Background(), command.Action, command.Payload)
+			payload, err := c.store.ApplyMCPCommand(command.ID, command.Action, command.Payload)
 			if err != nil {
 				return c.rejectCommand(msg, command.Reply, err)
 			}

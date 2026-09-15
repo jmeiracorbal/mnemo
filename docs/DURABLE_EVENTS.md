@@ -65,7 +65,9 @@ JetStream for retry; no event is silently downgraded to a direct write.
 `mnemo mcp` does not open the SQLite store. Read operations are forwarded to
 the controller over local NATS request/reply. Mutating operations are published
 to the durable `MNEMO_COMMANDS` JetStream stream and the controller replies
-only after it has applied the operation. This keeps the MCP process, agent
+only after it has atomically applied the operation and persisted its result.
+On redelivery, the controller returns that stored result without repeating the
+mutation. This keeps the MCP process, agent
 hooks and extensions on the same local controller boundary.
 
 ## Event types
