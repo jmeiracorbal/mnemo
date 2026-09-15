@@ -212,3 +212,21 @@ func TestControllerLaunchAgentPlist(t *testing.T) {
 		}
 	}
 }
+
+func TestControllerSystemdUnit(t *testing.T) {
+	content := controllerSystemdUnit("/home/test", "/bin/mnemo")
+	for _, want := range []string{"ExecStart=/bin/mnemo controller serve", "Environment=HOME=/home/test", "Restart=on-failure", "WantedBy=default.target"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("unit missing %q", want)
+		}
+	}
+}
+
+func TestControllerWindowsTaskXML(t *testing.T) {
+	content := controllerWindowsTaskXML(`C:\mnemo.exe`)
+	for _, want := range []string{"controller serve", "LogonTrigger", "RestartOnFailure", "MultipleInstancesPolicy"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("task XML missing %q", want)
+		}
+	}
+}
