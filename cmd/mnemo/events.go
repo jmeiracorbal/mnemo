@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,7 +14,9 @@ import (
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
-func runEvents(s *store.Store) {
+// runEvents only publishes to the controller. It deliberately does not open a
+// Store: hook processes must never touch SQLite, even to initialize it.
+func runEvents() {
 	args := eventArgs()
 	if len(args) == 0 {
 		eventUsage()
@@ -33,25 +33,18 @@ func runEvents(s *store.Store) {
 		fmt.Fprintln(os.Stderr, "mnemo events: --project and --directory are required")
 		return
 	}
-	cfg, err := events.LoadConfig(s.DataDir())
+	storeConfig, err := store.DefaultConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mnemo events:", err)
+		return
+	}
+	cfg, err := events.LoadConfig(storeConfig.DataDir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "mnemo events:", err)
 		return
 	}
 
 	switch command {
-	case "serve":
-		controller, err := events.NewController(cfg, s)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "mnemo events:", err)
-			return
-		}
-		defer controller.Close()
-		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		defer stop()
-		if err := controller.Run(ctx); err != nil {
-			fmt.Fprintln(os.Stderr, "mnemo events:", err)
-		}
 	case "publish":
 		payload := json.RawMessage(values["payload"])
 		event := events.Event{ID: uuid.NewString(), Type: values["type"], Project: project, ExecutionKey: values["execution-key"], Agent: adapters.Agent(values["agent"]), NativeID: values["native-id"], Payload: payload, OccurredAt: time.Now().UTC()}
@@ -92,6 +85,5 @@ func eventFlagValues(args []string) (map[string]string, error) {
 }
 
 func eventUsage() {
-	fmt.Fprintln(os.Stderr, "usage: mnemo events serve --project PROJECT --directory DIR")
-	fmt.Fprintln(os.Stderr, "       mnemo events publish --project PROJECT --directory DIR --execution-key KEY --type TYPE --payload VALUE")
+	fmt.Fprintln(os.Stderr, "usage: mnemo events publish --project PROJECT --directory DIR --execution-key KEY --type TYPE --payload VALUE")
 }

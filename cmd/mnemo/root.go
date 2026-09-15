@@ -40,7 +40,7 @@ func newRootCommand() *cobra.Command {
 		storeCommand("projects", "Manage known projects", runProjects),
 		storeCommand("memories", "Review and curate memories", runMemories),
 		storeCommand("session", "Manage memory sessions", runSession),
-		storeCommand("events", "Run or publish durable agent events", runEvents),
+		command("events", "Publish durable agent events", runEvents),
 		storeCommand("controller", "Run the installation-wide event controller", runController),
 		command("json [KEY ...]", "Extract fields from JSON on stdin", runJSON),
 		command("json-merge <file>", "Deep-merge JSON from stdin into a file", runJSONMerge),
@@ -137,8 +137,7 @@ func addCommandTree(root *cobra.Command) {
 	)
 	addChildren(root, "controller", storeCommand("serve", "Run the installation-wide controller", runController))
 	addChildren(root, "events",
-		storeCommand("serve --project PROJECT --directory DIR", "Run the project event controller", runEvents),
-		storeCommand("publish --project PROJECT --directory DIR --execution-key KEY --type TYPE --payload VALUE", "Publish a durable typed event", runEvents),
+		command("publish --project PROJECT --directory DIR --execution-key KEY --type TYPE --payload VALUE", "Publish a durable typed event", runEvents),
 	)
 }
 
