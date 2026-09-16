@@ -79,24 +79,11 @@ func TestRefreshSetupScopesAgentSpecificSkillLinks(t *testing.T) {
 	}
 	for _, path := range []string{
 		filepath.Join(home, ".claude", "skills", "mnemo-memory"),
-		filepath.Join(home, ".codeium", "windsurf", "skills", "mnemo-memory"),
 		filepath.Join(home, ".pi", "agent", "skills", "mnemo-memory"),
 	} {
 		if _, err := os.Lstat(path); !os.IsNotExist(err) {
 			t.Fatalf("unexpected agent-specific skill link %s after cursor-only refresh: %v", path, err)
 		}
-	}
-
-	if _, err := refreshSetup(setupRefreshOptions{Agent: "windsurf", Home: home, MnemoBin: "mnemo"}); err != nil {
-		t.Fatalf("refresh windsurf setup: %v", err)
-	}
-	windsurfLink := filepath.Join(home, ".codeium", "windsurf", "skills", "mnemo-memory")
-	info, err := os.Lstat(windsurfLink)
-	if err != nil {
-		t.Fatalf("stat windsurf skill link: %v", err)
-	}
-	if info.Mode()&os.ModeSymlink == 0 {
-		t.Fatalf("%s is not a symlink", windsurfLink)
 	}
 }
 

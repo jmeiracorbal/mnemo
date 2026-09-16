@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jmeiracorbal/mnemo/adapters"
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
 
@@ -14,6 +15,7 @@ const (
 	EventExecutionStarted     = "execution.started"
 	EventExecutionClosed      = "execution.closed"
 	EventSessionCompacted     = "session.compacted"
+	EventAgentToolResult      = "agent.tool_result"
 	EventWorkspaceFileChanged = "workspace.file_changed"
 	EventGitCommitCreated     = "git.commit_created"
 )
@@ -30,14 +32,14 @@ type DurableEvent struct {
 }
 
 // BindExecutionSession records the controller-owned session selected by an MCP
-// runtime for one opaque adapter execution key. Rebinding is intentional: a new
-// MCP runtime for the same execution supersedes the prior runtime's session.
-func (s *Store) BindExecutionSession(project, executionKey, sessionID string) error {
-	if strings.TrimSpace(project) == "" {
-		return fmt.Errorf("project id must not be empty")
-	}
-	if strings.TrimSpace(executionKey) == "" {
-		return fmt.Errorf("execution key must not be empty")
+// runtime for one native adapter execution identity. The controller derives the
+// opaque execution key itself so MCP clients never submit a hash. Rebinding is
+// intentional: a new MCP runtime for the same execution supersedes the prior
+// runtime's session.
+func (s *Store) BindExecutionSession(project string, agent adapters.Agent, nativeID, sessionID string) error {
+	identity, err := adapters.NewIdentity(agent, project, nativeID)
+	if err != nil {
+		return fmt.Errorf("derive execution identity: %w", err)
 	}
 	if strings.TrimSpace(sessionID) == "" {
 		return fmt.Errorf("session id must not be empty")
@@ -49,7 +51,7 @@ func (s *Store) BindExecutionSession(project, executionKey, sessionID string) er
 		_, err := s.execHook(tx, `
 INSERT INTO execution_sessions (project, execution_key, session_id)
 VALUES (?, ?, ?)
-ON CONFLICT(project, execution_key) DO UPDATE SET session_id = excluded.session_id`, project, executionKey, sessionID)
+ON CONFLICT(project, execution_key) DO UPDATE SET session_id = excluded.session_id`, project, identity.Execution, sessionID)
 		return err
 	})
 }
@@ -92,11 +94,7 @@ ON CONFLICT(id) DO NOTHING`, event.ID, event.Type, event.Project, event.Executio
 			if err := json.Unmarshal(event.Payload, &payload); err != nil || strings.TrimSpace(payload.Directory) == "" {
 				return fmt.Errorf("%s payload requires directory", event.Type)
 			}
-			sessionID := "execution-" + event.ExecutionKey
-			if err := s.createSessionTx(tx, sessionID, event.Project, payload.Directory, ProvenanceInput{}); err != nil {
-				return err
-			}
-			_, err := s.execHook(tx, `INSERT INTO execution_sessions (project, execution_key, session_id) VALUES (?, ?, ?) ON CONFLICT(project, execution_key) DO UPDATE SET session_id = excluded.session_id`, event.Project, event.ExecutionKey, sessionID)
+			_, err := s.ensureExecutionSessionTx(tx, adapters.Identity{Project: event.Project, Execution: event.ExecutionKey}, payload.Directory)
 			return err
 		}
 		var sessionID string
@@ -111,6 +109,23 @@ ON CONFLICT(id) DO NOTHING`, event.ID, event.Type, event.Project, event.Executio
 				return fmt.Errorf("invalid %s payload", event.Type)
 			}
 			return q.TouchSessionCompact(context.Background(), sessionID)
+		case EventAgentToolResult:
+			var payload struct {
+				Tool string `json:"tool"`
+			}
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				return fmt.Errorf("decode %s payload: %w", event.Type, err)
+			}
+			if strings.TrimSpace(payload.Tool) == "" {
+				return fmt.Errorf("%s payload requires tool", event.Type)
+			}
+			_, err := q.InsertObservation(context.Background(), dbgen.InsertObservationParams{
+				SyncID: sqlNullString(newSyncID("event")), SessionID: sessionID,
+				Type: "tool_use", Title: "Tool used: " + payload.Tool,
+				Content: string(event.Payload), Scope: "project",
+				NormalizedHash: sqlNullString(hashNormalized(string(event.Payload))),
+			})
+			return err
 		case EventWorkspaceFileChanged:
 			var payload struct {
 				Path   string `json:"path"`

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -86,7 +88,9 @@ func runSave(s *store.Store) {
 	fmt.Printf("Memory saved: #%d %q (%s)\n", id, title, typ)
 }
 
-func runSearch(s *store.Store) {
+// runSearch routes through the controller. It deliberately does not open a
+// Store: hook processes must never touch SQLite, even to initialize it.
+func runSearch() {
 	args := os.Args[2:]
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: mnemo search <query> [--type TYPE] [--project PROJECT] [--scope SCOPE] [--limit N]")
@@ -115,10 +119,20 @@ func runSearch(s *store.Store) {
 		}
 	}
 
-	results, err := s.Search(query, opts)
+	cfg, err := loadEventsConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: search failed: %v\n", err)
-		os.Exit(1)
+		fmt.Printf("No memories found for: %q\n", query)
+		return
+	}
+
+	var results []store.SearchResult
+	input := struct {
+		Query   string              `json:"query"`
+		Options store.SearchOptions `json:"options"`
+	}{query, opts}
+	if err := events.Call(context.Background(), cfg, "search", input, &results); err != nil {
+		fmt.Printf("No memories found for: %q\n", query)
+		return
 	}
 
 	if len(results) == 0 {
@@ -141,24 +155,44 @@ func runSearch(s *store.Store) {
 	}
 }
 
-func runContext(s *store.Store) {
+// runContext routes through the controller. It deliberately does not open a
+// Store: hook processes must never touch SQLite, even to initialize it.
+func runContext() {
 	project := ""
 	if len(os.Args) > 2 {
 		project = os.Args[2]
 	}
 
-	ctx, err := s.FormatContext(project, "")
+	cfg, err := loadEventsConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: context failed: %v\n", err)
-		os.Exit(1)
-	}
-
-	if ctx == "" {
 		fmt.Println("No previous session memories found.")
 		return
 	}
 
-	fmt.Println(ctx)
+	var output string
+	input := struct {
+		Project string               `json:"project"`
+		Scope   string               `json:"scope"`
+		Options store.ContextOptions `json:"options"`
+	}{project, "", store.ContextOptions{}}
+	if err := events.Call(context.Background(), cfg, "format_context", input, &output); err != nil {
+		fmt.Println("No previous session memories found.")
+		return
+	}
+
+	if output == "" {
+		fmt.Println("No previous session memories found.")
+		return
+	}
+	fmt.Println(output)
+}
+
+func loadEventsConfig() (events.Config, error) {
+	storeConfig, err := store.DefaultConfig()
+	if err != nil {
+		return events.Config{}, err
+	}
+	return events.LoadConfig(storeConfig.DataDir)
 }
 
 func runSession(s *store.Store) {

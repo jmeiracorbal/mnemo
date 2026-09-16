@@ -119,33 +119,6 @@ var agentSpecs = []AgentSpec{
 		Supports: AgentSpecCapabilities{MCP: true, Instructions: true, Hooks: true, SessionLifecycle: true},
 	},
 	{
-		ID:     AgentWindsurf,
-		Label:  windsurfLabel(),
-		Detect: detectFromPaths(windsurfDetectionPaths),
-		MCP: MCPConfigSpec{
-			Snippets:  windsurfConfigSnippets,
-			Uninstall: windsurfUninstallConfig,
-			Check:     windsurfCheckMCP,
-		},
-		Instructions: []InstructionSpec{{
-			Scope:   InstructionScopeGlobal,
-			Path:    windsurfInstructionPath,
-			Install: windsurfInstallInstructions,
-			Remove:  windsurfRemoveInstructions,
-			Check:   windsurfCheckInstructions,
-		}, {
-			Scope:   InstructionScopeProject,
-			Path:    windsurfProjectInstructionPath,
-			Install: windsurfInstallProjectInstructions,
-		}},
-		Hooks: []HookSpec{{
-			RuntimeAssets: windsurfRuntimeAssets,
-			Check:         windsurfCheckRuntime,
-		}},
-		Skill:    AgentSkillSpec{GlobalLinkPath: windsurfSkillLinkPath},
-		Supports: AgentSpecCapabilities{MCP: true, Instructions: true, Skills: true, Hooks: true, SessionLifecycle: true},
-	},
-	{
 		ID:     AgentCodex,
 		Label:  codexLabel(),
 		Detect: detectFromPaths(codexDetectionPaths),
@@ -211,7 +184,7 @@ var agentSpecs = []AgentSpec{
 		}},
 		Hooks:    []HookSpec{{RuntimeAssets: piRuntimeAssets, Check: piCheckRuntime}},
 		Skill:    AgentSkillSpec{GlobalLinkPath: piSkillLinkPath},
-		Supports: AgentSpecCapabilities{MCP: true, MCPConditional: true, Instructions: true, Skills: true, Hooks: true, SessionLifecycle: true},
+		Supports: AgentSpecCapabilities{Instructions: true, Skills: true, Hooks: true, SessionLifecycle: true, RPC: true},
 	},
 }
 

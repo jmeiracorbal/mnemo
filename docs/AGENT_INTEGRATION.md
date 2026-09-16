@@ -1,6 +1,6 @@
 # Agent integration
 
-mnemo supports Claude Code, Cursor, Windsurf, Codex, OpenCode, and Pi through one MCP memory contract. Agent-specific runtime surfaces may provide context or durable events, but never direct memory writes.
+mnemo supports Claude Code, Cursor, Windsurf, Codex, OpenCode, and Pi through one controller-owned memory contract. MCP is used where the agent can carry its native session identity; Pi uses its native extension instead. Agent-specific runtime surfaces may provide context or durable events, but never direct SQLite writes.
 
 ## Global surfaces
 
@@ -20,7 +20,7 @@ Current behavior:
 
 - Claude Code, Windsurf and Pi receive symlinks from their agent-specific global skill directories to `~/.agents/skills/mnemo-memory/`.
 
-MCP setup records lightweight provenance for supported configurations by setting `MNEMO_AGENT`, `MNEMO_MCP_CLIENT` and `MNEMO_MCP_TRANSPORT` in the generated MCP server entry. mnemo stores that metadata in normalized SQLite tables separate from the project identity in `.mnemo`.
+MCP setup records lightweight provenance for supported configurations by setting `MNEMO_AGENT`, `MNEMO_MCP_CLIENT` and `MNEMO_MCP_TRANSPORT` in the generated MCP server entry. Pi is a native-extension exception: its extension supplies `agent=pi` and Pi's native session ID directly to the controller. mnemo stores that metadata in normalized SQLite tables separate from the project identity in `.mnemo`.
 
 ## What `mnemo init` creates
 
@@ -93,8 +93,8 @@ The `.mnemo` file at the project root activates mnemo for a project:
 
 ### Pi
 
-Pi support uses global `~/.pi/agent/APPEND_SYSTEM.md` instructions, project `AGENTS.md` activation, the canonical `mnemo-memory` skill linked into `~/.pi/agent/skills/`, and a standard `mcpServers` entry in `~/.pi/agent/mcp.json` for environments that have a Pi MCP extension such as `pi-mcp-adapter`, `pi-mcp-extension`, or `pi-mcp` installed.
+Pi support uses global `~/.pi/agent/APPEND_SYSTEM.md` instructions, project `AGENTS.md` activation, the canonical `mnemo-memory` skill linked into `~/.pi/agent/skills/`, and `~/.pi/agent/extensions/mnemo.ts`. The extension registers mnemo tools through Pi's supported `pi.registerTool` API and supplies `ctx.sessionManager.getSessionId()` to the controller on every call.
 
-mnemo does not write `.pi/SYSTEM.md` because that file replaces Pi's default system prompt. The managed PI guidance is appended instead, so Pi keeps its default prompt, context files and skills behavior. Pi support does not install hooks because Pi does not expose a stable declarative hook surface for mnemo to rely on.
+mnemo does not write `.pi/SYSTEM.md` because that file replaces Pi's default system prompt. The managed PI guidance is appended instead, so Pi keeps its default prompt, context files and skills behavior. Pi's extension is the lifecycle and tool surface; mnemo removes its legacy static `mcpServers.mnemo` entry because a generic MCP child cannot carry Pi's native session ID.
 
-On session start, hooks resolve the Git root and read the project identifier from `.mnemo`. This keeps the same identity regardless of which subdirectory the editor opens. Hooks are context-only: MCP creates and closes the agent session from its stdio connection.
+On session start, the extension reads the project identifier from `.mnemo` and publishes the native Pi session identity. The controller creates and closes the deterministic execution session; neither the extension nor a caller creates or passes a mnemo session ID.

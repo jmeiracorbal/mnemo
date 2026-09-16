@@ -44,6 +44,13 @@ func Refresh(home, mnemoBin, agent string) ([]string, error) {
 		}
 		updated = append(updated, snippet.Path)
 	}
+	if agent == "pi" {
+		removed, err := piUninstallConfig(home)
+		if err != nil {
+			return nil, err
+		}
+		updated = append(updated, removed...)
+	}
 
 	runtimeFiles, err := writeRuntime(home, agent)
 	if err != nil {
@@ -102,6 +109,9 @@ func applyConfig(snippet ConfigSnippet) error {
 	case "json":
 		if snippet.Agent == openCodeLabel() {
 			if _, err := removeMCPServer(snippet.Path, "mcp", "mnemo"); err != nil {
+				return err
+			}
+			if _, err := removeNestedMCPServer(snippet.Path, "mcp", "servers", "mnemo"); err != nil {
 				return err
 			}
 		}

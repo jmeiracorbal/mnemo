@@ -32,6 +32,7 @@ const (
 	EventExecutionStarted     = store.EventExecutionStarted
 	EventExecutionClosed      = store.EventExecutionClosed
 	EventSessionCompacted     = store.EventSessionCompacted
+	EventAgentToolResult      = store.EventAgentToolResult
 	EventWorkspaceFileChanged = store.EventWorkspaceFileChanged
 	EventGitCommitCreated     = store.EventGitCommitCreated
 )
