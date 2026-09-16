@@ -51,10 +51,10 @@ mnemo events publish \
   --payload "{\"directory\":\"$PWD\"}"
 ```
 
-The event includes either an existing `execution_key` or the adapter's
-`agent` + `native_id`. Only the Go controller derives the canonical execution
-key. TypeScript hooks and extensions must not calculate identifiers or use a
-path, PID, latest session, temporary file or direct SQLite fallback.
+The event includes the adapter's `agent` + `native_id`. Only the Go controller
+derives the canonical execution key. TypeScript hooks and extensions must not
+calculate identifiers or use a path, PID, latest session, temporary file or
+direct SQLite fallback.
 
 The controller acknowledges an event only after one SQLite transaction records
 its idempotency key and applies its effect. A failed or unbound event remains in
@@ -70,11 +70,31 @@ On redelivery, the controller returns that stored result without repeating the
 mutation. This keeps the MCP process, agent
 hooks and extensions on the same local controller boundary.
 
+When an agent supplies its native execution ID in MCP request metadata or the
+inherited MCP process environment, mnemo binds the MCP-owned session through
+the same controller command. For Codex, the adapter requires
+`params._meta.x-codex-turn-metadata.session_id` on every `tools/call`; for
+Claude Code, it requires `CLAUDE_CODE_SESSION_ID` in the MCP process. Each is
+the same identifier its SessionStart hook publishes. A missing or malformed
+carrier is an error, never a fallback to the MCP process identity. The
+empirical records and revalidation rules live at
+[events/codex/session-carrier.md](events/codex/session-carrier.md) and
+[events/claudecode/session-carrier.md](events/claudecode/session-carrier.md).
+
+Pi is deliberately different: its native extension reads
+`ctx.sessionManager.getSessionId()` for every tool invocation and calls
+`mnemo events invoke`. That command is a durable controller command, not an
+MCP process and not a SQLite client. The controller derives the Pi execution
+key in Go and creates or resolves its deterministic execution session in the
+same transaction. Pi's static `mcp.json` entry is removed during setup because
+it cannot carry this per-session identity.
+
 ## Event types
 
 - `execution.started` — creates and binds the controller-owned session.
 - `execution.closed` — closes the bound session.
 - `session.compacted` — records compaction for the bound session.
+- `agent.tool_result` — records a tool-use observation for the bound session.
 - `workspace.file_changed` — creates a `file_change` observation.
 - `git.commit_created` — creates a `decision` observation.
 

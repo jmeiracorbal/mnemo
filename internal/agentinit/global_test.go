@@ -13,10 +13,8 @@ func TestInstallGlobalInstructionsWritesConditionalAgentFiles(t *testing.T) {
 	cases := map[string]string{
 		"claudecode": filepath.Join(home, ".claude", "CLAUDE.md"),
 		"cursor":     filepath.Join(home, ".cursor", "rules", "mnemo.mdc"),
-		"windsurf":   filepath.Join(home, ".codeium", "windsurf", "memories", "global_rules.md"),
 		"codex":      filepath.Join(home, ".codex", "AGENTS.md"),
 		"opencode":   filepath.Join(home, ".config", "opencode", "AGENTS.md"),
-		"fx":         filepath.Join(home, ".fx", "AGENTS.md"),
 		"pi":         filepath.Join(home, ".pi", "agent", "APPEND_SYSTEM.md"),
 	}
 
@@ -133,21 +131,6 @@ func TestRemoveGlobalInstructionsRemovesCursorRuleFile(t *testing.T) {
 	}
 }
 
-func TestFxGlobalInstructionsDisableNativeMemory(t *testing.T) {
-	home := t.TempDir()
-	path, err := InstallGlobalInstructions(home, "fx")
-	if err != nil {
-		t.Fatalf("install fx global instructions: %v", err)
-	}
-
-	content := string(mustReadFile(t, path))
-	if !strings.Contains(content, "FX NATIVE MEMORY") ||
-		!strings.Contains(content, "`memory` tool") ||
-		!strings.Contains(content, "~/.fx/memories.json") ||
-		!strings.Contains(content, "Do not call the native `memory` tool") {
-		t.Fatalf("fx instructions do not disable native memory:\n%s", content)
-	}
-}
 
 func TestPiGlobalInstructionsUseAppendSystemPrompt(t *testing.T) {
 	home := t.TempDir()

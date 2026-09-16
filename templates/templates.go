@@ -11,14 +11,8 @@ var ClaudeCode string
 //go:embed rules/cursor.mdc
 var Cursor string
 
-//go:embed rules/windsurf.md
-var Windsurf string
-
 //go:embed rules/global.md
 var Global string
-
-//go:embed rules/fx.md
-var Fx string
 
 //go:embed rules/pi.md
 var Pi string

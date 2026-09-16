@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 
+	"github.com/jmeiracorbal/mnemo/adapters"
 	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
@@ -13,7 +14,7 @@ type MemoryBackend interface {
 	Search(string, store.SearchOptions) ([]store.SearchResult, error)
 	ResolveMCPInstanceSession(string, string, string, int) (string, error)
 	CloseMCPInstanceSessions(string) error
-	BindExecutionSession(string, string, string) error
+	BindExecutionSession(string, adapters.Agent, string, string) error
 	AddObservation(store.AddObservationParams) (int64, error)
 	UpdateObservation(int64, store.UpdateObservationParams) (*store.Observation, error)
 	DeleteObservation(int64) error
@@ -60,12 +61,13 @@ func (b *ControllerBackend) CloseMCPInstanceSessions(instance string) error {
 		InstanceID string `json:"instance_id"`
 	}{instance}, nil)
 }
-func (b *ControllerBackend) BindExecutionSession(project, executionKey, sessionID string) error {
+func (b *ControllerBackend) BindExecutionSession(project string, agent adapters.Agent, nativeID, sessionID string) error {
 	return b.call("bind_execution_session", struct {
-		Project      string `json:"project"`
-		ExecutionKey string `json:"execution_key"`
-		SessionID    string `json:"session_id"`
-	}{project, executionKey, sessionID}, nil)
+		Project   string         `json:"project"`
+		Agent     adapters.Agent `json:"agent"`
+		NativeID  string         `json:"native_id"`
+		SessionID string         `json:"session_id"`
+	}{project, agent, nativeID, sessionID}, nil)
 }
 func (b *ControllerBackend) AddObservation(params store.AddObservationParams) (int64, error) {
 	var out int64

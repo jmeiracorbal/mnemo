@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+
+	"github.com/jmeiracorbal/mnemo/adapters"
 )
 
 // ApplyMCPCommand executes one durable MCP mutation and stores its serialized
@@ -85,14 +87,15 @@ func (s *Store) ExecuteMCPAction(ctx context.Context, action string, payload jso
 		}
 	case "bind_execution_session":
 		var input struct {
-			Project      string `json:"project"`
-			ExecutionKey string `json:"execution_key"`
-			SessionID    string `json:"session_id"`
+			Project   string         `json:"project"`
+			Agent     adapters.Agent `json:"agent"`
+			NativeID  string         `json:"native_id"`
+			SessionID string         `json:"session_id"`
 		}
 		if err := json.Unmarshal(payload, &input); err != nil {
 			return nil, err
 		}
-		if err := s.BindExecutionSession(input.Project, input.ExecutionKey, input.SessionID); err != nil {
+		if err := s.BindExecutionSession(input.Project, input.Agent, input.NativeID, input.SessionID); err != nil {
 			return nil, err
 		}
 	case "add_observation":
@@ -251,6 +254,16 @@ func (s *Store) ExecuteMCPAction(ctx context.Context, action string, payload jso
 		result = value
 	case "max_observation_length":
 		result = s.MaxObservationLength()
+	case "agent_tool":
+		var input AgentToolRequest
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.ExecuteAgentTool(input)
+		if err != nil {
+			return nil, err
+		}
+		result = value
 	default:
 		return nil, fmt.Errorf("unsupported MCP action %q", action)
 	}

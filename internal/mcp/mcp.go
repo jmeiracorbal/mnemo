@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/adapters"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -179,13 +180,14 @@ func NewServerWithTools(s MemoryBackend, version string, allowlist map[string]bo
 	return srv, err
 }
 
-// Runtime owns the session identity for one MCP stdio server process. It is
-// intentionally independent from agent-specific hook identifiers.
+// Runtime owns one MCP stdio server process. Its per-process instance ID is
+// distinct from an agent execution identity; an adapter may bind a session to
+// a documented native execution ID carried by a tools/call request.
 type Runtime struct {
-	instanceID   string
-	pid          int
-	executionKey string
-	mu           sync.Mutex
+	instanceID string
+	pid        int
+	agent      adapters.Agent
+	mu         sync.Mutex
 }
 
 // NewServerWithRuntime creates an MCP server and the runtime that owns its
@@ -194,11 +196,13 @@ func NewServerWithRuntime(s MemoryBackend, version string, allowlist map[string]
 	if strings.TrimSpace(version) == "" {
 		return nil, nil, fmt.Errorf("mcp server version is required")
 	}
-	runtime := &Runtime{
-		instanceID:   uuid.NewString(),
-		pid:          os.Getpid(),
-		executionKey: strings.TrimSpace(os.Getenv("MNEMO_EXECUTION_KEY")),
+	agent := adapters.Agent(strings.TrimSpace(os.Getenv("MNEMO_AGENT")))
+	if agent != "" {
+		if _, ok := adapters.AdapterFor(agent); !ok {
+			return nil, nil, fmt.Errorf("unknown MCP agent %q", agent)
+		}
 	}
+	runtime := &Runtime{instanceID: uuid.NewString(), pid: os.Getpid(), agent: agent}
 
 	srv := server.NewMCPServer(
 		"mnemo",
@@ -217,20 +221,61 @@ func (r *Runtime) Close(s MemoryBackend) error {
 	return s.CloseMCPInstanceSessions(r.instanceID)
 }
 
-func (r *Runtime) resolveSession(s MemoryBackend, project, directory string) (string, error) {
+func (r *Runtime) resolveSession(s MemoryBackend, project, directory string, req mcp.CallToolRequest) (string, error) {
+	identity, bindExecution, err := r.executionIdentity(project, req)
+	if err != nil {
+		return "", err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	sessionID, err := s.ResolveMCPInstanceSession(project, directory, r.instanceID, r.pid)
 	if err != nil {
 		return "", err
 	}
-	if r.executionKey == "" {
+	if !bindExecution {
 		return sessionID, nil
 	}
-	if err := s.BindExecutionSession(project, r.executionKey, sessionID); err != nil {
+	if err := s.BindExecutionSession(project, identity.Agent, identity.NativeID, sessionID); err != nil {
 		return "", err
 	}
 	return sessionID, nil
+}
+
+func (r *Runtime) executionIdentity(project string, req mcp.CallToolRequest) (adapters.Identity, bool, error) {
+	if adapter, ok := adapters.ToolCallAdapterFor(r.agent); ok {
+		if req.Params.Meta == nil {
+			return adapters.Identity{}, true, fmt.Errorf("%s tools/call metadata is required", r.agent)
+		}
+		identity, err := adapter.ParseToolCallMeta(req.Params.Meta.AdditionalFields, project)
+		if err != nil {
+			return adapters.Identity{}, true, err
+		}
+		return identity, true, nil
+	}
+	if adapter, ok := adapters.EnvironmentAdapterFor(r.agent); ok {
+		variable := adapter.NativeIDEnvironmentVariable()
+		nativeID := strings.TrimSpace(os.Getenv(variable))
+		if nativeID == "" {
+			return adapters.Identity{}, true, fmt.Errorf("%s requires %s", r.agent, variable)
+		}
+		identity, err := adapter.Identity(project, nativeID)
+		if err != nil {
+			return adapters.Identity{}, true, err
+		}
+		return identity, true, nil
+	}
+	if adapter, ok := adapters.SideChannelAdapterFor(r.agent); ok {
+		nativeID, err := adapter.ReadNativeID(project)
+		if err != nil {
+			return adapters.Identity{}, true, err
+		}
+		identity, err := adapter.Identity(project, nativeID)
+		if err != nil {
+			return adapters.Identity{}, true, err
+		}
+		return identity, true, nil
+	}
+	return adapters.Identity{}, false, nil
 }
 
 func shouldRegister(name string, allowlist map[string]bool) bool {
@@ -780,7 +825,7 @@ func handleSave(s MemoryBackend, runtime *Runtime) server.ToolHandlerFunc {
 		}
 		suggestedTopicKey := suggestTopicKey(typ, title, content)
 
-		sessionID, err := runtime.resolveSession(s, project, directory)
+		sessionID, err := runtime.resolveSession(s, project, directory, req)
 		if err != nil {
 			return mcp.NewToolResultError("No active session: " + err.Error()), nil
 		}
@@ -917,7 +962,7 @@ func handleSavePrompt(s MemoryBackend, runtime *Runtime) server.ToolHandlerFunc 
 		project, _ := req.GetArguments()["project"].(string)
 		directory, _ := req.GetArguments()["directory"].(string)
 
-		sessionID, err := runtime.resolveSession(s, project, directory)
+		sessionID, err := runtime.resolveSession(s, project, directory, req)
 		if err != nil {
 			return mcp.NewToolResultError("No active session: " + err.Error()), nil
 		}
@@ -1282,7 +1327,7 @@ func handleSessionSummary(s MemoryBackend, runtime *Runtime) server.ToolHandlerF
 		project, _ := req.GetArguments()["project"].(string)
 		directory, _ := req.GetArguments()["directory"].(string)
 
-		sessionID, err := runtime.resolveSession(s, project, directory)
+		sessionID, err := runtime.resolveSession(s, project, directory, req)
 		if err != nil {
 			return mcp.NewToolResultError("No active session: " + err.Error()), nil
 		}
@@ -1315,7 +1360,7 @@ func handleCapturePassive(s MemoryBackend, runtime *Runtime) server.ToolHandlerF
 			return mcp.NewToolResultError("content is required — include text with a '## Key Learnings:' section"), nil
 		}
 
-		sessionID, err := runtime.resolveSession(s, project, directory)
+		sessionID, err := runtime.resolveSession(s, project, directory, req)
 		if err != nil {
 			return mcp.NewToolResultError("No active session: " + err.Error()), nil
 		}

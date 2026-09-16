@@ -76,22 +76,6 @@ func TestInstallProjectInstructionsClaudeCode(t *testing.T) {
 	}
 }
 
-func TestInstallProjectInstructionsWindsurf(t *testing.T) {
-	root := t.TempDir()
-
-	paths, err := InstallProjectInstructions(root, "windsurf")
-	if err != nil {
-		t.Fatalf("install windsurf project instructions: %v", err)
-	}
-	if len(paths) != 2 {
-		t.Fatalf("expected 2 paths, got %d", len(paths))
-	}
-
-	windsurfPath := filepath.Join(root, ".windsurf", "rules", "mnemo.md")
-	if _, err := os.Stat(windsurfPath); err != nil {
-		t.Fatalf("windsurf rule missing: %v", err)
-	}
-}
 
 func TestInstallProjectInstructionsPi(t *testing.T) {
 	root := t.TempDir()

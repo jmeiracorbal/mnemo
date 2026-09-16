@@ -1,5 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 function gitRoot(cwd: string): string {
   const r = Bun.spawnSync(["git", "-C", cwd, "rev-parse", "--show-toplevel"], { stderr: "ignore" })
@@ -16,46 +18,97 @@ function mnemoProject(root: string): string | null {
   }
 }
 
-function mnemoEnv(source: string): Record<string, string> {
-  return {
-    ...process.env,
-    MNEMO_AGENT: process.env.MNEMO_AGENT ?? "opencode",
-    MNEMO_SOURCE: process.env.MNEMO_SOURCE ?? source,
-  } as Record<string, string>
+function sideChannelPath(project: string): string {
+  return join(tmpdir(), `mnemo-opencode-${project}`)
 }
 
-function run(cmd: string[], source = "hook"): { ok: boolean; out: string } {
-  const r = Bun.spawnSync(cmd, { stderr: "ignore", env: mnemoEnv(source) })
+function run(cmd: string[]): { ok: boolean; out: string } {
+  const r = Bun.spawnSync(cmd, { stderr: "ignore" })
   return { ok: r.exitCode === 0, out: r.stdout?.toString().trim() ?? "" }
 }
 
-type Entry = { context: string; injected: boolean }
+function publish(type: string, project: string, directory: string, nativeID: string, payload: object): void {
+  run(["mnemo", "events", "publish",
+    "--project", project, "--directory", directory,
+    "--agent", "opencode", "--native-id", nativeID,
+    "--type", type, "--payload", JSON.stringify(payload),
+  ])
+}
+
+function invoke(tool: string, project: string, directory: string, nativeID: string, args: Record<string, unknown>): string {
+  const r = run(["mnemo", "events", "invoke",
+    "--project", project, "--directory", directory,
+    "--agent", "opencode", "--native-id", nativeID,
+    "--tool", tool, "--payload", JSON.stringify(args),
+  ])
+  return r.ok ? r.out : ""
+}
+
+type EventMapping = { native_type: string; mnemo_type: string; native_id_path: string; payload_context?: string; lifecycle_action?: string }
+
+// Plugin-level lifecycle action labels. Values must match adapters.LifecycleAction* constants in Go.
+const LIFECYCLE_START_SESSION = "start_session"
+
+function loadEventMap(agent: string): EventMapping[] {
+  const r = Bun.spawnSync(["mnemo", "events", "map", "--agent", agent], { stderr: "ignore" })
+  if (r.exitCode !== 0) return []
+  try {
+    return (JSON.parse(r.stdout?.toString() ?? "{}") as any)?.events ?? []
+  } catch {
+    return []
+  }
+}
+
+function resolvePropertyPath(obj: unknown, path: string): string | undefined {
+  if (!path) return undefined
+  let current: unknown = obj
+  for (const part of path.split(".")) {
+    if (current == null || typeof current !== "object") return undefined
+    current = (current as Record<string, unknown>)[part]
+  }
+  return typeof current === "string" ? current : undefined
+}
+
+type Entry = { nativeID: string; context: string; injected: boolean }
 
 export const Mnemo: Plugin = async (ctx) => {
   const PROTOCOL = await Bun.file(`${import.meta.dir}/mnemo-protocol.md`).text()
   const root = gitRoot(ctx.directory)
   const project = mnemoProject(root)
   const sessions = new Map<string, Entry>()
+  const eventMap = loadEventMap("opencode")
+
+  function startSession(sessionId: string): Entry {
+    try { writeFileSync(sideChannelPath(project!), sessionId) } catch {}
+    publish("execution.started", project!, ctx.directory, sessionId, { directory: ctx.directory })
+    const context = invoke("mem_context", project!, ctx.directory, sessionId, { project: project! })
+    const entry: Entry = { nativeID: sessionId, context, injected: false }
+    sessions.set(sessionId, entry)
+    return entry
+  }
 
   return {
     event: async ({ event }) => {
-      if (event.type !== "session.created" || !project) return
-      const sessionId: string = (event.properties as any)?.info?.id
-      if (!sessionId || sessions.has(sessionId)) return
-
-      run(["mnemo", "session", "start", sessionId, "--project", project, "--dir", ctx.directory], "hook")
-      const c = run(["mnemo", "context", project])
-      sessions.set(sessionId, { context: c.ok ? c.out : "", injected: false })
+      if (!project) return
+      const mapping = eventMap.find(m => m.native_type === event.type)
+      if (!mapping) return
+      const sessionId = resolvePropertyPath(event.properties, mapping.native_id_path)
+      if (!sessionId) return
+      if (mapping.lifecycle_action === LIFECYCLE_START_SESSION) {
+        if (!sessions.has(sessionId)) startSession(sessionId)
+        return
+      }
+      const entry = sessions.get(sessionId)
+      if (!entry) return
+      publish(mapping.mnemo_type, project, ctx.directory, entry.nativeID, {})
     },
 
     "experimental.chat.system.transform": async (input, output) => {
-      if (!project) return
+      if (!project || !input.sessionID) return
       let entry = sessions.get(input.sessionID)
       if (!entry) {
-        // Session started before the plugin loaded (resume scenario)
-        const c = run(["mnemo", "context", project])
-        entry = { context: c.ok ? c.out : "", injected: false }
-        sessions.set(input.sessionID, entry)
+        // Resume: session started before the plugin loaded.
+        entry = startSession(input.sessionID)
       }
       if (entry.injected) return
       entry.injected = true
@@ -75,10 +128,10 @@ export const Mnemo: Plugin = async (ctx) => {
     "experimental.session.compacting": async (input, output) => {
       const entry = sessions.get(input.sessionID)
       if (!entry || !project) return
-      const r = run(["mnemo", "context", project])
-      if (r.ok && r.out) {
-        output.context.push(r.out)
-        entry.context = r.out
+      const context = invoke("mem_context", project, ctx.directory, entry.nativeID, { project })
+      if (context) {
+        output.context.push(context)
+        entry.context = context
       }
       entry.injected = false
     },

@@ -75,7 +75,6 @@ func TestShippedHooksResolveProjectFromMarker(t *testing.T) {
 	roots := []string{
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts"),
 		filepath.Join("..", "..", "scripts", "cursor", "hooks"),
-		filepath.Join("..", "..", "scripts", "windsurf", "hooks"),
 		filepath.Join("..", "..", "scripts", "codex", "hooks"),
 		filepath.Join("..", "..", "scripts", "opencode", "plugins"),
 	}
@@ -136,7 +135,6 @@ func TestShippedHooksDoNotWriteSessionsDirectly(t *testing.T) {
 	roots := []string{
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts"),
 		filepath.Join("..", "..", "scripts", "cursor", "hooks"),
-		filepath.Join("..", "..", "scripts", "windsurf", "hooks"),
 		filepath.Join("..", "..", "scripts", "codex", "hooks"),
 	}
 
@@ -186,14 +184,12 @@ func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
 		filepath.Join("..", "..", "templates", "rules", "global.md"),
 		filepath.Join("..", "..", "templates", "rules", "cursor.mdc"),
 		filepath.Join("..", "..", "templates", "rules", "cursor-global.mdc"),
-		filepath.Join("..", "..", "templates", "rules", "windsurf.md"),
 		filepath.Join("..", "..", "templates", "rules", "pi.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "mnemo.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "session-start-protocol.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "post-compact-protocol-header.md"),
 		filepath.Join("..", "..", "scripts", "codex", "hooks", "mnemo-protocol.md"),
 		filepath.Join("..", "..", "scripts", "cursor", "rules", "mnemo.mdc"),
-		filepath.Join("..", "..", "scripts", "windsurf", "templates", "global_rules.md"),
 	}
 
 	for _, path := range files {

@@ -28,8 +28,8 @@ func newRootCommand() *cobra.Command {
 
 	root.AddCommand(
 		storeCommand("save <title> <content> [--type=TYPE] [--project=PROJECT] [--scope=SCOPE] [--topic=TOPIC]", "Save a memory", runSave),
-		storeCommand("search <query> [--project=PROJECT] [--scope=SCOPE] [--limit=N]", "Search memories", runSearch),
-		storeCommand("context [project]", "Show context from previous sessions", runContext),
+		command("search <query> [--project=PROJECT] [--scope=SCOPE] [--limit=N]", "Search memories", runSearch),
+		command("context [project]", "Show context from previous sessions", runContext),
 		storeCommand("stats", "Show memory statistics", runStats),
 		storeCommand("export [file]", "Export all memories to JSON", runExport),
 		storeCommand("import <file.json>", "Import memories from JSON", runImport),
@@ -138,6 +138,7 @@ func addCommandTree(root *cobra.Command) {
 	addChildren(root, "controller", storeCommand("serve", "Run the installation-wide controller", runController))
 	addChildren(root, "events",
 		command("publish --project PROJECT --directory DIR --execution-key KEY --type TYPE --payload VALUE", "Publish a durable typed event", runEvents),
+		command("invoke --project PROJECT --directory DIR --agent AGENT --native-id ID --tool TOOL --payload JSON", "Invoke a native agent tool through the controller", runEvents),
 	)
 }
 

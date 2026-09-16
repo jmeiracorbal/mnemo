@@ -46,9 +46,7 @@ func openCodeConfigSnippets(home, mnemoBin string) []ConfigSnippet {
 		Format: "json",
 		Content: prettyJSON(map[string]any{
 			"mcp": map[string]any{
-				"servers": map[string]any{
-					"mnemo": server,
-				},
+				"mnemo": server,
 			},
 		}),
 	}}
@@ -87,7 +85,7 @@ func openCodeCheckInstructions(home string) Check {
 
 func openCodeCheckMCP(home string) Check {
 	path := filepath.Join(home, ".config", "opencode", "opencode.json")
-	return checkJSONMCPWithEnv(path, "mcp_config.opencode", "opencode", "environment", "mcp", "servers", "mnemo")
+	return checkJSONMCPWithEnv(path, "mcp_config.opencode", "opencode", "environment", "mcp", "mnemo")
 }
 
 func openCodeCheckRuntime(home string) Check {

@@ -20,12 +20,17 @@ func TestControllerAppliesEventExactlyOnceAfterExecutionBinding(t *testing.T) {
 	t.Cleanup(func() { _ = memory.Close() })
 
 	project := "project-events"
-	executionKey := "execution-key"
+	agent := adapters.AgentCodex
+	nativeID := "codex-session"
+	identity, err := adapters.NewIdentity(agent, project, nativeID)
+	if err != nil {
+		t.Fatalf("derive execution identity: %v", err)
+	}
 	sessionID, err := memory.ResolveMCPInstanceSession(project, t.TempDir(), "mcp-instance", 1)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	if err := memory.BindExecutionSession(project, executionKey, sessionID); err != nil {
+	if err := memory.BindExecutionSession(project, agent, nativeID, sessionID); err != nil {
 		t.Fatalf("bind execution session: %v", err)
 	}
 
@@ -40,7 +45,7 @@ func TestControllerAppliesEventExactlyOnceAfterExecutionBinding(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- controller.Run(ctx) }()
 
-	event, err := NewEvent(EventWorkspaceFileChanged, project, executionKey, map[string]string{"path": "internal/events/events.go", "action": "modified"})
+	event, err := NewEvent(EventWorkspaceFileChanged, project, identity.Execution, map[string]string{"path": "internal/events/events.go", "action": "modified"})
 	if err != nil {
 		t.Fatalf("new event: %v", err)
 	}

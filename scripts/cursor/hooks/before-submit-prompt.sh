@@ -25,6 +25,10 @@ MNEMO_FILE="${PROJECT_ROOT}/.mnemo"
 [ -f "$MNEMO_FILE" ] && PROJECT=$(mnemo json id < "$MNEMO_FILE" 2>/dev/null)
 [ -z "$PROJECT" ] && exit 0
 
+# Write conversation_id to the side-channel so the MCP server can correlate
+# the native Cursor identity without a per-call metadata carrier.
+printf '%s' "$CONVERSATION_ID" > "${TMPDIR:-/tmp}/mnemo-cursor-${PROJECT}" 2>/dev/null || true
+
 # Emit context. MCP owns session creation and closure on its stdio connection.
 printf "\n[mnemo] MCP memory connection active (project: %s)\n" "$PROJECT"
 
