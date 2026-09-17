@@ -4,3 +4,6 @@
 .hybrid-coco
 .cocoindex_code
 .mnemo
+.cursor/
+.codegraph/
+.claude/

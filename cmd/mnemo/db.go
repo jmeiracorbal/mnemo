@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -89,7 +92,35 @@ func migrateDB(opts dbMigrateOptions) (dbmigrate.Status, error) {
 	if opts.Check {
 		return dbmigrate.CheckDataDir(opts.DataDir)
 	}
+	if err := guardControllerNotRunning(opts.DataDir); err != nil {
+		return dbmigrate.Status{}, err
+	}
 	return dbmigrate.ApplyDataDir(opts.DataDir)
+}
+
+// guardControllerNotRunning refuses the migration if the controller that owns
+// dataDir is reachable. Running migrations while the controller holds the
+// database open risks WAL-state conflicts and violates the offline-maintenance
+// contract for mnemo db migrate.
+//
+// The guard distinguishes three states:
+//   - config.toml absent → no controller has ever been started → safe
+//   - config.toml present but unreadable or invalid → uncertain → fail conservatively
+//   - config valid but controller unreachable → not holding the WAL → safe
+func guardControllerNotRunning(dataDir string) error {
+	evtCfg, err := events.LoadConfig(dataDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil // no config.toml; no controller has been started for this data dir
+		}
+		// config.toml exists but is malformed or unreadable — cannot confirm the
+		// controller is not running.
+		return fmt.Errorf("cannot verify controller state before migrating; inspect config.toml in %s or run 'mnemo db migrate --check': %w", dataDir, err)
+	}
+	if err := events.CheckHealth(context.Background(), evtCfg); err != nil {
+		return nil // controller not reachable; safe to migrate
+	}
+	return fmt.Errorf("the mnemo controller is currently running and owns the database; stop it before migrating or run 'mnemo db migrate --check'")
 }
 
 func printDBMigrationStatus(status dbmigrate.Status, check bool) {

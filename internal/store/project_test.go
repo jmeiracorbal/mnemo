@@ -11,11 +11,12 @@ func TestListProjectSummariesIncludesRegisteredAndActivityProjects(t *testing.T)
 	if err := s.EnsureProject("registered", "Registered"); err != nil {
 		t.Fatalf("ensure project: %v", err)
 	}
-	if err := s.CreateSession("s-alpha", "alpha", "/tmp/alpha"); err != nil {
+	sAlpha, err := s.ResolveMCPInstanceSession("alpha", "/tmp/alpha", "s-alpha", 0)
+	if err != nil {
 		t.Fatalf("create alpha session: %v", err)
 	}
 	if _, err := s.AddObservation(AddObservationParams{
-		SessionID: "s-alpha",
+		SessionID: sAlpha,
 		Type:      "decision",
 		Title:     "Alpha",
 		Content:   "Alpha memory",
@@ -24,16 +25,16 @@ func TestListProjectSummariesIncludesRegisteredAndActivityProjects(t *testing.T)
 	}); err != nil {
 		t.Fatalf("add alpha observation: %v", err)
 	}
-	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-alpha", Content: "Alpha prompt", Project: "alpha"}); err != nil {
+	if _, err := s.AddPrompt(AddPromptParams{SessionID: sAlpha, Content: "Alpha prompt", Project: "alpha"}); err != nil {
 		t.Fatalf("add alpha prompt: %v", err)
 	}
-	if _, err := s.db.Exec(`UPDATE sessions SET started_at = '2026-01-01 10:00:00' WHERE id = 's-alpha'`); err != nil {
+	if _, err := s.db.Exec(`UPDATE sessions SET started_at = '2026-01-01 10:00:00' WHERE id = ?`, sAlpha); err != nil {
 		t.Fatalf("update alpha session: %v", err)
 	}
-	if _, err := s.db.Exec(`UPDATE observations SET created_at = '2026-01-02 10:00:00', updated_at = '2026-01-02 10:00:00', last_seen_at = '2026-01-02 10:00:00' WHERE session_id = 's-alpha'`); err != nil {
+	if _, err := s.db.Exec(`UPDATE observations SET created_at = '2026-01-02 10:00:00', updated_at = '2026-01-02 10:00:00', last_seen_at = '2026-01-02 10:00:00' WHERE session_id = ?`, sAlpha); err != nil {
 		t.Fatalf("update alpha observation: %v", err)
 	}
-	if _, err := s.db.Exec(`UPDATE user_prompts SET created_at = '2026-01-03 10:00:00' WHERE session_id = 's-alpha'`); err != nil {
+	if _, err := s.db.Exec(`UPDATE user_prompts SET created_at = '2026-01-03 10:00:00' WHERE session_id = ?`, sAlpha); err != nil {
 		t.Fatalf("update alpha prompt: %v", err)
 	}
 
@@ -74,11 +75,12 @@ func TestBuildProjectMergePlan(t *testing.T) {
 	if err := s.EnsureProject("11111111-2222-3333-4444-555555555555", "Alpha"); err != nil {
 		t.Fatalf("ensure destination project: %v", err)
 	}
-	if err := s.CreateSession("s-alpha-legacy", "alpha-legacy", "/tmp/alpha"); err != nil {
+	sAlphaLegacy, err := s.ResolveMCPInstanceSession("alpha-legacy", "/tmp/alpha", "s-alpha-legacy", 0)
+	if err != nil {
 		t.Fatalf("create source session: %v", err)
 	}
 	if _, err := s.AddObservation(AddObservationParams{
-		SessionID: "s-alpha-legacy",
+		SessionID: sAlphaLegacy,
 		Type:      "decision",
 		Title:     "Alpha decision",
 		Content:   "Alpha memory",
@@ -87,7 +89,7 @@ func TestBuildProjectMergePlan(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("add source observation: %v", err)
 	}
-	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-alpha-legacy", Content: "Alpha prompt", Project: "alpha-legacy"}); err != nil {
+	if _, err := s.AddPrompt(AddPromptParams{SessionID: sAlphaLegacy, Content: "Alpha prompt", Project: "alpha-legacy"}); err != nil {
 		t.Fatalf("add source prompt: %v", err)
 	}
 
@@ -114,11 +116,12 @@ func TestMergeProjectsConsolidatesProjectData(t *testing.T) {
 	if err := s.EnsureProject(destination, "Alpha"); err != nil {
 		t.Fatalf("ensure destination project: %v", err)
 	}
-	if err := s.CreateSession("s-alpha-legacy", source, "/tmp/alpha"); err != nil {
+	sAlphaLegacy, err := s.ResolveMCPInstanceSession(source, "/tmp/alpha", "s-alpha-legacy", 0)
+	if err != nil {
 		t.Fatalf("create source session: %v", err)
 	}
 	if _, err := s.AddObservation(AddObservationParams{
-		SessionID: "s-alpha-legacy",
+		SessionID: sAlphaLegacy,
 		Type:      "decision",
 		Title:     "Alpha merge",
 		Content:   "Merge source data",
@@ -127,7 +130,7 @@ func TestMergeProjectsConsolidatesProjectData(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("add source observation: %v", err)
 	}
-	if _, err := s.AddPrompt(AddPromptParams{SessionID: "s-alpha-legacy", Content: "Alpha prompt", Project: source}); err != nil {
+	if _, err := s.AddPrompt(AddPromptParams{SessionID: sAlphaLegacy, Content: "Alpha prompt", Project: source}); err != nil {
 		t.Fatalf("add source prompt: %v", err)
 	}
 
@@ -180,11 +183,12 @@ func TestMergeProjectsConsolidatesProjectData(t *testing.T) {
 func TestRenameProjectUpdatesMetadataWithoutChangingActivityProjectID(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s-alpha", "alpha", "/tmp/alpha"); err != nil {
+	sAlpha, err := s.ResolveMCPInstanceSession("alpha", "/tmp/alpha", "s-alpha", 0)
+	if err != nil {
 		t.Fatalf("create alpha session: %v", err)
 	}
 	if _, err := s.AddObservation(AddObservationParams{
-		SessionID: "s-alpha",
+		SessionID: sAlpha,
 		Type:      "decision",
 		Title:     "Alpha rename",
 		Content:   "Keep activity project id stable",
@@ -238,7 +242,7 @@ func TestRenameProjectUpdatesMetadataWithoutChangingActivityProjectID(t *testing
 func TestRenameProjectSelectsByPath(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s-alpha", "alpha", "/tmp/alpha"); err != nil {
+	if _, err := s.ResolveMCPInstanceSession("alpha", "/tmp/alpha", "s-alpha", 0); err != nil {
 		t.Fatalf("create alpha session: %v", err)
 	}
 
@@ -261,10 +265,10 @@ func TestRenameProjectSelectsByPath(t *testing.T) {
 func TestBuildProjectRenamePlanByPathRejectsAmbiguousPath(t *testing.T) {
 	s := newTestStore(t)
 
-	if err := s.CreateSession("s-alpha", "alpha", "/tmp/shared"); err != nil {
+	if _, err := s.ResolveMCPInstanceSession("alpha", "/tmp/shared", "s-alpha", 0); err != nil {
 		t.Fatalf("create alpha session: %v", err)
 	}
-	if err := s.CreateSession("s-beta", "beta", "/tmp/shared"); err != nil {
+	if _, err := s.ResolveMCPInstanceSession("beta", "/tmp/shared", "s-beta", 0); err != nil {
 		t.Fatalf("create beta session: %v", err)
 	}
 

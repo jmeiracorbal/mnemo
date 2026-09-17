@@ -1,5 +1,5 @@
 #!/bin/bash
-# mnemo — SessionStart (source: compact) hook for Claude Code plugin
+# mnemo — PostCompact resume hook for Claude Code plugin
 # Fires when a new context window starts after compaction.
 # The compacted summary was already persisted by the PostCompact hook.
 

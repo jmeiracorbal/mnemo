@@ -11,10 +11,8 @@ var SupportedAgents = agentSpecIDs(agentSpecs)
 const (
 	AgentClaudeCode = "claudecode"
 	AgentCursor     = "cursor"
-	AgentWindsurf   = "windsurf"
 	AgentCodex      = "codex"
 	AgentOpenCode   = "opencode"
-	AgentFx         = "fx"
 	AgentPi         = "pi"
 )
 

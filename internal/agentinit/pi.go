@@ -35,12 +35,18 @@ func piRemoveInstructions(home string) (string, bool, error) {
 }
 
 func piConfigSnippets(home, mnemoBin string) []ConfigSnippet {
-	return []ConfigSnippet{{
-		Agent:   piLabel(),
-		Path:    filepath.Join(home, ".pi", "agent", "mcp.json"),
-		Format:  "json",
-		Content: mcpServersJSON(mnemoBin, AgentPi),
-	}}
+	// Pi's native extension carries ctx.sessionManager.getSessionId() on every
+	// call. A static MCP child cannot receive that dynamic identity, so Pi owns
+	// no mnemo MCP configuration.
+	return nil
+}
+
+func piRuntimeAssets() []assetTarget {
+	return []assetTarget{{Asset: "scripts/pi/extensions/mnemo.ts", Path: filepath.Join(".pi", "agent", "extensions", "mnemo.ts"), Mode: 0644}}
+}
+
+func piCheckRuntime(home string) Check {
+	return checkFiles("pi", "runtime_files.pi", "Pi lifecycle extension installed", []string{filepath.Join(home, ".pi", "agent", "extensions", "mnemo.ts")}, false)
 }
 
 func piUninstallConfig(home string) ([]string, error) {
@@ -54,8 +60,12 @@ func piCheckInstructions(home string) Check {
 }
 
 func piCheckMCP(home string) Check {
-	path := filepath.Join(home, ".pi", "agent", "mcp.json")
-	return checkJSONMCPWithEnv(path, "mcp_config.pi", "pi", "env", "mcpServers", "mnemo")
+	check := piCheckRuntime(home)
+	check.ID = "mcp_config.pi"
+	if check.Status == "ok" {
+		check.Message = "Pi native extension owns mnemo tool transport"
+	}
+	return check
 }
 
 func piProjectInstructionPath(root string) string {

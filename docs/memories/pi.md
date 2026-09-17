@@ -10,9 +10,9 @@ Relevant surfaces:
 2. System prompt files: `.pi/SYSTEM.md` replaces the default system prompt, while `.pi/APPEND_SYSTEM.md` extends it.
 3. Skills under `~/.pi/agent/skills/`, `~/.agents/skills/`, `.pi/skills/`, and project `.agents/skills/`.
 4. Session JSONL under `~/.pi/agent/sessions/`, which is resumable conversation history rather than curated semantic memory.
-5. Optional MCP support through community extensions such as `pi-mcp-adapter`, `pi-mcp-extension`, or `pi-mcp`, which read standard MCP configuration.
+5. First-class TypeScript extensions, which can register custom tools and observe lifecycle events.
 
-mnemo treats Pi as an agent runtime with instruction, skill, and optional MCP surfaces.
+mnemo treats Pi as an agent runtime with instruction, skill, and native-extension surfaces.
 
 ## Locations
 
@@ -37,10 +37,10 @@ Sessions:
 - Session history: `~/.pi/agent/sessions/`, organized by working directory.
 - Pi can export/import sessions as JSONL, but these are transcripts and branches, not a curated memory database.
 
-MCP:
+Native extension:
 
-- Pi does not rely on a documented built-in MCP surface in the same way as Codex, Cursor, or Claude Code.
-- Pi MCP adapters read standard MCP config from paths such as `.pi/mcp.json`, `.pi/mcp.jsonc`, and `~/.pi/agent/mcp.json`; mnemo writes the global Pi entry to `~/.pi/agent/mcp.json` using `mcpServers.mnemo`.
+- Pi's supported extension API exposes `ctx.sessionManager.getSessionId()` and `pi.registerTool()`.
+- mnemo uses `~/.pi/agent/extensions/mnemo.ts` rather than a generic MCP bridge, so every lifecycle event and memory call carries the same Pi-native ID to the controller.
 
 ## Shape and retrieval
 
@@ -88,7 +88,7 @@ Important importer behavior:
 
 - Preserve whether a source was `AGENTS.md`, `CLAUDE.md`, `SYSTEM.md`, or `APPEND_SYSTEM.md` because the runtime semantics differ.
 - Prefer `APPEND_SYSTEM.md` for generated mnemo integration guidance; avoid writing `SYSTEM.md` so mnemo does not replace Pi's default prompt.
-- Treat Pi MCP as conditional on an installed MCP extension until Pi documents a built-in MCP config contract.
+- Do not add Pi MCP configuration for mnemo: the native extension is the canonical transport and avoids losing Pi's dynamic session identity.
 - Preserve source path, heading, scope, and whether the file was global or project-local.
 - Preserve project-trust context for `.pi/skills`, `.pi/settings.json`, and project `.agents/skills` if those surfaces are ever imported.
 - Do not treat Pi sessions, package manifests, model settings, keybindings, themes, or extension code as memory import sources by default.

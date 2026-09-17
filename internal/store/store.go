@@ -60,17 +60,20 @@ func (s *Store) MaxObservationLength() int {
 	return s.cfg.MaxObservationLength
 }
 
+// DataDir returns the store-owned data directory. Controllers use it to keep
+// JetStream persistence beside the database without exposing database handles.
+func (s *Store) DataDir() string {
+	return s.cfg.DataDir
+}
+
 // ─── Store ───────────────────────────────────────────────────────────────────
 
 type Store struct {
-	db    *sql.DB
-	q     *dbgen.Queries
-	cfg   Config
-	hooks storeHooks
-}
-
-type execer interface {
-	Exec(query string, args ...any) (sql.Result, error)
+	db       *sql.DB
+	q        *dbgen.Queries
+	cfg      Config
+	hooks    storeHooks
+	activeTx *sql.Tx
 }
 
 type queryer interface {
@@ -94,7 +97,6 @@ func (r sqlRowScanner) Err() error             { return r.rows.Err() }
 func (r sqlRowScanner) Close() error           { return r.rows.Close() }
 
 type storeHooks struct {
-	exec    func(db execer, query string, args ...any) (sql.Result, error)
 	query   func(db queryer, query string, args ...any) (*sql.Rows, error)
 	queryIt func(db queryer, query string, args ...any) (rowScanner, error)
 	beginTx func(db *sql.DB) (*sql.Tx, error)
@@ -103,9 +105,6 @@ type storeHooks struct {
 
 func defaultStoreHooks() storeHooks {
 	return storeHooks{
-		exec: func(db execer, query string, args ...any) (sql.Result, error) {
-			return db.Exec(query, args...)
-		},
 		query: func(db queryer, query string, args ...any) (*sql.Rows, error) {
 			return db.Query(query, args...)
 		},
@@ -123,13 +122,6 @@ func defaultStoreHooks() storeHooks {
 			return tx.Commit()
 		},
 	}
-}
-
-func (s *Store) execHook(db execer, query string, args ...any) (sql.Result, error) {
-	if s.hooks.exec != nil {
-		return s.hooks.exec(db, query, args...)
-	}
-	return db.Exec(query, args...)
 }
 
 func (s *Store) queryHook(db queryer, query string, args ...any) (*sql.Rows, error) {
@@ -223,6 +215,9 @@ func (s *Store) migrate() error {
 }
 
 func (s *Store) withTx(fn func(tx *sql.Tx) error) error {
+	if s.activeTx != nil {
+		return fn(s.activeTx)
+	}
 	tx, err := s.beginTxHook()
 	if err != nil {
 		return err

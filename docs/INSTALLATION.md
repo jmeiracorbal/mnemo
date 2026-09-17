@@ -97,9 +97,9 @@ claude plugin install mnemo@mnemo
 
 ## Pi notes
 
-Pi support installs global guidance into `~/.pi/agent/APPEND_SYSTEM.md` so mnemo extends Pi's default prompt instead of replacing it with `.pi/SYSTEM.md`. It also writes a standard `mcpServers` entry to `~/.pi/agent/mcp.json` for Pi environments that have an MCP extension such as `pi-mcp-adapter`, `pi-mcp-extension`, or `pi-mcp` installed.
+Pi support installs global guidance into `~/.pi/agent/APPEND_SYSTEM.md` so mnemo extends Pi's default prompt instead of replacing it with `.pi/SYSTEM.md`. It installs `~/.pi/agent/extensions/mnemo.ts`, which registers native Pi tools and supplies Pi's session ID to the controller. Setup removes mnemo's legacy static `mcpServers` entry because it cannot carry that dynamic session ID.
 
-Pi does not expose a stable declarative hook surface for mnemo, so setup does not install hooks for Pi.
+Pi's extension is its lifecycle surface: it publishes durable lifecycle/tool events and never writes SQLite directly.
 
 ## Build from source
 
