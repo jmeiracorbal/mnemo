@@ -48,7 +48,7 @@ func newRootCommand() *cobra.Command {
 		command("install-instructions [--agent=AGENT]", "Install global agent instructions", runInstallInstructions),
 		command("doctor [--json] [--agent=AGENT] [--path=DIR] [--home=DIR] [--data-dir=DIR]", "Run read-only diagnostics", runDoctor),
 		command("db", "Validate or apply database migrations", runDB),
-		command("update [--check] [--yes] [--agent=AGENT] [--json]", "Check for and install a newer mnemo release", runUpdate),
+		command("update [--check] [--yes] [--agent=AGENT] [--json] [--prerelease]", "Check for and install a newer mnemo release", runUpdate),
 		command("setup", "Manage global agent setup", runSetup),
 		&cobra.Command{Use: "version", Short: "Show version", Run: func(*cobra.Command, []string) { fmt.Printf("mnemo %s\n", version) }},
 	)
