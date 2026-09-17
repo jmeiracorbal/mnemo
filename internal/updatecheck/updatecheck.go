@@ -8,14 +8,16 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/coreos/go-semver/semver"
 )
 
 const (
-	DefaultEndpoint = "https://api.github.com/repos/jmeiracorbal/mnemo/releases/latest"
-	DefaultInterval = 24 * time.Hour
+	DefaultEndpoint           = "https://api.github.com/repos/jmeiracorbal/mnemo/releases/latest"
+	DefaultPrereleaseEndpoint = "https://api.github.com/repos/jmeiracorbal/mnemo/releases"
+	DefaultInterval           = 24 * time.Hour
 )
 
 type Options struct {
@@ -25,6 +27,7 @@ type Options struct {
 	Now            func() time.Time
 	Client         *http.Client
 	Force          bool
+	Prerelease     bool
 }
 
 type Result struct {
@@ -62,14 +65,26 @@ func Check(ctx context.Context, opts Options) (Result, error) {
 	}
 	endpoint := opts.Endpoint
 	if endpoint == "" {
-		endpoint = DefaultEndpoint
+		if opts.Prerelease {
+			endpoint = DefaultPrereleaseEndpoint
+		} else {
+			endpoint = DefaultEndpoint
+		}
 	}
 	client := opts.Client
 	if client == nil {
-		client = &http.Client{Timeout: 800 * time.Millisecond}
+		timeout := 800 * time.Millisecond
+		if opts.Prerelease {
+			timeout = 5 * time.Second
+		}
+		client = &http.Client{Timeout: timeout}
 	}
 
-	cachePath := filepath.Join(opts.HomeDir, ".mnemo", "update-check.json")
+	cacheFilename := "update-check.json"
+	if opts.Prerelease {
+		cacheFilename = "update-check-prerelease.json"
+	}
+	cachePath := filepath.Join(opts.HomeDir, ".mnemo", cacheFilename)
 	if !opts.Force {
 		if cached, ok := readFreshCache(cachePath, now()); ok {
 			result.Checked = true
@@ -94,19 +109,45 @@ func Check(ctx context.Context, opts Options) (Result, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return result, fmt.Errorf("latest release lookup returned %s", resp.Status)
 	}
-	var payload struct {
-		TagName string `json:"tag_name"`
-		HTMLURL string `json:"html_url"`
+	var latest, latestURL string
+	if opts.Prerelease {
+		var releases []struct {
+			TagName string `json:"tag_name"`
+			HTMLURL string `json:"html_url"`
+		}
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 4*1024*1024)).Decode(&releases); err != nil {
+			return result, err
+		}
+		for _, r := range releases {
+			v := Normalize(r.TagName)
+			if _, err := semver.NewVersion(v); err != nil {
+				continue
+			}
+			if latest == "" || IsNewer(v, latest) {
+				latest = v
+				latestURL = r.HTMLURL
+			}
+		}
+		if latest == "" {
+			result.Message = "no releases found"
+			return result, nil
+		}
+	} else {
+		var payload struct {
+			TagName string `json:"tag_name"`
+			HTMLURL string `json:"html_url"`
+		}
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&payload); err != nil {
+			return result, err
+		}
+		latest = Normalize(payload.TagName)
+		latestURL = payload.HTMLURL
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&payload); err != nil {
-		return result, err
-	}
-	latest := Normalize(payload.TagName)
 	result.Checked = true
 	result.LatestVersion = latest
-	result.URL = payload.HTMLURL
+	result.URL = latestURL
 	result.UpdateAvailable = IsNewer(latest, current)
-	_ = writeCache(cachePath, cacheFile{CheckedAt: now().UTC().Format(time.RFC3339), Latest: latest, URL: payload.HTMLURL})
+	_ = writeCache(cachePath, cacheFile{CheckedAt: now().UTC().Format(time.RFC3339), Latest: latest, URL: latestURL})
 	return result, nil
 }
 
@@ -117,17 +158,15 @@ func Normalize(version string) string {
 }
 
 func IsNewer(candidate, current string) bool {
-	cand := parseVersion(candidate)
-	cur := parseVersion(current)
-	if len(cand) == 0 || len(cur) == 0 {
+	cand, err := semver.NewVersion(Normalize(candidate))
+	if err != nil {
 		return false
 	}
-	for i := 0; i < 3; i++ {
-		if cand[i] != cur[i] {
-			return cand[i] > cur[i]
-		}
+	cur, err := semver.NewVersion(Normalize(current))
+	if err != nil {
+		return false
 	}
-	return false
+	return cand.Compare(*cur) > 0
 }
 
 func readFreshCache(path string, now time.Time) (cacheFile, bool) {
@@ -155,25 +194,4 @@ func writeCache(path string, cached cacheFile) error {
 		return err
 	}
 	return os.WriteFile(path, append(data, '\n'), 0644)
-}
-
-func parseVersion(version string) [3]int {
-	var parsed [3]int
-	version = Normalize(version)
-	main := strings.SplitN(version, "-", 2)[0]
-	parts := strings.Split(main, ".")
-	if len(parts) == 0 || len(parts) > 3 {
-		return [3]int{}
-	}
-	for i := 0; i < len(parts); i++ {
-		if parts[i] == "" {
-			return [3]int{}
-		}
-		n, err := strconv.Atoi(parts[i])
-		if err != nil || n < 0 {
-			return [3]int{}
-		}
-		parsed[i] = n
-	}
-	return parsed
 }
