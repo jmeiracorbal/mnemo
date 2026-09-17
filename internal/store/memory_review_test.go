@@ -5,11 +5,12 @@ import "testing"
 func TestReviewMemoryConflictsDetectsAndResolvesDuplicateTitle(t *testing.T) {
 	s := newTestStore(t)
 	provenance := ProvenanceInput{AgentID: AgentCursor, SourceKindID: SourceMCP, ToolID: ToolMemSave}
-	if err := s.CreateSession("s-review", "alpha", "/tmp/alpha"); err != nil {
+	sessID, err := s.ResolveMCPInstanceSession("alpha", "/tmp/alpha", "s-review", 0)
+	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 	firstID, err := s.AddObservation(AddObservationParams{
-		SessionID:  "s-review",
+		SessionID:  sessID,
 		Type:       "decision",
 		Title:      "Cache strategy",
 		Content:    "Use a local cache for package metadata.",
@@ -21,7 +22,7 @@ func TestReviewMemoryConflictsDetectsAndResolvesDuplicateTitle(t *testing.T) {
 		t.Fatalf("add first: %v", err)
 	}
 	secondID, err := s.AddObservation(AddObservationParams{
-		SessionID:  "s-review",
+		SessionID:  sessID,
 		Type:       "decision",
 		Title:      "Cache   strategy",
 		Content:    "Avoid the local cache for package metadata.",
@@ -64,11 +65,12 @@ func TestReviewMemoryConflictsDetectsAndResolvesDuplicateTitle(t *testing.T) {
 
 func TestReviewMemoryConflictsDetectsTopicConflictAndConsolidatesTopic(t *testing.T) {
 	s := newTestStore(t)
-	if err := s.CreateSession("s-topic", "alpha", "/tmp/alpha"); err != nil {
+	sTopic, err := s.ResolveMCPInstanceSession("alpha", "/tmp/alpha", "s-topic", 0)
+	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 	firstID, err := s.AddObservation(AddObservationParams{
-		SessionID: "s-topic",
+		SessionID: sTopic,
 		Type:      "decision",
 		Title:     "Use REST",
 		Content:   "Use REST API endpoints.",
@@ -79,7 +81,7 @@ func TestReviewMemoryConflictsDetectsTopicConflictAndConsolidatesTopic(t *testin
 		t.Fatalf("add topic observation: %v", err)
 	}
 	otherTopicID, err := s.AddObservation(AddObservationParams{
-		SessionID: "s-topic",
+		SessionID: sTopic,
 		Type:      "decision",
 		Title:     "Use GraphQL",
 		Content:   "Use GraphQL for the public API.",

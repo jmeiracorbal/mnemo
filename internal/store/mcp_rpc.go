@@ -264,6 +264,204 @@ func (s *Store) ExecuteMCPAction(ctx context.Context, action string, payload jso
 			return nil, err
 		}
 		result = value
+	case "export":
+		value, err := s.Export()
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "import":
+		var input ExportData
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.Import(&input)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "list_project_summaries":
+		value, err := s.ListProjectSummaries()
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "build_project_merge_plan":
+		var input struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.BuildProjectMergePlan(input.From, input.To)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "merge_projects":
+		var input struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.MergeProjects(input.From, input.To)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "build_project_rename_plan":
+		var input struct {
+			Selector ProjectRenameSelector `json:"selector"`
+			Name     string                `json:"name"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.BuildProjectRenamePlan(input.Selector, input.Name)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "rename_project":
+		var input struct {
+			Selector ProjectRenameSelector `json:"selector"`
+			Name     string                `json:"name"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.RenameProject(input.Selector, input.Name)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "session_exists":
+		var input struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		_, err := s.GetSession(input.ID)
+		result = err == nil
+	case "session_obs_count":
+		var input struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.ObsCount(input.ID)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "session_project_obs_count":
+		var input struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.ObsCountForSession(input.ID)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "review_memories":
+		var input MemoryReviewOptions
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.ReviewMemoryConflicts(input)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "mark_memory_reviewed":
+		var input struct {
+			ID     int64  `json:"id"`
+			Reason string `json:"reason"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		if err := s.MarkMemoryReviewed(input.ID, input.Reason); err != nil {
+			return nil, err
+		}
+	case "mark_memory_stale":
+		var input struct {
+			ID     int64  `json:"id"`
+			Reason string `json:"reason"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		if err := s.MarkMemoryStale(input.ID, input.Reason); err != nil {
+			return nil, err
+		}
+	case "supersede_memory":
+		var input struct {
+			OldID  int64  `json:"old_id"`
+			NewID  int64  `json:"new_id"`
+			Reason string `json:"reason"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		if err := s.SupersedeMemory(input.OldID, input.NewID, input.Reason); err != nil {
+			return nil, err
+		}
+	case "plan_consolidate_topic":
+		var input struct {
+			FromTopic string `json:"from_topic"`
+			ToTopic   string `json:"to_topic"`
+			Project   string `json:"project"`
+			Scope     string `json:"scope"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.PlanMemoryTopicConsolidation(input.FromTopic, input.ToTopic, input.Project, input.Scope)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "consolidate_topic":
+		var input struct {
+			FromTopic string `json:"from_topic"`
+			ToTopic   string `json:"to_topic"`
+			Project   string `json:"project"`
+			Scope     string `json:"scope"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		value, err := s.ConsolidateMemoryTopic(input.FromTopic, input.ToTopic, input.Project, input.Scope)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "migrate_project_identity":
+		var input struct {
+			LegacyKey string `json:"legacy_key"`
+			ProjectID string `json:"project_id"`
+			Name      string `json:"name"`
+		}
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, err
+		}
+		migrateResult, err := s.MigrateProject(input.LegacyKey, input.ProjectID)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.EnsureProject(input.ProjectID, input.Name); err != nil {
+			return nil, err
+		}
+		result = migrateResult
 	default:
 		return nil, fmt.Errorf("unsupported MCP action %q", action)
 	}

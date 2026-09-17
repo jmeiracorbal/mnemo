@@ -65,38 +65,6 @@ func (s *Store) CloseMCPInstanceSessions(instanceID string) error {
 	})
 }
 
-func (s *Store) CreateSession(id, project, directory string) error {
-	return s.withTx(func(tx *sql.Tx) error {
-		return s.createSessionTx(tx, id, project, directory, ProvenanceInput{})
-	})
-}
-
-// EnsureSession creates the session if it does not already exist. If it exists,
-// it returns immediately without modifying anything. Use this in tool handlers
-// that may be called before an explicit session start.
-func (s *Store) EnsureSession(id, project, directory string) error {
-	return s.withTx(func(tx *sql.Tx) error {
-		_, err := s.q.WithTx(tx).GetSessionPayload(context.Background(), id)
-		if err == nil {
-			return nil
-		}
-		if err != sql.ErrNoRows {
-			return err
-		}
-		return s.createSessionTx(tx, id, project, directory, ProvenanceInput{})
-	})
-}
-
-
-// TouchCompact records that the agent compacted its context window for this
-// session. The session_id stays the same across compaction; this is an update,
-// not a new session creation.
-func (s *Store) TouchCompact(id string) error {
-	return s.withTx(func(tx *sql.Tx) error {
-		return s.q.WithTx(tx).TouchSessionCompact(context.Background(), id)
-	})
-}
-
 func (s *Store) EndSession(id string, summary string) error {
 	return s.withTx(func(tx *sql.Tx) error {
 		q := s.q.WithTx(tx)
@@ -152,13 +120,6 @@ func (s *Store) ObsCountForSession(sessionID string) (int, error) {
 func (s *Store) RecentSessions(project string, limit int) ([]SessionSummary, error) {
 	if limit <= 0 {
 		limit = 5
-	}
-	return s.listSessions(project, limit)
-}
-
-func (s *Store) AllSessions(project string, limit int) ([]SessionSummary, error) {
-	if limit <= 0 {
-		limit = 50
 	}
 	return s.listSessions(project, limit)
 }
