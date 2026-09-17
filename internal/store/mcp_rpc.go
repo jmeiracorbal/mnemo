@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jmeiracorbal/mnemo/adapters"
+	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
 
 // ApplyMCPCommand executes one durable MCP mutation and stores its serialized
@@ -15,8 +16,8 @@ import (
 func (s *Store) ApplyMCPCommand(id, action string, payload json.RawMessage) (json.RawMessage, error) {
 	var result json.RawMessage
 	err := s.withTx(func(tx *sql.Tx) error {
-		var prior string
-		err := tx.QueryRow(`SELECT result_json FROM processed_mcp_commands WHERE id = ?`, id).Scan(&prior)
+		q := s.q.WithTx(tx)
+		prior, err := q.GetProcessedMCPCommandResult(context.Background(), id)
 		if err == nil {
 			result = json.RawMessage(prior)
 			return nil
@@ -26,12 +27,14 @@ func (s *Store) ApplyMCPCommand(id, action string, payload json.RawMessage) (jso
 		}
 		transactional := *s
 		transactional.activeTx = tx
-		transactional.q = s.q.WithTx(tx)
+		transactional.q = q
 		computed, err := transactional.ExecuteMCPAction(context.Background(), action, payload)
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`INSERT INTO processed_mcp_commands (id, action, result_json) VALUES (?, ?, ?)`, id, action, string(computed)); err != nil {
+		if err := q.InsertProcessedMCPCommand(context.Background(), dbgen.InsertProcessedMCPCommandParams{
+			ID: id, Action: action, ResultJson: string(computed),
+		}); err != nil {
 			return err
 		}
 		result = computed

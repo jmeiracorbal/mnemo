@@ -1949,9 +1949,6 @@ func TestHookFallbacksAndAdditionalBranches(t *testing.T) {
 		s := newTestStore(t)
 		s.hooks = storeHooks{}
 
-		if _, err := s.execHook(s.db, "SELECT 1"); err != nil {
-			t.Fatalf("exec hook fallback: %v", err)
-		}
 		rows, err := s.queryHook(s.db, "SELECT 1")
 		if err != nil {
 			t.Fatalf("query hook fallback: %v", err)

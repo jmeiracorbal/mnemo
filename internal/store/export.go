@@ -79,117 +79,114 @@ func (s *Store) Import(data *ExportData) (*ImportResult, error) {
 	if data == nil {
 		return nil, fmt.Errorf("import: nil export data")
 	}
-	tx, err := s.beginTxHook()
-	if err != nil {
-		return nil, fmt.Errorf("import: begin tx: %w", err)
-	}
-	defer tx.Rollback()
+	var result *ImportResult
+	if err := s.withTx(func(tx *sql.Tx) error {
+		q := s.q.WithTx(tx)
+		r := &ImportResult{}
 
-	result := &ImportResult{}
-	q := s.q.WithTx(tx)
-
-	for _, sess := range data.Sessions {
-		if err := s.ensureProjectTx(tx, sess.Project); err != nil {
-			return nil, fmt.Errorf("import session %s project: %w", sess.ID, err)
-		}
-		provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromStored(
-			sess.Provenance,
-			ProvenanceInput{AgentID: AgentCLI, SourceKindID: SourceImport, ToolID: ToolMnemoImport},
-		))
-		if err != nil {
-			return nil, fmt.Errorf("import session %s provenance: %w", sess.ID, err)
-		}
-		n, err := q.ImportSession(context.Background(), dbgen.ImportSessionParams{
-			ID: sess.ID, Project: sess.Project, Directory: sess.Directory, StartedAt: sess.StartedAt,
-			EndedAt: sqlNullStringPtr(sess.EndedAt), Summary: sqlNullStringPtr(sess.Summary), ProvenanceID: provenanceID,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("import session %s: %w", sess.ID, err)
-		}
-		if n > 0 && sess.Tags != nil {
-			if err := s.setTagsForSessionTx(tx, sess.ID, sess.Tags); err != nil {
-				return nil, fmt.Errorf("import session %s: tags: %w", sess.ID, err)
+		for _, sess := range data.Sessions {
+			if err := s.ensureProjectTx(tx, sess.Project); err != nil {
+				return fmt.Errorf("import session %s project: %w", sess.ID, err)
 			}
-		}
-		result.SessionsImported += int(n)
-	}
-
-	for _, obs := range data.Observations {
-		if obs.SyncID != "" {
-			_, err := q.GetObservationBySyncIDIncludingDeleted(context.Background(), sqlNullString(obs.SyncID))
-			if err == nil {
-				continue
-			}
-			if err != sql.ErrNoRows {
-				return nil, fmt.Errorf("import observation check %d: %w", obs.ID, err)
-			}
-		} else {
-			count, err := q.CountObservationsByHash(context.Background(), sqlNullString(hashNormalized(obs.Content)))
+			provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromStored(
+				sess.Provenance,
+				ProvenanceInput{AgentID: AgentCLI, SourceKindID: SourceImport, ToolID: ToolMnemoImport},
+			))
 			if err != nil {
-				return nil, fmt.Errorf("import observation check %d: %w", obs.ID, err)
+				return fmt.Errorf("import session %s provenance: %w", sess.ID, err)
 			}
-			if count > 0 {
-				continue
+			n, err := q.ImportSession(context.Background(), dbgen.ImportSessionParams{
+				ID: sess.ID, Project: sess.Project, Directory: sess.Directory, StartedAt: sess.StartedAt,
+				EndedAt: sqlNullStringPtr(sess.EndedAt), Summary: sqlNullStringPtr(sess.Summary), ProvenanceID: provenanceID,
+			})
+			if err != nil {
+				return fmt.Errorf("import session %s: %w", sess.ID, err)
 			}
-		}
-		if err := s.validateImportedSessionProjectTx(tx, obs.SessionID, obs.Project); err != nil {
-			return nil, fmt.Errorf("import observation %d project: %w", obs.ID, err)
-		}
-		hash := hashNormalized(obs.Content)
-		provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromStored(
-			obs.Provenance,
-			ProvenanceInput{AgentID: AgentCLI, SourceKindID: SourceImport, ToolID: ToolMnemoImport},
-		))
-		if err != nil {
-			return nil, fmt.Errorf("import observation %d provenance: %w", obs.ID, err)
-		}
-		newID, err := q.ImportObservation(context.Background(), dbgen.ImportObservationParams{
-			SyncID:    sqlNullString(normalizeExistingSyncID(obs.SyncID, "obs")),
-			SessionID: obs.SessionID, Type: obs.Type, Title: obs.Title, Content: obs.Content,
-			ToolName: sqlNullStringPtr(obs.ToolName),
-			Scope:    normalizeScope(obs.Scope), TopicKey: sqlNullString(normalizeTopicKey(derefString(obs.TopicKey))),
-			NormalizedHash: sqlNullString(hash), RevisionCount: int64(maxInt(obs.RevisionCount, 1)),
-			DuplicateCount: int64(maxInt(obs.DuplicateCount, 1)), LastSeenAt: sqlNullStringPtr(obs.LastSeenAt),
-			CreatedAt: obs.CreatedAt, UpdatedAt: obs.UpdatedAt, IsDeleted: boolToInt64(obs.IsDeleted),
-			ProvenanceID: provenanceID,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("import observation %d: %w", obs.ID, err)
-		}
-		if obs.Tags != nil {
-			if err := s.setTagsForObservationTx(tx, newID, obs.Tags); err != nil {
-				return nil, fmt.Errorf("import observation %d: tags: %w", obs.ID, err)
+			if n > 0 && sess.Tags != nil {
+				if err := s.setTagsForSessionTx(tx, sess.ID, sess.Tags); err != nil {
+					return fmt.Errorf("import session %s: tags: %w", sess.ID, err)
+				}
 			}
+			r.SessionsImported += int(n)
 		}
-		result.ObservationsImported++
-	}
 
-	for _, p := range data.Prompts {
-		if err := s.validateImportedSessionProjectTx(tx, p.SessionID, nullableString(p.Project)); err != nil {
-			return nil, fmt.Errorf("import prompt %d project: %w", p.ID, err)
+		for _, obs := range data.Observations {
+			if obs.SyncID != "" {
+				_, err := q.GetObservationBySyncIDIncludingDeleted(context.Background(), sqlNullString(obs.SyncID))
+				if err == nil {
+					continue
+				}
+				if err != sql.ErrNoRows {
+					return fmt.Errorf("import observation check %d: %w", obs.ID, err)
+				}
+			} else {
+				count, err := q.CountObservationsByHash(context.Background(), sqlNullString(hashNormalized(obs.Content)))
+				if err != nil {
+					return fmt.Errorf("import observation check %d: %w", obs.ID, err)
+				}
+				if count > 0 {
+					continue
+				}
+			}
+			if err := s.validateImportedSessionProjectTx(tx, obs.SessionID, obs.Project); err != nil {
+				return fmt.Errorf("import observation %d project: %w", obs.ID, err)
+			}
+			hash := hashNormalized(obs.Content)
+			provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromStored(
+				obs.Provenance,
+				ProvenanceInput{AgentID: AgentCLI, SourceKindID: SourceImport, ToolID: ToolMnemoImport},
+			))
+			if err != nil {
+				return fmt.Errorf("import observation %d provenance: %w", obs.ID, err)
+			}
+			newID, err := q.ImportObservation(context.Background(), dbgen.ImportObservationParams{
+				SyncID:    sqlNullString(normalizeExistingSyncID(obs.SyncID, "obs")),
+				SessionID: obs.SessionID, Type: obs.Type, Title: obs.Title, Content: obs.Content,
+				ToolName: sqlNullStringPtr(obs.ToolName),
+				Scope:    normalizeScope(obs.Scope), TopicKey: sqlNullString(normalizeTopicKey(derefString(obs.TopicKey))),
+				NormalizedHash: sqlNullString(hash), RevisionCount: int64(maxInt(obs.RevisionCount, 1)),
+				DuplicateCount: int64(maxInt(obs.DuplicateCount, 1)), LastSeenAt: sqlNullStringPtr(obs.LastSeenAt),
+				CreatedAt: obs.CreatedAt, UpdatedAt: obs.UpdatedAt, IsDeleted: boolToInt64(obs.IsDeleted),
+				ProvenanceID: provenanceID,
+			})
+			if err != nil {
+				return fmt.Errorf("import observation %d: %w", obs.ID, err)
+			}
+			if obs.Tags != nil {
+				if err := s.setTagsForObservationTx(tx, newID, obs.Tags); err != nil {
+					return fmt.Errorf("import observation %d: tags: %w", obs.ID, err)
+				}
+			}
+			r.ObservationsImported++
 		}
-		provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromStored(
-			p.Provenance,
-			ProvenanceInput{AgentID: AgentCLI, SourceKindID: SourceImport, ToolID: ToolMnemoImport},
-		))
-		if err != nil {
-			return nil, fmt.Errorf("import prompt %d provenance: %w", p.ID, err)
-		}
-		err = q.ImportPrompt(context.Background(), dbgen.ImportPromptParams{
-			SyncID:    sqlNullString(normalizeExistingSyncID(p.SyncID, "prompt")),
-			SessionID: p.SessionID, Content: p.Content, CreatedAt: p.CreatedAt,
-			IsDeleted: boolToInt64(p.IsDeleted), ProvenanceID: provenanceID,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("import prompt %d: %w", p.ID, err)
-		}
-		result.PromptsImported++
-	}
 
-	if err := s.commitHook(tx); err != nil {
-		return nil, fmt.Errorf("import: commit: %w", err)
-	}
+		for _, p := range data.Prompts {
+			if err := s.validateImportedSessionProjectTx(tx, p.SessionID, nullableString(p.Project)); err != nil {
+				return fmt.Errorf("import prompt %d project: %w", p.ID, err)
+			}
+			provenanceID, err := s.optionalProvenanceTx(tx, provenanceInputFromStored(
+				p.Provenance,
+				ProvenanceInput{AgentID: AgentCLI, SourceKindID: SourceImport, ToolID: ToolMnemoImport},
+			))
+			if err != nil {
+				return fmt.Errorf("import prompt %d provenance: %w", p.ID, err)
+			}
+			err = q.ImportPrompt(context.Background(), dbgen.ImportPromptParams{
+				SyncID:    sqlNullString(normalizeExistingSyncID(p.SyncID, "prompt")),
+				SessionID: p.SessionID, Content: p.Content, CreatedAt: p.CreatedAt,
+				IsDeleted: boolToInt64(p.IsDeleted), ProvenanceID: provenanceID,
+			})
+			if err != nil {
+				return fmt.Errorf("import prompt %d: %w", p.ID, err)
+			}
+			r.PromptsImported++
+		}
 
+		result = r
+		return nil
+	}); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 

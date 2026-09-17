@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -101,10 +102,21 @@ func migrateDB(opts dbMigrateOptions) (dbmigrate.Status, error) {
 // dataDir is reachable. Running migrations while the controller holds the
 // database open risks WAL-state conflicts and violates the offline-maintenance
 // contract for mnemo db migrate.
+//
+// The guard distinguishes three states:
+//   - config.toml absent → no controller has ever been started → safe
+//   - config.toml present but unreadable or invalid → uncertain → fail conservatively
+//   - config valid but controller unreachable → not holding the WAL → safe
 func guardControllerNotRunning(dataDir string) error {
 	evtCfg, err := events.LoadConfig(dataDir)
 	if err != nil {
-		return nil // no config.toml yet; controller is not running
+		if errors.Is(err, os.ErrNotExist) {
+			return nil // no config.toml; no controller has been started for this data dir
+		}
+		// config.toml exists but is malformed or unreadable — cannot confirm the
+		// controller is not running.
+		return fmt.Errorf("cannot verify controller state before migrating: %w\n"+
+			"  Inspect config.toml in %s or use 'mnemo db migrate --check'.", err, dataDir)
 	}
 	if err := events.CheckHealth(context.Background(), evtCfg); err != nil {
 		return nil // controller not reachable; safe to migrate

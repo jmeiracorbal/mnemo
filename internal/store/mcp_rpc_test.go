@@ -1,11 +1,78 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
 	"github.com/jmeiracorbal/mnemo/adapters"
 )
+
+func TestApplyMCPCommandImportIsAtomic(t *testing.T) {
+	src, err := New(FallbackConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = src.Close() })
+
+	sessionID, err := src.ResolveMCPInstanceSession("import-project", t.TempDir(), "instance-import", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := src.AddObservation(AddObservationParams{
+		SessionID: sessionID, Project: "import-project", Type: "manual",
+		Title: "imported obs", Content: "content for import test",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	exported, err := src.Export()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dst, err := New(FallbackConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = dst.Close() })
+
+	payload, err := json.Marshal(exported)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := dst.ApplyMCPCommand("import-cmd-1", "import", payload)
+	if err != nil {
+		t.Fatalf("first import: %v", err)
+	}
+
+	var firstResult ImportResult
+	if err := json.Unmarshal(first, &firstResult); err != nil {
+		t.Fatalf("unmarshal first result: %v", err)
+	}
+	if firstResult.ObservationsImported != 1 {
+		t.Fatalf("observations imported = %d, want 1", firstResult.ObservationsImported)
+	}
+
+	// Replay must return the cached result without re-importing.
+	second, err := dst.ApplyMCPCommand("import-cmd-1", "import", payload)
+	if err != nil {
+		t.Fatalf("replay import: %v", err)
+	}
+	if string(first) != string(second) {
+		t.Fatalf("replayed result = %s, want %s", second, first)
+	}
+
+	// Verify the import and the command record committed atomically.
+	rows, err := dst.q.ExportObservations(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Title != "imported obs" {
+		t.Fatalf("observations in dst = %d, want 1 with title 'imported obs'", len(rows))
+	}
+}
 
 func TestApplyMCPCommandReturnsStoredResultWithoutRepeatingMutation(t *testing.T) {
 	memory, err := New(FallbackConfig(t.TempDir()))
