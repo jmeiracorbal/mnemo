@@ -59,6 +59,9 @@ Remember that `mnemo update` updates the mnemo binary and mnemo-owned agent
 integration files only; it does not update Claude Code, Codex, Cursor or other
 agent applications themselves. Do not update mnemo silently, and do not run
 update checks from MCP, hooks, or JSON-output paths.
+`mnemo update --prerelease` opts into published alpha and beta releases; use it
+only when the user explicitly requests a prerelease. Binaries older than
+`v1.0.0-alpha.2` do not support that flag and require a pinned installer.
 
 ## 2. Recover relevant context
 

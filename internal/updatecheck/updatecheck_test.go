@@ -28,6 +28,10 @@ func TestIsNewer(t *testing.T) {
 		{"0.33.3", "0.33.2", true},
 		{"0.33.2", "0.33.2", false},
 		{"0.32.9", "0.33.2", false},
+		{"v1.0.0-alpha.2", "v1.0.0-alpha.1", true},
+		{"v1.0.0-alpha.1", "v1.0.0-alpha.2", false},
+		{"v1.0.0", "v1.0.0-alpha.2", true},
+		{"v1.0.0-alpha.2", "v1.0.0", false},
 		{"dev", "0.33.2", false},
 	}
 	for _, tc := range cases {
@@ -109,6 +113,62 @@ func TestCommandSkipsUpdateCheckForHelp(t *testing.T) {
 		if !commandSkipsUpdateCheck(args) {
 			t.Fatalf("expected update check to skip %v", args)
 		}
+	}
+}
+
+func TestCheckPrereleasePicksNewestFromList(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+		body := `[{"tag_name":"v1.0.0-alpha.1","html_url":"https://example.test/alpha1"},{"tag_name":"v0.39.0","html_url":"https://example.test/stable"},{"tag_name":"v1.0.0-alpha.2","html_url":"https://example.test/alpha2"}]`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader(body)),
+		}, nil
+	})}
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	result, err := Check(context.Background(), Options{
+		CurrentVersion: "v1.0.0-alpha.1",
+		HomeDir:        t.TempDir(),
+		Endpoint:       "https://example.test/releases",
+		Client:         client,
+		Now:            func() time.Time { return now },
+		Prerelease:     true,
+	})
+	if err != nil {
+		t.Fatalf("check update: %v", err)
+	}
+	if !result.UpdateAvailable || result.LatestVersion != "1.0.0-alpha.2" || result.URL != "https://example.test/alpha2" {
+		t.Fatalf("expected alpha.2 update available, got: %+v", result)
+	}
+}
+
+func TestCheckPrereleaseCachesWithSeparateFile(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+		body := `[{"tag_name":"v1.0.0-alpha.1","html_url":"https://example.test/alpha"}]`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader(body)),
+		}, nil
+	})}
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	home := t.TempDir()
+	_, err := Check(context.Background(), Options{
+		CurrentVersion: "v0.39.0",
+		HomeDir:        home,
+		Endpoint:       "https://example.test/releases",
+		Client:         client,
+		Now:            func() time.Time { return now },
+		Prerelease:     true,
+	})
+	if err != nil {
+		t.Fatalf("check update: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".mnemo", "update-check-prerelease.json")); err != nil {
+		t.Fatalf("prerelease cache file missing: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".mnemo", "update-check.json")); err == nil {
+		t.Fatal("stable cache file should not be written for prerelease check")
 	}
 }
 

@@ -46,10 +46,10 @@ En lugar de repartir conocimiento entre `MEMORY.md`, memorias nativas del editor
 Instala el binario y configura los agentes detectados:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.1 bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.2 bash
 ```
 
-Esto fija la alpha actual. La instalación sin versión y `mnemo update` siguen las releases estables.
+Esto fija la alpha actual. La instalación sin versión y `mnemo update` siguen las releases estables por defecto; usa `mnemo update --prerelease` para incluir versiones preliminares.
 
 Activa mnemo en un proyecto:
 
@@ -152,7 +152,7 @@ No potential memory conflicts found.
 
 | Vía | Cuándo usarla | Comando |
 |---|---|---|
-| Alpha actual | Quieres probar `v1.0.0-alpha.1` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.1 bash</code> |
+| Alpha actual | Quieres probar `v1.0.0-alpha.2` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.2 bash</code> |
 | Última estable | Quieres binario estable + setup de agentes detectados | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | Agente explícito | Solo quieres una integración | `bash -s -- --agent=codex` |
 | Todos los agentes | Quieres preparar todas las integraciones | `bash -s -- --agent=all` |
@@ -169,10 +169,14 @@ instalada/disponible y pregunta antes de modificar nada:
 
 ```bash
 mnemo update
+mnemo update --prerelease --check
+mnemo update --prerelease
 mnemo update --yes --agent=all
 mnemo update --check --json
 ```
 
+Por defecto, `mnemo update` consulta releases estables. `--prerelease` consulta
+todas las publicadas y elige la versión más reciente, incluidas alphas y betas.
 `mnemo update` descarga el instalador oficial, lo fija a la última release
 detectada y refresca los archivos de integración de mnemo para agentes después
 de instalar. No actualiza Claude Code, Codex, Cursor ni otras aplicaciones de
