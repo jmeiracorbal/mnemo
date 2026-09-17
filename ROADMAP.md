@@ -51,7 +51,7 @@ Help users move from static agent memory files to mnemo as the canonical memory 
 
 Planned capabilities:
 
-- detect competing or oversized memory files such as `MEMORY.md`, Claude memory files, Cursor/Windsurf rules used as memory, and other static memory surfaces;
+- detect competing or oversized memory files such as `MEMORY.md`, Claude memory files, Cursor rules used as memory, and other static memory surfaces;
 - provide a dry-run importer that parses candidate memories into mnemo observations before writing anything;
 - preserve provenance for imported memories, including source file path, heading or section, import timestamp, and confidence;
 - deduplicate imported chunks against existing mnemo observations;
@@ -94,7 +94,7 @@ Goals:
 Potential metadata fields:
 
 ```txt
-agent: codex | claudecode | cursor | windsurf | opencode | cli | unknown
+agent: codex | claudecode | cursor | opencode | pi | cli | unknown
 source: mcp | cli | hook | passive_capture | import | skill
 tool: mem_save | capture | session_end | ingest | ...
 model: optional model identifier when available

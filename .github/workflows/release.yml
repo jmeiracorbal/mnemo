@@ -22,6 +22,7 @@ jobs:
       - name: Upload scripts archive
         uses: softprops/action-gh-release@v2
         with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             mnemo-scripts.tar.gz
             mnemo-scripts.tar.gz.sha256
@@ -71,6 +72,7 @@ jobs:
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             mnemo-${{ matrix.goos }}-${{ matrix.goarch }}
             mnemo-${{ matrix.goos }}-${{ matrix.goarch }}.sha256

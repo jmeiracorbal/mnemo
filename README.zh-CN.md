@@ -17,7 +17,7 @@
 
 <p align="center">
   <a href="https://go.dev"><img alt="Go" src="https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white"></a>
-  <a href="https://github.com/jmeiracorbal/mnemo"><img alt="状态" src="https://img.shields.io/badge/status-stable-brightgreen"></a>
+  <a href="https://github.com/jmeiracorbal/mnemo/releases"><img alt="状态" src="https://img.shields.io/badge/status-alpha-orange"></a>
   <a href="https://sqlite.org"><img alt="存储" src="https://img.shields.io/badge/storage-SQLite%2BFTS5-003B57?logo=sqlite&logoColor=white"></a>
   <a href="https://github.com/jmeiracorbal/mnemo"><img alt="平台" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey"></a>
   <a href="LICENSE"><img alt="许可证" src="https://img.shields.io/badge/license-Apache%202.0-blue"></a>
@@ -35,20 +35,19 @@
 
 ## 什么是 mnemo？
 
-mnemo 是面向代理式开发的本地记忆层。它把决策、Bug、约定、发现和会话摘要保存在 SQLite 中，并通过 MCP 工具、hooks 和可移植的 Agent Skills 暴露给代理使用。
+mnemo 是面向代理式开发的本地记忆层。它把决策、Bug、约定、发现和会话摘要保存在 SQLite 中，并通过 MCP 或原生工具、hooks 和可移植的 Agent Skills 暴露给代理使用。本地事件控制器是正常运行时唯一的 SQLite 写入者：代理发布持久事件和记忆命令，而不直接打开数据库。
 
 你不再需要把项目知识分散在 `MEMORY.md`、编辑器原生记忆、聊天记录和人工笔记里。mnemo 为所有支持的代理提供同一个按项目隔离的可信记忆来源。
-
-> [!IMPORTANT]
-
 
 ## 快速开始
 
 安装二进制文件并配置检测到的代理：
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.1 bash
 ```
+
+这会固定安装当前 alpha 版本。未指定版本的安装和 `mnemo update` 仍跟随稳定版。
 
 在项目中启用 mnemo：
 
@@ -63,19 +62,20 @@ mnemo init --agent=all
 mnemo doctor --agent=all --path=.
 ```
 
-也可以从 CLI 手动保存和搜索记忆：
+在代理中使用 `mem_save` 保存决策，使用 `mem_search` 检索。CLI 也可以搜索已有记忆：
 
 ```bash
-mnemo session start manual-1 --project myapp --dir "$PWD"
-mnemo save "使用 SQLite FTS5" "搜索保持本地、快速且依赖很少。" --type decision --session manual-1 --project myapp --dir "$PWD"
-mnemo search "SQLite" --project myapp
+mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
+
+安装时会将控制器注册为用户服务。有关投递保证和故障行为，请参阅[持久事件](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events)。
 
 ## 为什么选择 mnemo？
 
 | 问题 | mnemo 提供 |
 |---|---|
 | 代理在不同会话之间忘记决策 | 保存在 `~/.mnemo/memory.db` 中的持久化项目记忆 |
+| Hooks 或插件丢失写入、相互竞争 | 本地控制器提供持久投递和幂等的 SQLite 事务 |
 | Markdown 记忆文件容易漂移或冲突 | 结构化 observations、tags、topic keys 和 review 状态 |
 | 全局 hooks 可能有风险 | 通过 `.mnemo` 标记按项目显式启用；没有标记的项目会被忽略 |
 | 安装问题可能静默失败 | `mnemo doctor` 和 `mnemo setup status` 会说明当前配置状态 |
@@ -87,9 +87,10 @@ mnemo search "SQLite" --project myapp
 |---|---|
 | **按项目启用** | 全局 hooks 只会在项目包含有效 `.mnemo` 标记时运行。 |
 | **MCP 工具** | 代理可以调用 `mem_save`、`mem_search`、`mem_context`、`mem_current_project`、`mem_doctor` 等工具。 |
-| **MCP 管理的会话** | 每个 MCP 连接会为项目创建和关闭自己的会话；hooks 只负责注入上下文。 |
+| **持久事件控制器** | 每个用户的 JetStream 服务是正常运行时唯一的 SQLite 写入者；发布者不打开数据库。 |
+| **控制器管理的会话** | 代理原生执行 ID 将事件和记忆工具绑定到同一个规范会话。 |
 | **可移植 Agent Skills** | 教会兼容代理何时以及如何使用 mnemo，而不是回退到原生记忆。 |
-| **被动捕获** | MCP 从代理提供的内容中提取有价值的学习。 |
+| **被动捕获** | 记忆工具从代理提供的内容中提取有价值的学习。 |
 | **代理溯源** | 对提供相关信息的写入，记录可通过 SQL 查询的代理、来源、工具、模型和 MCP 客户端元数据。 |
 | **诊断** | `mnemo doctor` 检查项目启用、全局配置、MCP、hooks、竞争记忆表面和数据库迁移健康状态。 |
 | **数据库安全** | 安全迁移会自动应用；`mnemo db migrate --check` 可为 CI 或故障排查验证本地存储。 |
@@ -103,19 +104,17 @@ mnemo search "SQLite" --project myapp
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-supported-6B46C1?logo=claudecode&logoColor=white">
   <img alt="Codex" src="https://img.shields.io/badge/Codex-supported-00A67E?logo=openai&logoColor=white">
   <img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-111111?logo=cursor&logoColor=white">
-  <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-supported-2563EB?logo=windsurf&logoColor=white">
   <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-supported-F97316?logo=opencode&logoColor=white">
   <img alt="Pi" src="https://img.shields.io/badge/Pi-supported-0EA5E9">
 </p>
 
 | 代理 | MCP | Hooks / runtime | 全局指令 | Skill 访问 | 状态 |
 |---|---:|---:|---:|---:|---|
-| Claude Code | ✅ | Plugin 或通过 `install.sh` 为 n/a | ✅ | ✅ | 支持 |
-| Codex | ✅ | ✅ | ✅ | ✅ | 支持 |
-| Cursor | ✅ | ✅ | ✅ | ✅ | 支持 |
-| Windsurf | ✅ | ✅ | ✅ | ✅ | 支持 |
-| OpenCode | ✅ | ✅ | ✅ | ✅ | 支持 |
-| Pi | 通过 MCP 扩展 ✅ | ✅ 扩展 | ✅ | 通过 `~/.pi/agent/skills/` ✅ | 支持 |
+| Claude Code | 是 | 插件 hooks 或安装器配置 | 是 | 是 | 支持 |
+| Codex | 是 | 会话 hooks | 是 | 是 | 支持 |
+| Cursor | 是 | 提示词 hook | 是 | 是 | 支持 |
+| OpenCode | 是 | 插件事件 | 是 | 是 | 支持 |
+| Pi | 原生工具 | 原生扩展 | 是 | 是 | 支持 |
 
 全局配置只需安装一次。项目启用仍然是本地、显式的 opt-in：
 
@@ -148,13 +147,14 @@ No potential memory conflicts found.
 
 | 方式 | 适用场景 | 命令 |
 |---|---|---|
-| 自动安装 | 需要二进制文件并配置检测到的代理 | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
+| 当前 alpha | 体验 `v1.0.0-alpha.1` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.1 bash</code> |
+| 最新稳定版 | 安装稳定版并配置检测到的代理 | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | 指定代理 | 只想配置某一个集成 | `bash -s -- --agent=codex` |
 | 所有代理 | 想准备所有支持的集成 | `bash -s -- --agent=all` |
 | Claude plugin | 使用 Claude Code 的 plugin marketplace | `claude plugin install mnemo@mnemo` |
 | 源码构建 | 开发 mnemo 本身 | `go build -o ~/.local/bin/mnemo ./cmd/mnemo/` |
 
-完整安装指南见 [docs/INSTALLATION.md](docs/INSTALLATION.md)。
+完整指南见[安装文档](https://github.com/jmeiracorbal/mnemo/wiki/Installation)。
 
 ### 更新
 
@@ -177,12 +177,13 @@ Claude Code、Codex、Cursor 或其他代理应用本身。更新后请重启活
 
 | 指南 | 内容 |
 |---|---|
-| [文档索引](docs/README.md) | 完整文档地图和研究笔记。 |
-| [安装](docs/INSTALLATION.md) | install script、plugin setup、项目启用和验证。 |
-| [代理集成](docs/AGENT_INTEGRATION.md) | Hook 行为、全局路径、`.mnemo` 标记和 Agent Skills。 |
-| [CLI 参考](docs/CLI.md) | 命令、示例、MCP 工具和搜索模式。 |
-| [故障排查](docs/TROUBLESHOOTING.md) | `doctor`、`setup status`、手动检查和幂等性验证。 |
-| [存储](docs/STORAGE.md) | SQLite 位置、schema 说明和 sqlc 工作流。 |
+| [Wiki 首页](https://github.com/jmeiracorbal/mnemo/wiki) | 用户文档导航。 |
+| [安装](https://github.com/jmeiracorbal/mnemo/wiki/Installation) | 二进制文件、控制器服务、项目启用和验证。 |
+| [代理集成](https://github.com/jmeiracorbal/mnemo/wiki/Agent-Integrations) | 原生 ID、hooks、工具和 `.mnemo` 标记。 |
+| [持久事件](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events) | 控制器架构、投递和故障行为。 |
+| [CLI 参考](https://github.com/jmeiracorbal/mnemo/wiki/CLI-Reference) | 当前命令和 MCP 工具。 |
+| [故障排查](https://github.com/jmeiracorbal/mnemo/wiki/Troubleshooting) | 诊断与控制器恢复。 |
+| [存储](https://github.com/jmeiracorbal/mnemo/wiki/Storage-and-Migrations) | SQLite、迁移和 sqlc。 |
 | [路线图](ROADMAP.md) | 计划中的产品和维护工作。 |
 
 ## 设计原则
