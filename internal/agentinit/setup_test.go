@@ -498,7 +498,7 @@ func TestPiLifecycleExtensionPublishesNativeSessionEvents(t *testing.T) {
 		t.Fatalf("refresh pi: %v", err)
 	}
 	content := readTestFile(t, filepath.Join(home, ".pi", "agent", "extensions", "mnemo.ts"))
-	for _, want := range []string{"ctx.sessionManager.getSessionId()", "execution.started", "execution.closed", "session.compacted", "pi.registerTool", "events", "invoke", "native-id"} {
+	for _, want := range []string{"ctx.sessionManager.getSessionId()", "loadPiEventMap", "pi.on", "pi.registerTool", "events", "invoke", "native-id"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("Pi extension missing %q:\n%s", want, content)
 		}

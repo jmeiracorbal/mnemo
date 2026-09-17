@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -35,22 +37,22 @@ type memoriesConsolidateTopicReport struct {
 	Plan   store.MemoryTopicConsolidationPlan `json:"plan"`
 }
 
-func runMemories(s *store.Store) {
+func runMemories() {
 	if len(os.Args) < 3 {
 		printMemoriesUsage()
 		os.Exit(1)
 	}
 	switch os.Args[2] {
 	case "review":
-		runMemoriesReview(s)
+		runMemoriesReview()
 	case "mark-reviewed":
-		runMemoriesMarkReviewed(s)
+		runMemoriesMarkReviewed()
 	case "mark-stale":
-		runMemoriesMarkStale(s)
+		runMemoriesMarkStale()
 	case "supersede":
-		runMemoriesSupersede(s)
+		runMemoriesSupersede()
 	case "consolidate-topic":
-		runMemoriesConsolidateTopic(s)
+		runMemoriesConsolidateTopic()
 	default:
 		printMemoriesUsage()
 		os.Exit(1)
@@ -65,16 +67,22 @@ func printMemoriesUsage() {
 	fmt.Fprintln(os.Stderr, "       mnemo memories consolidate-topic --from=TOPIC_KEY --to=TOPIC_KEY (--dry-run|--yes) [--project=PROJECT] [--scope=SCOPE] [--json]")
 }
 
-func runMemoriesReview(s *store.Store) {
+func runMemoriesReview() {
 	opts, err := parseMemoriesReviewArgs(os.Args[3:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories review: %v\n", err)
 		os.Exit(1)
 	}
-	report, err := s.ReviewMemoryConflicts(store.MemoryReviewOptions{
-		Project: opts.Project, Scope: opts.Scope, TopicKey: opts.TopicKey, Limit: opts.Limit,
-	})
+	cfg, err := loadEventsConfig()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+	input := store.MemoryReviewOptions{
+		Project: opts.Project, Scope: opts.Scope, TopicKey: opts.TopicKey, Limit: opts.Limit,
+	}
+	var report store.MemoryReviewReport
+	if err := events.Call(context.Background(), cfg, "review_memories", input, &report); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories review: %v\n", err)
 		os.Exit(1)
 	}
@@ -85,73 +93,111 @@ func runMemoriesReview(s *store.Store) {
 		}
 		return
 	}
-	printMemoriesReviewReport(os.Stdout, report)
+	printMemoriesReviewReport(os.Stdout, &report)
 }
 
-func runMemoriesMarkReviewed(s *store.Store) {
+func runMemoriesMarkReviewed() {
 	id, reason, err := parseMemoryStateArgs(os.Args[3:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories mark-reviewed: %v\n", err)
 		os.Exit(1)
 	}
-	if err := s.MarkMemoryReviewed(id, reason); err != nil {
+	cfg, err := loadEventsConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+	input := struct {
+		ID     int64  `json:"id"`
+		Reason string `json:"reason"`
+	}{id, reason}
+	if err := events.Call(context.Background(), cfg, "mark_memory_reviewed", input, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories mark-reviewed: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Printf("Marked observation #%d as reviewed\n", id)
 }
 
-func runMemoriesMarkStale(s *store.Store) {
+func runMemoriesMarkStale() {
 	id, reason, err := parseMemoryStateArgs(os.Args[3:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories mark-stale: %v\n", err)
 		os.Exit(1)
 	}
-	if err := s.MarkMemoryStale(id, reason); err != nil {
+	cfg, err := loadEventsConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+	input := struct {
+		ID     int64  `json:"id"`
+		Reason string `json:"reason"`
+	}{id, reason}
+	if err := events.Call(context.Background(), cfg, "mark_memory_stale", input, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories mark-stale: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Printf("Marked observation #%d as stale\n", id)
 }
 
-func runMemoriesSupersede(s *store.Store) {
+func runMemoriesSupersede() {
 	oldID, newID, reason, err := parseMemoriesSupersedeArgs(os.Args[3:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories supersede: %v\n", err)
 		os.Exit(1)
 	}
-	if err := s.SupersedeMemory(oldID, newID, reason); err != nil {
+	cfg, err := loadEventsConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+	input := struct {
+		OldID  int64  `json:"old_id"`
+		NewID  int64  `json:"new_id"`
+		Reason string `json:"reason"`
+	}{oldID, newID, reason}
+	if err := events.Call(context.Background(), cfg, "supersede_memory", input, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories supersede: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Printf("Marked observation #%d as superseded by #%d\n", oldID, newID)
 }
 
-func runMemoriesConsolidateTopic(s *store.Store) {
+func runMemoriesConsolidateTopic() {
 	opts, err := parseMemoriesConsolidateTopicArgs(os.Args[3:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories consolidate-topic: %v\n", err)
 		os.Exit(1)
 	}
-	var plan *store.MemoryTopicConsolidationPlan
-	if opts.DryRun {
-		plan, err = s.PlanMemoryTopicConsolidation(opts.FromTopic, opts.ToTopic, opts.Project, opts.Scope)
-	} else {
-		plan, err = s.ConsolidateMemoryTopic(opts.FromTopic, opts.ToTopic, opts.Project, opts.Scope)
-	}
+	cfg, err := loadEventsConfig()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+	input := struct {
+		FromTopic string `json:"from_topic"`
+		ToTopic   string `json:"to_topic"`
+		Project   string `json:"project"`
+		Scope     string `json:"scope"`
+	}{opts.FromTopic, opts.ToTopic, opts.Project, opts.Scope}
+	action := "consolidate_topic"
+	if opts.DryRun {
+		action = "plan_consolidate_topic"
+	}
+	var plan store.MemoryTopicConsolidationPlan
+	if err := events.Call(context.Background(), cfg, action, input, &plan); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories consolidate-topic: %v\n", err)
 		os.Exit(1)
 	}
 	if opts.JSON {
-		report := memoriesConsolidateTopicReport{DryRun: opts.DryRun, Plan: *plan}
+		report := memoriesConsolidateTopicReport{DryRun: opts.DryRun, Plan: plan}
 		if err := printJSONTo(os.Stdout, report); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo memories consolidate-topic: json: %v\n", err)
 			os.Exit(1)
 		}
 		return
 	}
-	printMemoriesConsolidateTopic(os.Stdout, opts.DryRun, plan)
+	printMemoriesConsolidateTopic(os.Stdout, opts.DryRun, &plan)
 }
 
 func parseMemoriesReviewArgs(args []string) (memoriesReviewOptions, error) {

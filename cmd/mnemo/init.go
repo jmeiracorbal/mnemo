@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -91,7 +93,7 @@ func printSkillRecommendation(w io.Writer, home string) {
 //  4. Rekey existing observations/sessions from legacy key → UUID.
 //  5. Register the project in the projects table.
 //  6. Write the UUID to .mnemo.
-func runMigrateProjects(s *store.Store) {
+func runMigrateProjects() {
 	dir := "."
 	for _, arg := range os.Args[2:] {
 		if strings.HasPrefix(arg, "--path=") {
@@ -115,14 +117,19 @@ func runMigrateProjects(s *store.Store) {
 	legacyKey := deriveLegacyKey(legacyRoot)
 	name := filepath.Base(root)
 
-	result, err := s.MigrateProject(legacyKey, projectID)
+	cfg, err := loadEventsConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo migrate: rekey: %v\n", err)
+		fmt.Fprintf(os.Stderr, "mnemo migrate: controller unavailable: %v\n", err)
 		os.Exit(1)
 	}
-
-	if err := s.EnsureProject(projectID, name); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo migrate: register: %v\n", err)
+	input := struct {
+		LegacyKey string `json:"legacy_key"`
+		ProjectID string `json:"project_id"`
+		Name      string `json:"name"`
+	}{legacyKey, projectID, name}
+	var result store.MigrateResult
+	if err := events.Call(context.Background(), cfg, "migrate_project_identity", input, &result); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo migrate: %v\n", err)
 		os.Exit(1)
 	}
 

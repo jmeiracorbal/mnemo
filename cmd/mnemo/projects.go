@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -59,18 +61,18 @@ type projectsRenameReport struct {
 	Result *store.ProjectRenameResult `json:"result,omitempty"`
 }
 
-func runProjects(s *store.Store) {
+func runProjects() {
 	if len(os.Args) < 3 {
 		printProjectsUsage()
 		os.Exit(1)
 	}
 	switch os.Args[2] {
 	case "list":
-		runProjectsList(s)
+		runProjectsList()
 	case "merge":
-		runProjectsMerge(s)
+		runProjectsMerge()
 	case "rename":
-		runProjectsRename(s)
+		runProjectsRename()
 	default:
 		printProjectsUsage()
 		os.Exit(1)
@@ -84,17 +86,24 @@ func printProjectsUsage() {
 	fmt.Fprintln(os.Stderr, "       mnemo projects rename (--id=PROJECT|--path=DIR) --name=NAME (--dry-run|--yes) [--json]")
 }
 
-func runProjectsList(s *store.Store) {
+func runProjectsList() {
 	opts, err := parseProjectsListArgs(os.Args[3:], time.Now)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo projects list: %v\n", err)
 		os.Exit(1)
 	}
-	projects, err := buildProjectsList(s, opts)
+	cfg, err := loadEventsConfig()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+	var all []store.ProjectSummary
+	if err := events.Call(context.Background(), cfg, "list_project_summaries", struct{}{}, &all); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo projects list: %v\n", err)
 		os.Exit(1)
 	}
+	projects := filterProjectsList(all, opts)
+	sortProjectsList(projects, opts)
 	if opts.JSON {
 		if err := printProjectsListJSONTo(os.Stdout, projects); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo projects list: json: %v\n", err)
@@ -105,13 +114,18 @@ func runProjectsList(s *store.Store) {
 	printProjectsList(projects)
 }
 
-func runProjectsMerge(s *store.Store) {
+func runProjectsMerge() {
 	opts, err := parseProjectsMergeArgs(os.Args[3:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo projects merge: %v\n", err)
 		os.Exit(1)
 	}
-	plans, err := buildProjectsMergePlans(s, opts)
+	cfg, err := loadEventsConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+	plans, err := buildProjectsMergePlansRPC(context.Background(), cfg, opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo projects merge: %v\n", err)
 		os.Exit(1)
@@ -128,7 +142,7 @@ func runProjectsMerge(s *store.Store) {
 		return
 	}
 
-	results, err := applyProjectsMergePlans(s, plans)
+	results, err := applyProjectsMergePlansRPC(context.Background(), cfg, plans)
 	if err != nil {
 		if len(results) > 0 {
 			if emitErr := printProjectsMergeApplyOutput(os.Stdout, opts.JSON, results); emitErr != nil {
@@ -144,31 +158,44 @@ func runProjectsMerge(s *store.Store) {
 	}
 }
 
-func runProjectsRename(s *store.Store) {
+func runProjectsRename() {
 	opts, err := parseProjectsRenameArgs(os.Args[3:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo projects rename: %v\n", err)
 		os.Exit(1)
 	}
+	cfg, err := loadEventsConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
 	selector := projectsRenameSelector(opts)
 	if opts.DryRun {
-		plan, err := s.BuildProjectRenamePlan(selector, opts.Name)
-		if err != nil {
+		input := struct {
+			Selector store.ProjectRenameSelector `json:"selector"`
+			Name     string                      `json:"name"`
+		}{selector, opts.Name}
+		var plan store.ProjectRenamePlan
+		if err := events.Call(context.Background(), cfg, "build_project_rename_plan", input, &plan); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo projects rename: %v\n", err)
 			os.Exit(1)
 		}
-		if err := printProjectsRenameDryRunOutput(os.Stdout, opts.JSON, *plan); err != nil {
+		if err := printProjectsRenameDryRunOutput(os.Stdout, opts.JSON, plan); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo projects rename: json: %v\n", err)
 			os.Exit(1)
 		}
 		return
 	}
-	result, err := s.RenameProject(selector, opts.Name)
-	if err != nil {
+	input := struct {
+		Selector store.ProjectRenameSelector `json:"selector"`
+		Name     string                      `json:"name"`
+	}{selector, opts.Name}
+	var result store.ProjectRenameResult
+	if err := events.Call(context.Background(), cfg, "rename_project", input, &result); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo projects rename: %v\n", err)
 		os.Exit(1)
 	}
-	if err := printProjectsRenameApplyOutput(os.Stdout, opts.JSON, *result); err != nil {
+	if err := printProjectsRenameApplyOutput(os.Stdout, opts.JSON, result); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo projects rename: json: %v\n", err)
 		os.Exit(1)
 	}
@@ -319,29 +346,44 @@ func parseUnusedSince(value string, now time.Time) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("invalid --unused-since %q", value)
 }
 
-func buildProjectsList(s *store.Store, opts projectsListOptions) ([]store.ProjectSummary, error) {
-	projects, err := s.ListProjectSummaries()
-	if err != nil {
-		return nil, err
-	}
-	projects = filterProjectsList(projects, opts)
-	sortProjectsList(projects, opts)
-	return projects, nil
-}
-
-func buildProjectsMergePlans(s *store.Store, opts projectsMergeOptions) ([]store.ProjectMergePlan, error) {
+func buildProjectsMergePlansRPC(ctx context.Context, cfg events.Config, opts projectsMergeOptions) ([]store.ProjectMergePlan, error) {
 	if !opts.AutoByPath {
-		plan, err := s.BuildProjectMergePlan(opts.From, opts.To)
-		if err != nil {
+		input := struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		}{opts.From, opts.To}
+		var plan store.ProjectMergePlan
+		if err := events.Call(ctx, cfg, "build_project_merge_plan", input, &plan); err != nil {
 			return nil, err
 		}
-		return []store.ProjectMergePlan{*plan}, nil
+		return []store.ProjectMergePlan{plan}, nil
 	}
 
-	projects, err := s.ListProjectSummaries()
-	if err != nil {
+	var projects []store.ProjectSummary
+	if err := events.Call(ctx, cfg, "list_project_summaries", struct{}{}, &projects); err != nil {
 		return nil, err
 	}
+
+	pairings := autoMergePairings(projects)
+	var plans []store.ProjectMergePlan
+	for _, pair := range pairings {
+		input := struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		}{pair[0], pair[1]}
+		var plan store.ProjectMergePlan
+		if err := events.Call(ctx, cfg, "build_project_merge_plan", input, &plan); err != nil {
+			return nil, err
+		}
+		plans = append(plans, plan)
+	}
+	return plans, nil
+}
+
+// autoMergePairings groups projects by directory and returns [source, destination] pairs
+// for projects that share a path. UUID projects and more-active projects are preferred
+// as destinations.
+func autoMergePairings(projects []store.ProjectSummary) [][2]string {
 	groups := make(map[string][]store.ProjectSummary)
 	for _, project := range projects {
 		directory := normalizedProjectDirectory(project.Directory)
@@ -358,7 +400,7 @@ func buildProjectsMergePlans(s *store.Store, opts projectsMergeOptions) ([]store
 	}
 	sort.Strings(directories)
 
-	var plans []store.ProjectMergePlan
+	var pairings [][2]string
 	for _, directory := range directories {
 		group := groups[directory]
 		sort.SliceStable(group, func(i, j int) bool {
@@ -366,24 +408,24 @@ func buildProjectsMergePlans(s *store.Store, opts projectsMergeOptions) ([]store
 		})
 		destination := group[0]
 		for _, source := range group[1:] {
-			plan, err := s.BuildProjectMergePlan(source.ID, destination.ID)
-			if err != nil {
-				return nil, err
-			}
-			plans = append(plans, *plan)
+			pairings = append(pairings, [2]string{source.ID, destination.ID})
 		}
 	}
-	return plans, nil
+	return pairings
 }
 
-func applyProjectsMergePlans(s *store.Store, plans []store.ProjectMergePlan) ([]store.ProjectMergeResult, error) {
+func applyProjectsMergePlansRPC(ctx context.Context, cfg events.Config, plans []store.ProjectMergePlan) ([]store.ProjectMergeResult, error) {
 	results := make([]store.ProjectMergeResult, 0, len(plans))
 	for _, plan := range plans {
-		result, err := s.MergeProjects(plan.From.ID, plan.To.ID)
-		if err != nil {
+		input := struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		}{plan.From.ID, plan.To.ID}
+		var result store.ProjectMergeResult
+		if err := events.Call(ctx, cfg, "merge_projects", input, &result); err != nil {
 			return results, fmt.Errorf("%s -> %s: %w", plan.From.ID, plan.To.ID, err)
 		}
-		results = append(results, *result)
+		results = append(results, result)
 	}
 	return results, nil
 }

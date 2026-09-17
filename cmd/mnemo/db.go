@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
 	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -89,7 +91,27 @@ func migrateDB(opts dbMigrateOptions) (dbmigrate.Status, error) {
 	if opts.Check {
 		return dbmigrate.CheckDataDir(opts.DataDir)
 	}
+	if err := guardControllerNotRunning(opts.DataDir); err != nil {
+		return dbmigrate.Status{}, err
+	}
 	return dbmigrate.ApplyDataDir(opts.DataDir)
+}
+
+// guardControllerNotRunning refuses the migration if the controller that owns
+// dataDir is reachable. Running migrations while the controller holds the
+// database open risks WAL-state conflicts and violates the offline-maintenance
+// contract for mnemo db migrate.
+func guardControllerNotRunning(dataDir string) error {
+	evtCfg, err := events.LoadConfig(dataDir)
+	if err != nil {
+		return nil // no config.toml yet; controller is not running
+	}
+	if err := events.CheckHealth(context.Background(), evtCfg); err != nil {
+		return nil // controller not reachable; safe to migrate
+	}
+	return fmt.Errorf("the mnemo controller is currently running and owns the database\n" +
+		"  Stop the controller before running migrations (mnemo db migrate is offline-only maintenance).\n" +
+		"  Use 'mnemo db migrate --check' to inspect the migration state without writing.")
 }
 
 func printDBMigrationStatus(status dbmigrate.Status, check bool) {
