@@ -143,12 +143,6 @@ func observationFromDB(
 	}
 }
 
-func observationFromListRow(r dbgen.ListObservationsRow) Observation {
-	return observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
-		r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,
-		r.LastSeenAt, r.CreatedAt, r.UpdatedAt, r.IsDeleted)
-}
-
 func observationFromRecentRow(r dbgen.ListRecentObservationsRow) Observation {
 	return observationFromDB(r.ID, r.SyncID, r.SessionID, r.Type, r.Title, r.Content,
 		r.ToolName, sqlNullString(r.Project), r.Scope, r.TopicKey, r.RevisionCount, r.DuplicateCount,

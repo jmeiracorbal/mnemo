@@ -115,15 +115,12 @@ func guardControllerNotRunning(dataDir string) error {
 		}
 		// config.toml exists but is malformed or unreadable — cannot confirm the
 		// controller is not running.
-		return fmt.Errorf("cannot verify controller state before migrating: %w\n"+
-			"  Inspect config.toml in %s or use 'mnemo db migrate --check'.", err, dataDir)
+		return fmt.Errorf("cannot verify controller state before migrating; inspect config.toml in %s or run 'mnemo db migrate --check': %w", dataDir, err)
 	}
 	if err := events.CheckHealth(context.Background(), evtCfg); err != nil {
 		return nil // controller not reachable; safe to migrate
 	}
-	return fmt.Errorf("the mnemo controller is currently running and owns the database\n" +
-		"  Stop the controller before running migrations (mnemo db migrate is offline-only maintenance).\n" +
-		"  Use 'mnemo db migrate --check' to inspect the migration state without writing.")
+	return fmt.Errorf("the mnemo controller is currently running and owns the database; stop it before migrating or run 'mnemo db migrate --check'")
 }
 
 func printDBMigrationStatus(status dbmigrate.Status, check bool) {
