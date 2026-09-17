@@ -1,7 +1,9 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
@@ -21,6 +23,40 @@ func TestParseDBMigrateArgsRejectsUnknown(t *testing.T) {
 	if _, err := parseDBMigrateArgs([]string{"--bogus"}); err == nil {
 		t.Fatal("expected unknown argument error")
 	}
+}
+
+func TestGuardControllerNotRunning(t *testing.T) {
+	t.Run("no config.toml allows migration", func(t *testing.T) {
+		if err := guardControllerNotRunning(t.TempDir()); err != nil {
+			t.Fatalf("expected nil, got %v", err)
+		}
+	})
+
+	t.Run("malformed config.toml blocks migration conservatively", func(t *testing.T) {
+		dataDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dataDir, "config.toml"), []byte("not valid toml [[["), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		err := guardControllerNotRunning(dataDir)
+		if err == nil {
+			t.Fatal("expected error for malformed config.toml, got nil")
+		}
+		if !strings.Contains(err.Error(), "cannot verify controller state") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+	})
+
+	t.Run("valid config with unreachable controller allows migration", func(t *testing.T) {
+		dataDir := t.TempDir()
+		// Port 1 is a valid port value that no controller will be listening on.
+		cfg := "[events]\nport = 1\n"
+		if err := os.WriteFile(filepath.Join(dataDir, "config.toml"), []byte(cfg), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		if err := guardControllerNotRunning(dataDir); err != nil {
+			t.Fatalf("expected nil for unreachable controller, got %v", err)
+		}
+	})
 }
 
 func TestMigrateDBApplyAndCheck(t *testing.T) {

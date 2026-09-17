@@ -45,14 +45,13 @@ func (s *Store) BindExecutionSession(project string, agent adapters.Agent, nativ
 		return fmt.Errorf("session id must not be empty")
 	}
 	return s.withTx(func(tx *sql.Tx) error {
-		if _, err := s.q.WithTx(tx).GetSessionPayload(context.Background(), sessionID); err != nil {
+		q := s.q.WithTx(tx)
+		if _, err := q.GetSessionPayload(context.Background(), sessionID); err != nil {
 			return fmt.Errorf("resolve session for execution key: %w", err)
 		}
-		_, err := s.execHook(tx, `
-INSERT INTO execution_sessions (project, execution_key, session_id)
-VALUES (?, ?, ?)
-ON CONFLICT(project, execution_key) DO UPDATE SET session_id = excluded.session_id`, project, identity.Execution, sessionID)
-		return err
+		return q.BindExecutionSessionKey(context.Background(), dbgen.BindExecutionSessionKeyParams{
+			Project: project, ExecutionKey: identity.Execution, SessionID: sessionID,
+		})
 	})
 }
 
@@ -71,22 +70,17 @@ func (s *Store) ApplyDurableEvent(event DurableEvent) error {
 		if err := s.ensureProjectTx(tx, event.Project); err != nil {
 			return err
 		}
-		result, err := s.execHook(tx, `
-INSERT INTO processed_events (id, event_type, project, execution_key)
-VALUES (?, ?, ?, ?)
-ON CONFLICT(id) DO NOTHING`, event.ID, event.Type, event.Project, event.ExecutionKey)
+		q := s.q.WithTx(tx)
+		changed, err := q.InsertProcessedEvent(context.Background(), dbgen.InsertProcessedEventParams{
+			ID: event.ID, EventType: event.Type, Project: event.Project, ExecutionKey: event.ExecutionKey,
+		})
 		if err != nil {
 			return err
-		}
-		changed, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("check durable event insertion: %w", err)
 		}
 		if changed == 0 {
 			return nil
 		}
 
-		q := s.q.WithTx(tx)
 		if event.Type == EventExecutionStarted {
 			var payload struct {
 				Directory string `json:"directory"`
@@ -97,8 +91,10 @@ ON CONFLICT(id) DO NOTHING`, event.ID, event.Type, event.Project, event.Executio
 			_, err := s.ensureExecutionSessionTx(tx, adapters.Identity{Project: event.Project, Execution: event.ExecutionKey}, payload.Directory)
 			return err
 		}
-		var sessionID string
-		if err := tx.QueryRow(`SELECT session_id FROM execution_sessions WHERE project = ? AND execution_key = ?`, event.Project, event.ExecutionKey).Scan(&sessionID); err != nil {
+		sessionID, err := q.GetExecutionSessionID(context.Background(), dbgen.GetExecutionSessionIDParams{
+			Project: event.Project, ExecutionKey: event.ExecutionKey,
+		})
+		if err != nil {
 			return fmt.Errorf("resolve event session: %w", err)
 		}
 		switch event.Type {

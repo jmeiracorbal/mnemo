@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jmeiracorbal/mnemo/adapters"
+	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
 
 // AgentToolRequest is the controller contract used by a native agent adapter.
@@ -149,8 +150,7 @@ func (s *Store) ensureExecutionSession(identity adapters.Identity, directory str
 func (s *Store) ensureExecutionSessionTx(tx *sql.Tx, identity adapters.Identity, directory string) (string, error) {
 	q := s.q.WithTx(tx)
 	id := "execution-" + identity.Execution
-	var endedAt sql.NullString
-	err := tx.QueryRow(`SELECT ended_at FROM sessions WHERE id = ? AND project = ? AND is_deleted = 0`, id, identity.Project).Scan(&endedAt)
+	endedAt, err := q.GetExecutionSessionEndedAt(context.Background(), dbgen.GetExecutionSessionEndedAtParams{ID: id, Project: identity.Project})
 	if err == sql.ErrNoRows {
 		if err := s.ensureProjectTx(tx, identity.Project); err != nil {
 			return "", err
@@ -163,7 +163,9 @@ func (s *Store) ensureExecutionSessionTx(tx *sql.Tx, identity adapters.Identity,
 	} else if endedAt.Valid {
 		return "", fmt.Errorf("execution is already closed")
 	}
-	if _, err := s.execHook(tx, `INSERT INTO execution_sessions (project, execution_key, session_id) VALUES (?, ?, ?) ON CONFLICT(project, execution_key) DO NOTHING`, identity.Project, identity.Execution, id); err != nil {
+	if err := q.InsertExecutionSessionIfMissing(context.Background(), dbgen.InsertExecutionSessionIfMissingParams{
+		Project: identity.Project, ExecutionKey: identity.Execution, SessionID: id,
+	}); err != nil {
 		return "", err
 	}
 	if _, err := q.GetSessionPayload(context.Background(), id); err != nil {
