@@ -44,10 +44,10 @@ Instead of spreading project knowledge across `MEMORY.md`, native editor memory,
 Install the binary and configure your detected agents:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.1 bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.2 bash
 ```
 
-This pins the current alpha. Unpinned installs and `mnemo update` continue to follow stable releases.
+This pins the current alpha. Unpinned installs and `mnemo update` follow stable releases by default; use `mnemo update --prerelease` to opt into prereleases.
 
 Activate mnemo in a project:
 
@@ -148,7 +148,7 @@ No potential memory conflicts found.
 
 | Path | Use when | Command |
 |---|---|---|
-| Current alpha | You want to try `v1.0.0-alpha.1` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.1 bash</code> |
+| Current alpha | You want to try `v1.0.0-alpha.2` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.2 bash</code> |
 | Latest stable | You want the latest stable binary plus detected agent setup | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | Explicit agent | You only want one integration | `bash -s -- --agent=codex` |
 | All agents | You want every supported integration prepared | `bash -s -- --agent=all` |
@@ -165,10 +165,14 @@ asks before changing anything:
 
 ```bash
 mnemo update
+mnemo update --prerelease --check
+mnemo update --prerelease
 mnemo update --yes --agent=all
 mnemo update --check --json
 ```
 
+By default, `mnemo update` checks stable releases. `--prerelease` checks all
+published releases and selects the newest version, including alphas and betas.
 `mnemo update` downloads the official installer, pins it to the detected latest
 release and refreshes mnemo's agent integration files after installing. It does
 not update Claude Code, Codex, Cursor or other agent applications themselves.

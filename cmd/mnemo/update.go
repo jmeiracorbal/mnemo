@@ -20,10 +20,11 @@ import (
 const installScriptURL = "https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh"
 
 type updateOptions struct {
-	AssumeYes bool
-	CheckOnly bool
-	JSON      bool
-	Agent     string
+	AssumeYes  bool
+	CheckOnly  bool
+	JSON       bool
+	Agent      string
+	Prerelease bool
 }
 
 type updateStatus struct {
@@ -73,7 +74,7 @@ func runUpdateCommand(ctx context.Context, args []string, rt updateRuntime) (upd
 	if opts.JSON && !opts.CheckOnly {
 		return updateStatus{}, errors.New("--json requires --check")
 	}
-	result, err := rt.check(ctx, updatecheck.Options{CurrentVersion: version, Force: true})
+	result, err := rt.check(ctx, updatecheck.Options{CurrentVersion: version, Force: true, Prerelease: opts.Prerelease})
 	status := statusFromUpdateResult(result)
 	if err != nil {
 		return status, err
@@ -120,6 +121,8 @@ func parseUpdateArgs(args []string) (updateOptions, error) {
 			opts.CheckOnly = true
 		case arg == "--json":
 			opts.JSON = true
+		case arg == "--prerelease":
+			opts.Prerelease = true
 		case strings.HasPrefix(arg, "--agent="):
 			opts.Agent = strings.TrimSpace(strings.TrimPrefix(arg, "--agent="))
 		default:

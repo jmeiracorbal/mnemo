@@ -156,6 +156,28 @@ func TestMaybeOfferUpdatePromptsAndInstalls(t *testing.T) {
 	}
 }
 
+func TestRunUpdateCommandPrereleasePassesFlag(t *testing.T) {
+	restore := setTestVersion("v0.33.1")
+	defer restore()
+	var gotOpts updatecheck.Options
+	_, err := runUpdateCommand(context.Background(), []string{"--prerelease", "--check", "--json"}, updateRuntime{
+		stdin:  strings.NewReader(""),
+		stdout: io.Discard,
+		stderr: io.Discard,
+		check: func(_ context.Context, opts updatecheck.Options) (updatecheck.Result, error) {
+			gotOpts = opts
+			return updatecheck.Result{Checked: true, CurrentVersion: "0.33.1"}, nil
+		},
+		install: func(context.Context, string, string, io.Writer, io.Writer) error { return nil },
+	})
+	if err != nil {
+		t.Fatalf("run update: %v", err)
+	}
+	if !gotOpts.Prerelease {
+		t.Fatal("--prerelease flag was not passed to check")
+	}
+}
+
 func TestUpdateRejectsJSONWithoutCheck(t *testing.T) {
 	_, err := runUpdateCommand(context.Background(), []string{"--json"}, updateRuntime{
 		stdin:   strings.NewReader(""),
