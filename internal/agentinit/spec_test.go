@@ -48,14 +48,12 @@ func TestAgentSpecsDeclareSkillLinkSurfaces(t *testing.T) {
 	home := t.TempDir()
 	wantLinks := map[string]string{
 		AgentClaudeCode: filepath.Join(home, ".claude", "skills", globalSkillName),
-		AgentWindsurf:   filepath.Join(home, ".codeium", "windsurf", "skills", globalSkillName),
 		AgentPi:         filepath.Join(home, ".pi", "agent", "skills", globalSkillName),
 	}
 	canonicalSkillAgents := map[string]bool{
 		AgentCursor:   true,
 		AgentCodex:    true,
 		AgentOpenCode: true,
-		AgentFx:       true,
 	}
 
 	for _, spec := range agentSpecs {

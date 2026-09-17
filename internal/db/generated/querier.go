@@ -10,6 +10,7 @@ import (
 )
 
 type Querier interface {
+	BindExecutionSessionKey(ctx context.Context, arg BindExecutionSessionKeyParams) error
 	CloseMCPInstanceSessions(ctx context.Context, mcpInstanceID sql.NullString) error
 	CopyObservationTag(ctx context.Context, arg CopyObservationTagParams) error
 	CopySessionTag(ctx context.Context, arg CopySessionTagParams) error
@@ -39,11 +40,14 @@ type Querier interface {
 	FindObservationByHashAndProject(ctx context.Context, arg FindObservationByHashAndProjectParams) (int64, error)
 	FindObservationByTopic(ctx context.Context, arg FindObservationByTopicParams) (int64, error)
 	FindPromptBySyncID(ctx context.Context, syncID sql.NullString) (int64, error)
+	GetExecutionSessionEndedAt(ctx context.Context, arg GetExecutionSessionEndedAtParams) (sql.NullString, error)
+	GetExecutionSessionID(ctx context.Context, arg GetExecutionSessionIDParams) (string, error)
 	GetLiveObservation(ctx context.Context, id int64) (GetLiveObservationRow, error)
 	GetLiveObservationBySyncID(ctx context.Context, syncID sql.NullString) (GetLiveObservationBySyncIDRow, error)
 	GetObservation(ctx context.Context, id int64) (GetObservationRow, error)
 	GetObservationBySyncIDIncludingDeleted(ctx context.Context, syncID sql.NullString) (GetObservationBySyncIDIncludingDeletedRow, error)
 	GetOpenSessionByMCPInstance(ctx context.Context, arg GetOpenSessionByMCPInstanceParams) (string, error)
+	GetProcessedMCPCommandResult(ctx context.Context, id string) (string, error)
 	GetProjectByID(ctx context.Context, id string) (Project, error)
 	GetProvenanceContext(ctx context.Context, id int64) (GetProvenanceContextRow, error)
 	GetProvenanceContextID(ctx context.Context, arg GetProvenanceContextIDParams) (int64, error)
@@ -52,9 +56,12 @@ type Querier interface {
 	ImportObservation(ctx context.Context, arg ImportObservationParams) (int64, error)
 	ImportPrompt(ctx context.Context, arg ImportPromptParams) error
 	ImportSession(ctx context.Context, arg ImportSessionParams) (int64, error)
+	InsertExecutionSessionIfMissing(ctx context.Context, arg InsertExecutionSessionIfMissingParams) error
 	InsertMCPInstanceSession(ctx context.Context, arg InsertMCPInstanceSessionParams) error
 	InsertObservation(ctx context.Context, arg InsertObservationParams) (int64, error)
 	InsertObservationTag(ctx context.Context, arg InsertObservationTagParams) error
+	InsertProcessedEvent(ctx context.Context, arg InsertProcessedEventParams) (int64, error)
+	InsertProcessedMCPCommand(ctx context.Context, arg InsertProcessedMCPCommandParams) error
 	InsertPrompt(ctx context.Context, arg InsertPromptParams) (int64, error)
 	InsertProvenanceContext(ctx context.Context, arg InsertProvenanceContextParams) (int64, error)
 	InsertSession(ctx context.Context, arg InsertSessionParams) error

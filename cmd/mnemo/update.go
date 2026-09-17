@@ -127,7 +127,7 @@ func parseUpdateArgs(args []string) (updateOptions, error) {
 		}
 	}
 	switch opts.Agent {
-	case "auto", "all", "claudecode", "cursor", "windsurf", "codex", "opencode", "fx", "pi":
+	case "auto", "all", "claudecode", "cursor", "codex", "opencode", "pi":
 		return opts, nil
 	default:
 		return opts, fmt.Errorf("unknown agent %q", opts.Agent)

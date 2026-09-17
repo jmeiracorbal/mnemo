@@ -202,6 +202,8 @@ func statusFromCheck(check agentinit.Check) string {
 	switch check.Status {
 	case "ok":
 		return "yes"
+	case "review":
+		return "review"
 	case "error":
 		return "error"
 	default:

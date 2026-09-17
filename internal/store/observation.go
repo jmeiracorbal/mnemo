@@ -9,34 +9,6 @@ import (
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
 
-func (s *Store) AllObservations(project, scope string, limit int, tags ...string) ([]Observation, error) {
-	if limit <= 0 {
-		limit = s.cfg.MaxContextResults
-	}
-
-	normalizedTags := normalizeTagList(tags)
-	rows, err := s.q.ListObservations(context.Background(), dbgen.ListObservationsParams{
-		Project: project, Scope: normalizeOptionalScope(scope), TagCount: len(normalizedTags),
-		TagsJson: jsonStrings(normalizedTags), ResultLimit: int64(limit),
-	})
-	if err != nil {
-		return nil, err
-	}
-	results := make([]Observation, 0, len(rows))
-	provenanceIDs := make([]sql.NullInt64, 0, len(rows))
-	for _, row := range rows {
-		results = append(results, observationFromListRow(row))
-		provenanceIDs = append(provenanceIDs, row.ProvenanceID)
-	}
-	if err := s.attachObservationsProvenance(results, provenanceIDs); err != nil {
-		return nil, err
-	}
-	if err := s.loadTagsForObservations(results); err != nil {
-		return nil, err
-	}
-	return results, nil
-}
-
 func (s *Store) AddObservation(p AddObservationParams) (int64, error) {
 	title := stripPrivateTags(p.Title)
 	content := stripPrivateTags(p.Content)

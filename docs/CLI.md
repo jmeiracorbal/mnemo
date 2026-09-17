@@ -8,6 +8,9 @@ installed binary.
 
 ```text
 mnemo mcp [--tools=PROFILE]          Start MCP server (stdio)
+mnemo controller serve                 Run the installation-wide event controller
+mnemo events publish --project PROJECT --directory DIR --execution-key KEY --type TYPE --payload JSON
+                                      Publish a typed durable event
 mnemo init [--agent=AGENT] [--path=DIR] [--no-project-rules]  Activate mnemo in the current project (.mnemo)
 mnemo install-instructions [--agent=AGENT]  Install global agent instructions
 mnemo doctor [--json] [--agent=AGENT] [--path=DIR] [--home=DIR] [--data-dir=DIR]  Run read-only diagnostics

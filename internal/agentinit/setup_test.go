@@ -1,6 +1,7 @@
 package agentinit
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,13 +34,16 @@ func TestConfigSnippetsForAll(t *testing.T) {
 		}
 		snippets = append(snippets, agentSnippets...)
 	}
-	if len(snippets) != 10 {
-		t.Fatalf("snippets = %d, want 10", len(snippets))
+	if len(snippets) != 6 {
+		t.Fatalf("snippets = %d, want 6", len(snippets))
 	}
 }
 
 func TestConfigSnippetsIncludeAgentProvenanceEnvironment(t *testing.T) {
 	for _, agent := range SupportedAgents {
+		if agent == AgentPi {
+			continue // Pi uses its native extension, not static MCP configuration.
+		}
 		snippets, err := ConfigSnippets("/home/test", "/bin/mnemo", agent)
 		if err != nil {
 			t.Fatalf("config snippets for %s: %v", agent, err)
@@ -60,12 +64,14 @@ func TestConfigSnippetsIncludeAgentProvenanceEnvironment(t *testing.T) {
 	}
 }
 
-func TestOpenCodeConfigUsesCurrentMCPServersShapeAndRemovesLegacyEntry(t *testing.T) {
+func TestOpenCodeConfigUsesFlatMCPShapeAndMigratesLegacyEntry(t *testing.T) {
 	home := t.TempDir()
 	configPath := filepath.Join(home, ".config", "opencode", "opencode.json")
 	writeTestFile(t, configPath, `{
   "mcp": {
-    "mnemo": {"type": "local", "command": ["/old/mnemo", "mcp"]},
+    "servers": {
+      "mnemo": {"type": "local", "command": ["/old/mnemo", "mcp"]}
+    },
     "other": {"type": "local", "command": ["/bin/other"]}
   }
 }`)
@@ -74,41 +80,31 @@ func TestOpenCodeConfigUsesCurrentMCPServersShapeAndRemovesLegacyEntry(t *testin
 		t.Fatalf("refresh opencode: %v", err)
 	}
 
+	var config map[string]any
 	content := readTestFile(t, configPath)
-	if strings.Contains(content, `"mnemo": {"type": "local", "command": ["/old/mnemo", "mcp"]}`) {
-		t.Fatalf("legacy OpenCode MCP entry was not removed:\n%s", content)
+	if err := json.Unmarshal([]byte(content), &config); err != nil {
+		t.Fatalf("parse refreshed config: %v", err)
 	}
-	if !strings.Contains(content, `"servers"`) || !strings.Contains(content, `"MNEMO_AGENT": "opencode"`) {
-		t.Fatalf("OpenCode MCP config missing v2 servers shape or provenance env:\n%s", content)
+	mcp := config["mcp"].(map[string]any)
+	if _, found := mcp["servers"]; found {
+		t.Fatalf("legacy mcp.servers entry was not removed:\n%s", content)
 	}
-	if !strings.Contains(content, `"other"`) {
+	server, found := mcp["mnemo"].(map[string]any)
+	if !found {
+		t.Fatalf("OpenCode flat mcp.mnemo entry missing:\n%s", content)
+	}
+	if !jsonPathEquals(server, "opencode", "environment", "MNEMO_AGENT") {
+		t.Fatalf("OpenCode MCP config missing provenance environment:\n%s", content)
+	}
+	if _, found := mcp["other"]; !found {
 		t.Fatalf("unrelated OpenCode MCP config was not preserved:\n%s", content)
 	}
-}
-
-func TestFxConfigUsesNativeMCPShape(t *testing.T) {
-	home := t.TempDir()
-	configPath := filepath.Join(home, ".fx", "mcp.json")
-	writeTestFile(t, configPath, `{
-  "mcp": {
-    "other": {"command": ["/bin/other"]}
-  }
-}`)
-
-	if _, err := Refresh(home, "/bin/mnemo", "fx"); err != nil {
-		t.Fatalf("refresh fx: %v", err)
-	}
-
-	content := readTestFile(t, configPath)
-	if !strings.Contains(content, `"mnemo"`) || !strings.Contains(content, `"command"`) || !strings.Contains(content, `"MNEMO_AGENT": "fx"`) {
-		t.Fatalf("fx MCP config missing mnemo server or provenance env:\n%s", content)
-	}
-	if !strings.Contains(content, `"other"`) {
-		t.Fatalf("unrelated fx MCP config was not preserved:\n%s", content)
+	if check := CheckMCP(home, "opencode"); check.Status != "ok" {
+		t.Fatalf("OpenCode MCP check = %+v, want ok", check)
 	}
 }
 
-func TestPiConfigUsesMCPServersShape(t *testing.T) {
+func TestPiRefreshRemovesLegacyMCPServerAndInstallsNativeExtension(t *testing.T) {
 	home := t.TempDir()
 	configPath := filepath.Join(home, ".pi", "agent", "mcp.json")
 	writeTestFile(t, configPath, `{
@@ -122,32 +118,12 @@ func TestPiConfigUsesMCPServersShape(t *testing.T) {
 	}
 
 	content := readTestFile(t, configPath)
-	if !strings.Contains(content, `"mcpServers"`) || !strings.Contains(content, `"MNEMO_AGENT": "pi"`) || !strings.Contains(content, `"MNEMO_MCP_CLIENT": "pi"`) {
-		t.Fatalf("Pi MCP config missing mnemo server or provenance env:\n%s", content)
-	}
-	if !strings.Contains(content, `"other"`) {
+	if strings.Contains(content, `"mnemo"`) || !strings.Contains(content, `"other"`) {
 		t.Fatalf("unrelated Pi MCP config was not preserved:\n%s", content)
 	}
-}
-
-func TestFxUninstallRemovesMCPConfig(t *testing.T) {
-	home := t.TempDir()
-	if _, err := Refresh(home, "/bin/mnemo", "fx"); err != nil {
-		t.Fatalf("refresh fx: %v", err)
-	}
-
-	removed, err := Uninstall(home, "fx")
-	if err != nil {
-		t.Fatalf("uninstall fx: %v", err)
-	}
-	if len(removed) != 2 {
-		t.Fatalf("removed paths = %v, want instructions and MCP config", removed)
-	}
-	if _, err := os.Stat(filepath.Join(home, ".fx", "AGENTS.md")); !os.IsNotExist(err) {
-		t.Fatalf("fx AGENTS.md still exists or stat failed: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(home, ".fx", "mcp.json")); !os.IsNotExist(err) {
-		t.Fatalf("fx mcp.json still exists or stat failed: %v", err)
+	extension := readTestFile(t, filepath.Join(home, ".pi", "agent", "extensions", "mnemo.ts"))
+	if !strings.Contains(extension, "pi.registerTool") || !strings.Contains(extension, "events\", \"invoke") {
+		t.Fatalf("Pi native extension does not own mnemo tools:\n%s", extension)
 	}
 }
 
@@ -241,7 +217,7 @@ func TestCodexCheckRuntimeWarnsWhenMnemoHooksNeedReview(t *testing.T) {
 	}
 
 	check := codexCheckRuntime(home)
-	if check.Status != "warning" || !strings.Contains(check.Message, "need review") {
+	if check.Status != "review" || !strings.Contains(check.Message, "need review") {
 		t.Fatalf("runtime check = %+v, want hook review warning", check)
 	}
 	if !strings.Contains(check.Details["missing_trust"], "SessionStart") || !strings.Contains(check.Details["missing_trust"], "Stop") {
@@ -280,7 +256,7 @@ trusted_hash = "sha256:test-stop"
 	writeTestFile(t, configPath, content)
 
 	check := codexCheckRuntime(home)
-	if check.Status != "warning" || !strings.Contains(check.Message, "need review") {
+	if check.Status != "review" || !strings.Contains(check.Message, "need review") {
 		t.Fatalf("runtime check = %+v, want hook review warning", check)
 	}
 }
@@ -302,24 +278,9 @@ func TestCheckMCPWarnsWhenJSONAgentToolInvocationMissing(t *testing.T) {
 			content:    `{"mcpServers":{"mnemo":{"command":"mnemo","args":["not-mcp"],"env":{"MNEMO_AGENT":"cursor"}}}}`,
 		},
 		{
-			agent:      "windsurf",
-			configPath: filepath.Join(".codeium", "windsurf", "mcp_config.json"),
-			content:    `{"mcpServers":{"mnemo":{"command":"mnemo","args":["not-mcp"],"env":{"MNEMO_AGENT":"windsurf"}}}}`,
-		},
-		{
 			agent:      "opencode",
 			configPath: filepath.Join(".config", "opencode", "opencode.json"),
-			content:    `{"mcp":{"servers":{"mnemo":{"command":["mnemo","not-mcp"],"environment":{"MNEMO_AGENT":"opencode"}}}}}`,
-		},
-		{
-			agent:      "fx",
-			configPath: filepath.Join(".fx", "mcp.json"),
-			content:    `{"mcp":{"mnemo":{"command":["mnemo","not-mcp"],"environment":{"MNEMO_AGENT":"fx"}}}}`,
-		},
-		{
-			agent:      "pi",
-			configPath: filepath.Join(".pi", "agent", "mcp.json"),
-			content:    `{"mcpServers":{"mnemo":{"command":"mnemo","args":["not-mcp"],"env":{"MNEMO_AGENT":"pi"}}}}`,
+			content:    `{"mcp":{"mnemo":{"command":["mnemo","not-mcp"],"environment":{"MNEMO_AGENT":"opencode"}}}}`,
 		},
 	} {
 		t.Run(tc.agent, func(t *testing.T) {
@@ -351,7 +312,7 @@ MNEMO_AGENT = "codex"
 	}
 }
 
-func TestCursorAndWindsurfCheckRuntimeValidateHookCommands(t *testing.T) {
+func TestCursorCheckRuntimeValidatesHookCommands(t *testing.T) {
 	for _, tc := range []struct {
 		agent     string
 		hooksPath string
@@ -359,10 +320,6 @@ func TestCursorAndWindsurfCheckRuntimeValidateHookCommands(t *testing.T) {
 		{
 			agent:     "cursor",
 			hooksPath: filepath.Join(".cursor", "hooks.json"),
-		},
-		{
-			agent:     "windsurf",
-			hooksPath: filepath.Join(".codeium", "windsurf", "hooks.json"),
 		},
 	} {
 		t.Run(tc.agent, func(t *testing.T) {
@@ -383,7 +340,7 @@ func TestCursorAndWindsurfCheckRuntimeValidateHookCommands(t *testing.T) {
 	}
 }
 
-func TestCursorAndWindsurfCheckRuntimeRequireSessionProtocol(t *testing.T) {
+func TestCursorCheckRuntimeRequiresSessionProtocol(t *testing.T) {
 	for _, tc := range []struct {
 		agent        string
 		protocolPath string
@@ -391,10 +348,6 @@ func TestCursorAndWindsurfCheckRuntimeRequireSessionProtocol(t *testing.T) {
 		{
 			agent:        "cursor",
 			protocolPath: filepath.Join(".cursor", "hooks", "session-start-protocol.md"),
-		},
-		{
-			agent:        "windsurf",
-			protocolPath: filepath.Join(".codeium", "windsurf", "hooks", "session-start-protocol.md"),
 		},
 	} {
 		t.Run(tc.agent, func(t *testing.T) {
@@ -536,5 +489,18 @@ trusted_hash = "sha256:test-stop"
 	}()
 	if _, err := f.WriteString(trust); err != nil {
 		t.Fatalf("append hook trust: %v", err)
+	}
+}
+
+func TestPiLifecycleExtensionPublishesNativeSessionEvents(t *testing.T) {
+	home := t.TempDir()
+	if _, err := Refresh(home, "/bin/mnemo", "pi"); err != nil {
+		t.Fatalf("refresh pi: %v", err)
+	}
+	content := readTestFile(t, filepath.Join(home, ".pi", "agent", "extensions", "mnemo.ts"))
+	for _, want := range []string{"ctx.sessionManager.getSessionId()", "loadPiEventMap", "pi.on", "pi.registerTool", "events", "invoke", "native-id"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("Pi extension missing %q:\n%s", want, content)
+		}
 	}
 }

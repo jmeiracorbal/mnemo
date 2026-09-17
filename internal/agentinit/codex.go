@@ -285,7 +285,7 @@ func codexCheckHookTrust(home string) Check {
 	if os.IsNotExist(err) {
 		return Check{
 			ID:       "runtime_files.codex",
-			Status:   "warning",
+			Status:   "review",
 			Severity: "warning",
 			Agent:    "codex",
 			Message:  "Codex mnemo hooks need review in Codex",
@@ -307,7 +307,7 @@ func codexCheckHookTrust(home string) Check {
 	if len(missingTrust) > 0 {
 		return Check{
 			ID:       "runtime_files.codex",
-			Status:   "warning",
+			Status:   "review",
 			Severity: "warning",
 			Agent:    "codex",
 			Message:  "Codex mnemo hooks need review in Codex",

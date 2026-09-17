@@ -59,15 +59,3 @@ func cursorInstallProjectInstructions(root string) (string, error) {
 	}
 	return path, nil
 }
-
-func windsurfProjectInstructionPath(root string) string {
-	return filepath.Join(root, ".windsurf", "rules", "mnemo.md")
-}
-
-func windsurfInstallProjectInstructions(root string) (string, error) {
-	path := windsurfProjectInstructionPath(root)
-	if err := AppendSection(path, templates.Windsurf); err != nil {
-		return "", fmt.Errorf(".windsurf/rules/mnemo.md: %w", err)
-	}
-	return path, nil
-}

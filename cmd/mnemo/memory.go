@@ -1,92 +1,28 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"strconv"
 
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
-func runSave(s *store.Store) {
-	args := os.Args[2:]
-	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: mnemo save <title> <content> --session SESSION --project PROJECT --dir DIR [--type TYPE] [--scope SCOPE] [--topic TOPIC_KEY]")
-		os.Exit(1)
-	}
-
-	title := args[0]
-	content := args[1]
-	typ := "manual"
-	project := ""
-	dir := ""
-	scope := ""
-	topicKey := ""
-	sessionID := ""
-
-	for i := 2; i < len(args)-1; i++ {
-		switch args[i] {
-		case "--type":
-			typ = args[i+1]
-			i++
-		case "--project":
-			project = args[i+1]
-			i++
-		case "--dir":
-			dir = args[i+1]
-			i++
-		case "--scope":
-			scope = args[i+1]
-			i++
-		case "--topic":
-			topicKey = args[i+1]
-			i++
-		case "--session":
-			sessionID = args[i+1]
-			i++
-		}
-	}
-
-	if project == "" {
-		fmt.Fprintln(os.Stderr, "mnemo: --project is required")
-		os.Exit(1)
-	}
-	if dir == "" {
-		fmt.Fprintln(os.Stderr, "mnemo: --dir is required")
-		os.Exit(1)
-	}
-	if sessionID == "" {
-		fmt.Fprintln(os.Stderr, "mnemo: --session is required")
-		os.Exit(1)
-	}
-
-	provenance := store.CLIProvenance(store.ToolMnemoSave)
-	if err := s.EnsureSession(sessionID, project, dir); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: could not ensure session: %v\n", err)
-		os.Exit(1)
-	}
-
-	id, err := s.AddObservation(store.AddObservationParams{
-		SessionID:  sessionID,
-		Type:       typ,
-		Title:      title,
-		Content:    content,
-		Project:    project,
-		Scope:      scope,
-		TopicKey:   topicKey,
-		Provenance: provenance,
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: save failed: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Memory saved: #%d %q (%s)\n", id, title, typ)
+// runSave is retired: session lifecycle is now owned by the controller.
+// Use the MCP tool mem_save instead.
+func runSave() {
+	fmt.Fprintln(os.Stderr, "mnemo save: this command is deprecated.")
+	fmt.Fprintln(os.Stderr, "  Session identity is now owned by the controller runtime.")
+	fmt.Fprintln(os.Stderr, "  Use the MCP tool mem_save to save memories through an active agent session.")
+	os.Exit(1)
 }
 
-func runSearch(s *store.Store) {
+// runSearch routes through the controller. It deliberately does not open a
+// Store: hook processes must never touch SQLite, even to initialize it.
+func runSearch() {
 	args := os.Args[2:]
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: mnemo search <query> [--type TYPE] [--project PROJECT] [--scope SCOPE] [--limit N]")
@@ -115,8 +51,18 @@ func runSearch(s *store.Store) {
 		}
 	}
 
-	results, err := s.Search(query, opts)
+	cfg, err := loadEventsConfig()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+
+	var results []store.SearchResult
+	input := struct {
+		Query   string              `json:"query"`
+		Options store.SearchOptions `json:"options"`
+	}{query, opts}
+	if err := events.Call(context.Background(), cfg, "search", input, &results); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: search failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -141,98 +87,114 @@ func runSearch(s *store.Store) {
 	}
 }
 
-func runContext(s *store.Store) {
+// runContext routes through the controller. It deliberately does not open a
+// Store: hook processes must never touch SQLite, even to initialize it.
+func runContext() {
 	project := ""
 	if len(os.Args) > 2 {
 		project = os.Args[2]
 	}
 
-	ctx, err := s.FormatContext(project, "")
+	cfg, err := loadEventsConfig()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+
+	var output string
+	input := struct {
+		Project string               `json:"project"`
+		Scope   string               `json:"scope"`
+		Options store.ContextOptions `json:"options"`
+	}{project, "", store.ContextOptions{}}
+	if err := events.Call(context.Background(), cfg, "format_context", input, &output); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: context failed: %v\n", err)
 		os.Exit(1)
 	}
 
-	if ctx == "" {
+	if output == "" {
 		fmt.Println("No previous session memories found.")
 		return
 	}
-
-	fmt.Println(ctx)
+	fmt.Println(output)
 }
 
-func runSession(s *store.Store) {
+func loadEventsConfig() (events.Config, error) {
+	storeConfig, err := store.DefaultConfig()
+	if err != nil {
+		return events.Config{}, err
+	}
+	return events.LoadConfig(storeConfig.DataDir)
+}
+
+// runSession handles session subcommands. Lifecycle operations (start/compact/end)
+// are retired: session lifecycle is owned exclusively by the controller. Read-only
+// queries (exists/obs-count/project-obs-count) route through controller RPC.
+func runSession() {
 	if len(os.Args) < 4 {
-		fmt.Fprintln(os.Stderr, "usage: mnemo session start <id> [--project PROJECT] [--dir DIR]")
-		fmt.Fprintln(os.Stderr, "       mnemo session compact <id>")
-		fmt.Fprintln(os.Stderr, "       mnemo session end <id> [--summary SUMMARY]")
+		fmt.Fprintln(os.Stderr, "usage: mnemo session exists <id>")
+		fmt.Fprintln(os.Stderr, "       mnemo session obs-count <id>")
+		fmt.Fprintln(os.Stderr, "       mnemo session project-obs-count <id>")
+		fmt.Fprintln(os.Stderr, "note: start/compact/end are retired; session lifecycle is owned by the controller")
 		os.Exit(1)
 	}
 
 	subcmd := os.Args[2]
 	id := os.Args[3]
-	args := os.Args[4:]
 
 	switch subcmd {
-	case "start":
-		project := ""
-		dir := ""
-		for i := 0; i < len(args)-1; i++ {
-			switch args[i] {
-			case "--project":
-				project = args[i+1]
-				i++
-			case "--dir":
-				dir = args[i+1]
-				i++
-			}
-		}
-		if err := s.CreateSession(id, project, dir); err != nil {
-			fmt.Fprintf(os.Stderr, "mnemo: session start failed: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Session %q started\n", id)
-
-	case "compact":
-		if err := s.TouchCompact(id); err != nil {
-			fmt.Fprintf(os.Stderr, "mnemo: session compact failed: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Session %q compact recorded\n", id)
-
-	case "end":
-		summary := ""
-		for i := 0; i < len(args)-1; i++ {
-			if args[i] == "--summary" {
-				summary = args[i+1]
-				i++
-			}
-		}
-		if err := s.EndSession(id, summary); err != nil {
-			fmt.Fprintf(os.Stderr, "mnemo: session end failed: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Session %q completed\n", id)
+	case "start", "compact", "end":
+		fmt.Fprintf(os.Stderr, "mnemo session %s: this subcommand is deprecated.\n", subcmd)
+		fmt.Fprintln(os.Stderr, "  Session lifecycle is owned by the controller runtime via durable events.")
+		os.Exit(1)
 
 	case "exists":
-		_, err := s.GetSession(id)
+		cfg, err := loadEventsConfig()
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+			os.Exit(1)
+		}
+		var exists bool
+		input := struct {
+			ID string `json:"id"`
+		}{id}
+		if err := events.Call(context.Background(), cfg, "session_exists", input, &exists); err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo: session exists failed: %v\n", err)
+			os.Exit(1)
+		}
+		if !exists {
 			fmt.Println("false")
 			os.Exit(1)
 		}
 		fmt.Println("true")
 
 	case "obs-count":
-		n, err := s.ObsCount(id)
+		cfg, err := loadEventsConfig()
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+			os.Exit(1)
+		}
+		var n int
+		input := struct {
+			ID string `json:"id"`
+		}{id}
+		if err := events.Call(context.Background(), cfg, "session_obs_count", input, &n); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo: obs-count failed: %v\n", err)
 			os.Exit(1)
 		}
 		fmt.Println(n)
 
 	case "project-obs-count":
-		n, err := s.ObsCountForSession(id)
+		cfg, err := loadEventsConfig()
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+			os.Exit(1)
+		}
+		var n int
+		input := struct {
+			ID string `json:"id"`
+		}{id}
+		if err := events.Call(context.Background(), cfg, "session_project_obs_count", input, &n); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo: project-obs-count failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -244,9 +206,15 @@ func runSession(s *store.Store) {
 	}
 }
 
-func runStats(s *store.Store) {
-	stats, err := s.Stats()
+func runStats() {
+	cfg, err := loadEventsConfig()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+
+	var stats store.Stats
+	if err := events.Call(context.Background(), cfg, "stats", struct{}{}, &stats); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: stats failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -260,9 +228,15 @@ func runStats(s *store.Store) {
 	}
 }
 
-func runExport(s *store.Store) {
-	data, err := s.Export()
+func runExport() {
+	cfg, err := loadEventsConfig()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+
+	var data store.ExportData
+	if err := events.Call(context.Background(), cfg, "export", struct{}{}, &data); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: export failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -284,7 +258,7 @@ func runExport(s *store.Store) {
 	}
 }
 
-func runImport(s *store.Store) {
+func runImport() {
 	if len(os.Args) < 3 {
 		fmt.Fprintln(os.Stderr, "usage: mnemo import <file.json>")
 		os.Exit(1)
@@ -302,8 +276,14 @@ func runImport(s *store.Store) {
 		os.Exit(1)
 	}
 
-	result, err := s.Import(&payload)
+	cfg, err := loadEventsConfig()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+
+	var result store.ImportResult
+	if err := events.Call(context.Background(), cfg, "import", payload, &result); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: import failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -311,73 +291,11 @@ func runImport(s *store.Store) {
 	fmt.Printf("Import complete: %d sessions, %d observations\n", result.SessionsImported, result.ObservationsImported)
 }
 
-func runCapture(s *store.Store) {
-	args := os.Args[2:]
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: mnemo capture <content>|- --session SESSION --project PROJECT --dir DIR")
-		os.Exit(1)
-	}
-
-	var content string
-	if args[0] == "-" {
-		data, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "mnemo: failed to read stdin: %v\n", err)
-			os.Exit(1)
-		}
-		content = string(data)
-	} else {
-		content = args[0]
-	}
-	sessionID := ""
-	project := ""
-	dir := ""
-
-	for i := 1; i < len(args)-1; i++ {
-		switch args[i] {
-		case "--session":
-			sessionID = args[i+1]
-			i++
-		case "--project":
-			project = args[i+1]
-			i++
-		case "--dir":
-			dir = args[i+1]
-			i++
-		}
-	}
-
-	if project == "" {
-		fmt.Fprintln(os.Stderr, "mnemo: --project is required")
-		os.Exit(1)
-	}
-	if dir == "" {
-		fmt.Fprintln(os.Stderr, "mnemo: --dir is required")
-		os.Exit(1)
-	}
-	if sessionID == "" {
-		fmt.Fprintln(os.Stderr, "mnemo: --session is required")
-		os.Exit(1)
-	}
-
-	provenance := store.CLIProvenance(store.ToolMnemoCapture)
-	if err := s.EnsureSession(sessionID, project, dir); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: could not ensure session: %v\n", err)
-		os.Exit(1)
-	}
-
-	result, err := s.PassiveCapture(store.PassiveCaptureParams{
-		SessionID:  sessionID,
-		Content:    content,
-		Project:    project,
-		Source:     "subagent-stop",
-		Provenance: provenance,
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: capture failed: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Captured: extracted=%d saved=%d duplicates=%d\n",
-		result.Extracted, result.Saved, result.Duplicates)
+// runCapture is retired: session lifecycle is now owned by the controller.
+// Use the MCP tool mem_capture_passive instead.
+func runCapture() {
+	fmt.Fprintln(os.Stderr, "mnemo capture: this command is deprecated.")
+	fmt.Fprintln(os.Stderr, "  Session identity is now owned by the controller runtime.")
+	fmt.Fprintln(os.Stderr, "  Use the MCP tool mem_capture_passive to capture learnings through an active agent session.")
+	os.Exit(1)
 }

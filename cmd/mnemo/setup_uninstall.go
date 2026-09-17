@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
@@ -65,6 +66,19 @@ func uninstallSetup(opts setupUninstallOptions) ([]string, error) {
 		return nil, err
 	}
 	var removed []string
+	actualHome, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		return removed, fmt.Errorf("resolve service home: %w", homeErr)
+	}
+	if filepath.Clean(opts.Home) == filepath.Clean(actualHome) {
+		servicePath, err := uninstallControllerService(opts.Home)
+		if err != nil {
+			return removed, fmt.Errorf("controller service: %w", err)
+		}
+		if servicePath != "" {
+			removed = append(removed, servicePath)
+		}
+	}
 	for _, agent := range agents {
 		agentRemoved, err := agentinit.Uninstall(opts.Home, agent)
 		removed = append(removed, agentRemoved...)

@@ -17,7 +17,6 @@ func TestStopHooksDoNotEmitZeroMemoryWarning(t *testing.T) {
 	for _, path := range []string{
 		"scripts/codex/hooks/stop.sh",
 		"scripts/cursor/hooks/stop.sh",
-		"scripts/windsurf/hooks/post-cascade-response.sh",
 		"plugin/claude-code/scripts/session-stop.sh",
 	} {
 		t.Run(path, func(t *testing.T) {

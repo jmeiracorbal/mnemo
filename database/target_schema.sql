@@ -79,6 +79,30 @@ CREATE TABLE sessions (
     mcp_instance_id TEXT
 );
 
+CREATE TABLE execution_sessions (
+    project TEXT NOT NULL REFERENCES projects(id),
+    execution_key TEXT NOT NULL,
+    session_id TEXT NOT NULL REFERENCES sessions(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (project, execution_key),
+    UNIQUE (session_id)
+);
+
+CREATE TABLE processed_events (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    project TEXT NOT NULL REFERENCES projects(id),
+    execution_key TEXT NOT NULL,
+    processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE processed_mcp_commands (
+    id TEXT PRIMARY KEY,
+    action TEXT NOT NULL,
+    result_json TEXT NOT NULL,
+    processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE observations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sync_id TEXT,
@@ -166,6 +190,9 @@ CREATE INDEX idx_prompts_sync_id ON user_prompts(sync_id);
 CREATE UNIQUE INDEX ux_user_prompts_sync_id ON user_prompts(sync_id) WHERE sync_id IS NOT NULL AND sync_id <> '';
 CREATE INDEX idx_prompts_provenance ON user_prompts(provenance_id);
 CREATE INDEX idx_sessions_provenance ON sessions(provenance_id);
+CREATE INDEX idx_execution_sessions_session ON execution_sessions(session_id);
+CREATE INDEX idx_processed_events_project ON processed_events(project, processed_at DESC);
+CREATE INDEX idx_processed_mcp_commands_processed_at ON processed_mcp_commands(processed_at DESC);
 CREATE UNIQUE INDEX ux_sessions_open_mcp_instance ON sessions(project, mcp_instance_id) WHERE mcp_instance_id IS NOT NULL AND ended_at IS NULL AND is_deleted = 0;
 CREATE INDEX idx_provenance_agent ON provenance_contexts(agent_id);
 CREATE INDEX idx_provenance_source ON provenance_contexts(source_kind_id);

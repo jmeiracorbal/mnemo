@@ -16,14 +16,15 @@ const (
 	AgentCodex      = "codex"
 	AgentClaudeCode = "claudecode"
 	AgentCursor     = "cursor"
-	AgentWindsurf   = "windsurf"
 	AgentOpenCode   = "opencode"
-	AgentFx         = "fx"
 	AgentPi         = "pi"
 
-	SourceUnknown        = "unknown"
-	SourceCLI            = "cli"
-	SourceMCP            = "mcp"
+	SourceUnknown = "unknown"
+	SourceCLI     = "cli"
+	SourceMCP     = "mcp"
+	// SourceAgentAdapter identifies operations sent by an agent-native adapter
+	// directly to the controller rather than through MCP stdio.
+	SourceAgentAdapter   = "agent_adapter"
 	SourceHook           = "hook"
 	SourcePassiveCapture = "passive_capture"
 	SourceImport         = "import"
@@ -37,8 +38,6 @@ const (
 	ToolMemCapturePassive = "mem_capture_passive"
 	ToolMnemoCapture      = "mnemo_capture"
 	ToolMnemoImport       = "mnemo_import"
-	ToolHookSessionStart  = "hook_session_start"
-	ToolHookSessionStop   = "hook_session_stop"
 
 	ModelUnknown     = "unknown"
 	MCPClientNone    = "none"
@@ -70,6 +69,17 @@ func MCPProvenance(tool string) ProvenanceInput {
 		MCPClientName:    firstNonEmpty(getenv("MNEMO_MCP_CLIENT_NAME"), displayName(clientID)),
 		MCPClientVersion: getenv("MNEMO_MCP_CLIENT_VERSION"),
 		MCPTransport:     firstNonEmpty(getenv("MNEMO_MCP_TRANSPORT"), "stdio"),
+	}
+}
+
+// AgentAdapterProvenance records calls made by a native agent extension. The
+// controller receives the adapter identity, so this must not depend on the
+// controller process environment.
+func AgentAdapterProvenance(agent, tool string) ProvenanceInput {
+	return ProvenanceInput{
+		AgentID:      normalizeCatalogID(agent, AgentUnknown),
+		SourceKindID: SourceAgentAdapter,
+		ToolID:       tool,
 	}
 }
 
@@ -324,9 +334,7 @@ func displayName(id string) string {
 		"codex":           "Codex",
 		"claudecode":      "Claude Code",
 		"cursor":          "Cursor",
-		"windsurf":        "Windsurf",
 		"opencode":        "OpenCode",
-		"fx":              "fx",
 		"pi":              "Pi",
 		"mcp":             "MCP",
 		"hook":            "Hook",

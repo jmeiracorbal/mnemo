@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/xml"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,8 +36,8 @@ func TestRefreshSetupWritesCodexFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refresh setup: %v", err)
 	}
-	if len(updated) != 10 {
-		t.Fatalf("updated paths = %d, want 10 (%v)", len(updated), updated)
+	if len(updated) != 11 {
+		t.Fatalf("updated paths = %d, want 11 (%v)", len(updated), updated)
 	}
 
 	config := readTestFile(t, filepath.Join(home, ".codex", "config.toml"))
@@ -45,6 +46,9 @@ func TestRefreshSetupWritesCodexFiles(t *testing.T) {
 	}
 	if !strings.Contains(config, "experimental_compact_prompt_file") {
 		t.Fatalf("codex config missing compact prompt file:\n%s", config)
+	}
+	if config := readTestFile(t, filepath.Join(home, ".mnemo", "config.toml")); !strings.Contains(config, "[events]") || !strings.Contains(config, "port = 4222") {
+		t.Fatalf("global event config missing: %s", config)
 	}
 	if !agentinit.GlobalSkillInstalled(home) {
 		t.Fatal("global skill not installed by setup refresh")
@@ -67,29 +71,19 @@ func TestRefreshSetupScopesAgentSpecificSkillLinks(t *testing.T) {
 		t.Fatalf("refresh setup: %v", err)
 	}
 
+	if config := readTestFile(t, filepath.Join(home, ".mnemo", "config.toml")); !strings.Contains(config, "[events]") || !strings.Contains(config, "port = 4222") {
+		t.Fatalf("global event config missing: %s", config)
+	}
 	if !agentinit.GlobalSkillInstalled(home) {
 		t.Fatal("canonical global skill not installed")
 	}
 	for _, path := range []string{
 		filepath.Join(home, ".claude", "skills", "mnemo-memory"),
-		filepath.Join(home, ".codeium", "windsurf", "skills", "mnemo-memory"),
 		filepath.Join(home, ".pi", "agent", "skills", "mnemo-memory"),
 	} {
 		if _, err := os.Lstat(path); !os.IsNotExist(err) {
 			t.Fatalf("unexpected agent-specific skill link %s after cursor-only refresh: %v", path, err)
 		}
-	}
-
-	if _, err := refreshSetup(setupRefreshOptions{Agent: "windsurf", Home: home, MnemoBin: "mnemo"}); err != nil {
-		t.Fatalf("refresh windsurf setup: %v", err)
-	}
-	windsurfLink := filepath.Join(home, ".codeium", "windsurf", "skills", "mnemo-memory")
-	info, err := os.Lstat(windsurfLink)
-	if err != nil {
-		t.Fatalf("stat windsurf skill link: %v", err)
-	}
-	if info.Mode()&os.ModeSymlink == 0 {
-		t.Fatalf("%s is not a symlink", windsurfLink)
 	}
 }
 
@@ -195,5 +189,41 @@ func assertExecutable(t *testing.T, path string) {
 	}
 	if info.Mode()&0111 == 0 {
 		t.Fatalf("%s is not executable: %v", path, info.Mode())
+	}
+}
+
+func TestControllerLaunchAgentPlist(t *testing.T) {
+	content := controllerLaunchAgentPlist("/home/test & user", "/bin/mnemo & controller")
+	for _, want := range []string{"com.jmeiracorbal.mnemo.controller", "/bin/mnemo &amp; controller", "controller", "serve", "KeepAlive"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("service file missing %q", want)
+		}
+	}
+	if err := xml.Unmarshal([]byte(content), new(struct{})); err != nil {
+		t.Fatalf("launchd plist is not valid XML: %v", err)
+	}
+}
+
+func TestControllerSystemdUnit(t *testing.T) {
+	content := controllerSystemdUnit("/home/test user", "/bin/mnemo controller")
+	for _, want := range []string{`ExecStart="/bin/mnemo controller" controller serve`, `Environment="HOME=/home/test user"`, "Restart=on-failure", "WantedBy=default.target"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("unit missing %q", want)
+		}
+	}
+}
+
+func TestControllerWindowsTaskXML(t *testing.T) {
+	content := controllerWindowsTaskXML(`C:\Program Files\mnemo & tools\mnemo.exe`)
+	for _, want := range []string{"controller serve", "LogonTrigger", "RestartOnFailure", "MultipleInstancesPolicy", `C:\Program Files\mnemo &amp; tools\mnemo.exe`} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("task XML missing %q", want)
+		}
+	}
+	if !strings.Contains(controllerWindowsTaskTemplate, "{{MNEMO_BIN}}") {
+		t.Fatal("Windows task template does not provide the binary placeholder")
+	}
+	if err := xml.Unmarshal([]byte(content), new(struct{})); err != nil {
+		t.Fatalf("Windows task XML is not valid: %v", err)
 	}
 }

@@ -16,6 +16,13 @@ type Agent struct {
 	CreatedAt   string `json:"created_at"`
 }
 
+type ExecutionSession struct {
+	Project      string `json:"project"`
+	ExecutionKey string `json:"execution_key"`
+	SessionID    string `json:"session_id"`
+	CreatedAt    string `json:"created_at"`
+}
+
 type McpClient struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -74,6 +81,21 @@ type ObservationsFt struct {
 	Content  string `json:"content"`
 	ToolName string `json:"tool_name"`
 	Type     string `json:"type"`
+}
+
+type ProcessedEvent struct {
+	ID           string `json:"id"`
+	EventType    string `json:"event_type"`
+	Project      string `json:"project"`
+	ExecutionKey string `json:"execution_key"`
+	ProcessedAt  string `json:"processed_at"`
+}
+
+type ProcessedMcpCommand struct {
+	ID          string `json:"id"`
+	Action      string `json:"action"`
+	ResultJson  string `json:"result_json"`
+	ProcessedAt string `json:"processed_at"`
 }
 
 type Project struct {

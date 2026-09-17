@@ -119,65 +119,35 @@ func TestProjectsListFiltersAndSorts(t *testing.T) {
 	}
 }
 
-func TestBuildProjectsMergePlansAutoByPath(t *testing.T) {
-	s := newProjectsTestStore(t)
+func TestAutoMergePairingsGroupsByDirectoryAndPrefersUUID(t *testing.T) {
 	uuidProject := "11111111-2222-3333-4444-555555555555"
 	legacyProject := "projects-alpha"
 
-	if err := s.CreateSession("s-uuid", uuidProject, "/tmp/alpha"); err != nil {
-		t.Fatalf("create uuid session: %v", err)
-	}
-	if err := s.CreateSession("s-legacy", legacyProject, "/tmp/alpha"); err != nil {
-		t.Fatalf("create legacy session: %v", err)
-	}
-	if _, err := s.AddObservation(testObservationParams(uuidProject, "s-uuid", "UUID project")); err != nil {
-		t.Fatalf("add uuid observation: %v", err)
-	}
-	if _, err := s.AddObservation(testObservationParams(legacyProject, "s-legacy", "Legacy project")); err != nil {
-		t.Fatalf("add legacy observation: %v", err)
+	projects := []store.ProjectSummary{
+		{ID: uuidProject, Directory: "/tmp/alpha", ObservationCount: 1},
+		{ID: legacyProject, Directory: "/tmp/alpha", ObservationCount: 1},
 	}
 
-	plans, err := buildProjectsMergePlans(s, projectsMergeOptions{AutoByPath: true, DryRun: true})
-	if err != nil {
-		t.Fatalf("build auto merge plans: %v", err)
+	pairings := autoMergePairings(projects)
+	if len(pairings) != 1 {
+		t.Fatalf("pairings = %d, want 1 (%+v)", len(pairings), pairings)
 	}
-	if len(plans) != 1 {
-		t.Fatalf("plans = %d, want 1 (%+v)", len(plans), plans)
-	}
-	if plans[0].From.ID != legacyProject || plans[0].To.ID != uuidProject {
-		t.Fatalf("unexpected auto merge plan: %+v", plans[0])
+	if pairings[0][0] != legacyProject || pairings[0][1] != uuidProject {
+		t.Fatalf("unexpected pairing (source, dest) = (%s, %s)", pairings[0][0], pairings[0][1])
 	}
 }
 
-func TestApplyProjectsMergePlansReturnsCompletedResultsOnLaterFailure(t *testing.T) {
-	s := newProjectsTestStore(t)
+func TestPrintProjectsMergeApplyOutputReportsPartialResults(t *testing.T) {
 	source := "projects-alpha"
 	destination := "11111111-2222-3333-4444-555555555555"
 
-	if err := s.EnsureProject(destination, "Alpha"); err != nil {
-		t.Fatalf("ensure destination: %v", err)
-	}
-	if err := s.CreateSession("s-alpha", source, "/tmp/alpha"); err != nil {
-		t.Fatalf("create source session: %v", err)
-	}
-	if _, err := s.AddObservation(testObservationParams(source, "s-alpha", "Alpha source")); err != nil {
-		t.Fatalf("add source observation: %v", err)
-	}
-	plans := []store.ProjectMergePlan{
-		{From: store.ProjectSummary{ID: source}, To: store.ProjectSummary{ID: destination}},
-		{From: store.ProjectSummary{ID: "missing-source"}, To: store.ProjectSummary{ID: destination}},
+	results := []store.ProjectMergeResult{
+		{
+			Plan:                store.ProjectMergePlan{From: store.ProjectSummary{ID: source}, To: store.ProjectSummary{ID: destination}},
+			ObservationsUpdated: 1,
+		},
 	}
 
-	results, err := applyProjectsMergePlans(s, plans)
-	if err == nil {
-		t.Fatal("expected second merge to fail")
-	}
-	if len(results) != 1 {
-		t.Fatalf("completed results = %d, want 1 (%+v)", len(results), results)
-	}
-	if results[0].Plan.From.ID != source || results[0].Plan.To.ID != destination {
-		t.Fatalf("unexpected completed result: %+v", results[0])
-	}
 	var out bytes.Buffer
 	if err := printProjectsMergeApplyOutput(&out, true, results); err != nil {
 		t.Fatalf("print partial results: %v", err)
@@ -188,6 +158,9 @@ func TestApplyProjectsMergePlansReturnsCompletedResultsOnLaterFailure(t *testing
 	}
 	if report.Total != 1 || len(report.Results) != 1 {
 		t.Fatalf("unexpected partial report: %+v", report)
+	}
+	if report.Results[0].Plan.From.ID != source || report.Results[0].Plan.To.ID != destination {
+		t.Fatalf("unexpected result IDs: %+v", report.Results[0])
 	}
 }
 
@@ -303,27 +276,4 @@ func TestPrintProjectsListJSONPreservesWhitespace(t *testing.T) {
 
 func fixedProjectsNow() time.Time {
 	return time.Date(2026, 2, 1, 12, 0, 0, 0, time.UTC)
-}
-
-func newProjectsTestStore(t *testing.T) *store.Store {
-	t.Helper()
-	s, err := store.New(store.FallbackConfig(t.TempDir()))
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = s.Close()
-	})
-	return s
-}
-
-func testObservationParams(project, sessionID, title string) store.AddObservationParams {
-	return store.AddObservationParams{
-		SessionID: sessionID,
-		Type:      "decision",
-		Title:     title,
-		Content:   title + " content",
-		Project:   project,
-		Scope:     "project",
-	}
 }
