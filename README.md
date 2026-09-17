@@ -17,7 +17,7 @@
 
 <p align="center">
   <a href="https://go.dev"><img alt="Go" src="https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white"></a>
-  <a href="https://github.com/jmeiracorbal/mnemo"><img alt="Status" src="https://img.shields.io/badge/status-stable-brightgreen"></a>
+  <a href="https://github.com/jmeiracorbal/mnemo/releases"><img alt="Status" src="https://img.shields.io/badge/status-alpha-orange"></a>
   <a href="https://sqlite.org"><img alt="Storage" src="https://img.shields.io/badge/storage-SQLite%2BFTS5-003B57?logo=sqlite&logoColor=white"></a>
   <a href="https://github.com/jmeiracorbal/mnemo"><img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-blue"></a>
@@ -35,7 +35,7 @@
 
 ## What is mnemo?
 
-mnemo is a local memory layer for agentic development. It stores decisions, bugs, conventions, discoveries and session summaries in SQLite, then exposes them back to agents through MCP tools, hooks and portable Agent Skills.
+mnemo is a local memory layer for agentic development. It stores decisions, bugs, conventions, discoveries and session summaries in SQLite, then exposes them to agents through MCP or native tools, hooks and portable Agent Skills. A local event controller is the sole normal SQLite writer: agents publish durable lifecycle events and memory commands instead of opening the database.
 
 Instead of spreading project knowledge across `MEMORY.md`, native editor memory, chat transcripts and human notes, mnemo gives every supported agent the same project-scoped source of truth.
 
@@ -44,8 +44,10 @@ Instead of spreading project knowledge across `MEMORY.md`, native editor memory,
 Install the binary and configure your detected agents:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.1 bash
 ```
+
+This pins the current alpha. Unpinned installs and `mnemo update` continue to follow stable releases.
 
 Activate mnemo in a project:
 
@@ -60,19 +62,20 @@ Check that everything is wired correctly:
 mnemo doctor --agent=all --path=.
 ```
 
-Save and search memory manually from the CLI:
+In your agent, use `mem_save` to record a decision and `mem_search` to find it later. The CLI can also search existing memories:
 
 ```bash
-mnemo session start manual-1 --project myapp --dir "$PWD"
-mnemo save "Use SQLite FTS5" "Search stays local, fast and dependency-light." --type decision --session manual-1 --project myapp --dir "$PWD"
-mnemo search "SQLite" --project myapp
+mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
+
+The controller is installed as a per-user service during setup. See [Durable events](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events) for delivery and failure semantics.
 
 ## Why mnemo?
 
 | Problem | mnemo gives you |
 |---|---|
 | Agents forget decisions between sessions | Durable project memory in `~/.mnemo/memory.db` |
+| Hooks or plugins can lose writes or race each other | One local event controller with durable delivery and idempotent SQLite transactions |
 | Markdown memory files drift or conflict | Structured observations, tags, topic keys and review states |
 | Global hooks can be risky | Project opt-in via a `.mnemo` marker; projects without it are ignored |
 | Setup breaks silently | `mnemo doctor` and `mnemo setup status` explain exactly what is configured |
@@ -84,9 +87,10 @@ mnemo search "SQLite" --project myapp
 |---|---|
 | **Project-scoped activation** | Global hooks only run when a project contains a valid `.mnemo` marker. |
 | **MCP tools** | Agents can call `mem_save`, `mem_search`, `mem_context`, `mem_current_project`, `mem_doctor` and more. |
-| **MCP-owned sessions** | Each MCP connection creates and closes its own per-project session; hooks only inject context. |
+| **Durable event controller** | A per-user JetStream service is the single normal SQLite writer; publishers never open the store. |
+| **Controller-owned sessions** | Agent-native execution IDs bind events and memory tools to one canonical session. |
 | **Portable Agent Skills** | Skills teach compatible agents when and how to use mnemo without falling back to native memory. |
-| **Passive capture** | MCP extracts useful learnings from agent-provided output. |
+| **Passive capture** | Memory tools extract useful learnings from agent-provided output. |
 | **Agent provenance** | Records SQL-queryable agent, source, tool, model and MCP client metadata for writes that provide it. |
 | **Diagnostics** | `mnemo doctor` checks project activation, global setup, MCP, hooks, competing memory surfaces and database migration health. |
 | **Database safety** | Safe schema migrations run automatically; `mnemo db migrate --check` validates the local store for CI or troubleshooting. |
@@ -101,19 +105,17 @@ mnemo search "SQLite" --project myapp
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-supported-6B46C1?logo=claudecode&logoColor=white">
   <img alt="Codex" src="https://img.shields.io/badge/Codex-supported-00A67E?logo=openai&logoColor=white">
   <img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-111111?logo=cursor&logoColor=white">
-  <img alt="Windsurf" src="https://img.shields.io/badge/Windsurf-supported-2563EB?logo=windsurf&logoColor=white">
   <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-supported-F97316?logo=opencode&logoColor=white">
   <img alt="Pi" src="https://img.shields.io/badge/Pi-supported-0EA5E9">
 </p>
 
 | Agent | MCP | Hooks / runtime | Global instructions | Skill access | Status |
 |---|---:|---:|---:|---:|---|
-| Claude Code | ✅ | Plugin or n/a via `install.sh` | ✅ | ✅ | Supported |
-| Codex | ✅ | ✅ | ✅ | ✅ | Supported |
-| Cursor | ✅ | ✅ | ✅ | ✅ | Supported |
-| Windsurf | ✅ | ✅ | ✅ | ✅ | Supported |
-| OpenCode | ✅ | ✅ | ✅ | ✅ | Supported |
-| Pi | ✅ via MCP extension | ✅ extension | ✅ | ✅ via `~/.pi/agent/skills/` | Supported |
+| Claude Code | Yes | Plugin hooks or installer setup | Yes | Yes | Supported |
+| Codex | Yes | Session hooks | Yes | Yes | Supported |
+| Cursor | Yes | Prompt hook | Yes | Yes | Supported |
+| OpenCode | Yes | Plugin events | Yes | Yes | Supported |
+| Pi | Native tools | Native extension | Yes | Yes | Supported |
 
 Global setup is installed once. Project activation stays local and opt-in:
 
@@ -146,13 +148,14 @@ No potential memory conflicts found.
 
 | Path | Use when | Command |
 |---|---|---|
-| Auto installer | You want the binary plus detected agent setup | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
+| Current alpha | You want to try `v1.0.0-alpha.1` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.1 bash</code> |
+| Latest stable | You want the latest stable binary plus detected agent setup | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | Explicit agent | You only want one integration | `bash -s -- --agent=codex` |
 | All agents | You want every supported integration prepared | `bash -s -- --agent=all` |
 | Claude plugin | You use Claude Code's plugin marketplace | `claude plugin install mnemo@mnemo` |
 | Source build | You develop mnemo itself | `go build -o ~/.local/bin/mnemo ./cmd/mnemo/` |
 
-Read the complete setup guide in [docs/INSTALLATION.md](docs/INSTALLATION.md).
+Read the complete [installation guide](https://github.com/jmeiracorbal/mnemo/wiki/Installation).
 
 ### Updates
 
@@ -199,12 +202,13 @@ hook command.
 
 | Guide | Contents |
 |---|---|
-| [Documentation index](docs/README.md) | Full documentation map and research notes. |
-| [Installation](docs/INSTALLATION.md) | Install script, plugin setup, project activation and verification. |
-| [Agent integration](docs/AGENT_INTEGRATION.md) | Hook behavior, global paths, `.mnemo` marker and Agent Skills. |
-| [CLI reference](docs/CLI.md) | Commands, examples, MCP tools and search modes. |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | `doctor`, `setup status`, manual checks and idempotency validation. |
-| [Storage](docs/STORAGE.md) | SQLite location, schema notes and sqlc workflow. |
+| [Wiki home](https://github.com/jmeiracorbal/mnemo/wiki) | User documentation and navigation. |
+| [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) | Binary, controller service, project activation and verification. |
+| [Agent integrations](https://github.com/jmeiracorbal/mnemo/wiki/Agent-Integrations) | Native IDs, hooks, tools and project marker. |
+| [Durable events](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events) | Controller architecture, delivery and failure behavior. |
+| [CLI reference](https://github.com/jmeiracorbal/mnemo/wiki/CLI-Reference) | Active commands, MCP tools and search modes. |
+| [Troubleshooting](https://github.com/jmeiracorbal/mnemo/wiki/Troubleshooting) | Diagnostics and controller recovery. |
+| [Storage](https://github.com/jmeiracorbal/mnemo/wiki/Storage-and-Migrations) | SQLite, migrations and sqlc workflow. |
 | [Roadmap](ROADMAP.md) | Planned product and maintenance work. |
 
 ## Design principles

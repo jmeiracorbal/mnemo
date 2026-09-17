@@ -1,6 +1,6 @@
 # Agent memory surfaces
 
-This directory records how the agents currently supported by mnemo store or load their own memory-like context. It is intended to inform a future `mnemo memories ingest` / conversion feature, not to replace the canonical mnemo store.
+This directory records how agents store or load their own memory-like context. It is research for a possible future import/conversion feature, not the runtime integration guide or a replacement for the canonical mnemo store. Runtime support currently covers Claude Code, Codex, Cursor, OpenCode and Pi; Windsurf and fx appear here only as import-surface research.
 
 ## Scope
 
@@ -85,10 +85,10 @@ mnemo can provide a complete runtime memory integration for an agent even when t
 | Claude Code | MCP, plugin hooks, instructions, skill link | Yes, auto-memory markdown via `MEMORY.md` index and topic files | Importable with index/reference expansion and review |
 | Codex | MCP, hooks, instructions, canonical skill path | No documented native semantic store | Import instruction hierarchy only |
 | Cursor | MCP, hooks, rules, canonical skill path | No documented local semantic store | Import rules/instructions; preserve rule metadata |
-| Windsurf | MCP, hooks, rules, skill link | Yes, Cascade Memories | Import memories/rules with workspace and trigger provenance |
+| Windsurf | Not supported | Yes, Cascade Memories | Research only: import memories/rules with workspace and trigger provenance |
 | OpenCode | MCP, plugin hooks, instructions, canonical skill path | No documented native semantic store | Import instructions; ignore session internals by default |
-| Pi | MCP through a Pi MCP extension, APPEND_SYSTEM guidance, skill link | No documented native semantic store; sessions are JSONL history, not curated memory | Runtime support is complete; import instructions only unless the user explicitly selects session exports |
-| fx | MCP, instructions, canonical skill path | Yes, `~/.fx/memories.json` strings | Import preference strings only with user approval |
+| Pi | Native controller tools through its extension, APPEND_SYSTEM guidance, skill link | No documented native semantic store; sessions are JSONL history, not curated memory | Import instructions only unless the user explicitly selects session exports |
+| fx | Not supported | Yes, `~/.fx/memories.json` strings | Research only: import preference strings with user approval |
 
 ## Index and reference patterns
 

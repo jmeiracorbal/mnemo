@@ -10,13 +10,12 @@ Every memory-writing MCP call must explicitly receive:
 - `project`: the unique identifier in `.mnemo`.
 - `directory`: the workspace of that session, not project identity.
 
-The MCP runtime creates and owns the session using an opaque per-process
-instance ID. It is the only session authority; callers must not provide,
-recover or generate session IDs. When an adapter documents a native execution
-ID in MCP request metadata or the inherited MCP process environment, the
-runtime must bind that MCP-owned session to the same native execution as the
-agent hook. It must reject a missing or malformed documented carrier rather
-than substitute its PID, path or another session.
+The controller creates and owns the session bound to the adapter's native
+execution ID. Callers must not provide, recover or generate mnemo session IDs.
+MCP request metadata, inherited process environment, or an adapter-defined
+hook-written side channel supplies the native ID. The runtime rejects a missing
+or malformed documented carrier rather than substituting its PID, path or a
+recent session.
 
 Every supported agent therefore has the same session semantics. The controller
 derives the canonical execution key in Go from adapter + project + native ID;
@@ -44,12 +43,11 @@ Before changing hooks, verify names and paths across
 tests. A prior critical defect referenced `post-compaction.sh` while the actual
 script was `post-compact.sh`.
 
-Hooks are context-only. They must not invoke `mnemo save`, `mnemo capture`,
-`mnemo session start`, `mnemo session compact` or `mnemo session end`.
-
-Durable hook events are the only exception to a hook's direct-write boundary:
-they are published to the installation-wide controller, never to SQLite. A
-hook may publish only when its adapter supplies its own native execution ID.
+Hooks and extensions may inject context and publish durable events, but must
+not write SQLite or invoke retired `mnemo save`, `mnemo capture`, or `mnemo
+session start/compact/end` commands. Events go to the installation-wide
+controller. A hook may publish only when its adapter supplies its own native
+execution ID.
 The Go controller derives the canonical execution key; hooks and extensions do
 not calculate it. Do not substitute a path, PID, another agent's native ID or
 a latest-session lookup when it is unavailable; report the adapter capability
