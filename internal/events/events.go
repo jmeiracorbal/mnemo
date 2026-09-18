@@ -15,7 +15,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmeiracorbal/mnemo/adapters"
-	"github.com/jmeiracorbal/mnemo/internal/store"
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/pelletier/go-toml/v2"
@@ -29,13 +28,33 @@ const (
 	commandConsumerName = "mnemo-controller-commands"
 	commandSubject      = "mnemo.commands"
 
-	EventExecutionStarted     = store.EventExecutionStarted
-	EventExecutionClosed      = store.EventExecutionClosed
-	EventSessionCompacted     = store.EventSessionCompacted
-	EventAgentToolResult      = store.EventAgentToolResult
-	EventWorkspaceFileChanged = store.EventWorkspaceFileChanged
-	EventGitCommitCreated     = store.EventGitCommitCreated
+	EventExecutionStarted     = "execution.started"
+	EventExecutionClosed      = "execution.closed"
+	EventSessionCompacted     = "session.compacted"
+	EventAgentToolResult      = "agent.tool_result"
+	EventWorkspaceFileChanged = "workspace.file_changed"
+	EventGitCommitCreated     = "git.commit_created"
 )
+
+// DurableEvent is the controller input persisted by the event broker. EventID
+// is globally unique and is the idempotency key; no delivery is acknowledged
+// until ApplyDurableEvent commits it with its effect.
+type DurableEvent struct {
+	ID           string
+	Type         string
+	Project      string
+	ExecutionKey string
+	Payload      json.RawMessage
+}
+
+// ControllerStore is the only store surface the Controller requires. The
+// concrete implementation lives in internal/store; this interface breaks the
+// import dependency so events does not couple to the database layer.
+type ControllerStore interface {
+	ApplyDurableEvent(DurableEvent) error
+	ApplyMCPCommand(id, action string, payload json.RawMessage) (json.RawMessage, error)
+	ExecuteMCPAction(ctx context.Context, action string, payload json.RawMessage) (json.RawMessage, error)
+}
 
 // Event is the wire contract shared by every agent adapter.
 type Event struct {
@@ -159,16 +178,16 @@ func Publish(ctx context.Context, cfg Config, event Event) error {
 }
 
 // Controller embeds a local NATS JetStream server and is the sole component
-// that invokes store.ApplyDurableEvent.
+// that invokes ControllerStore.ApplyDurableEvent.
 type Controller struct {
 	cfg    Config
-	store  *store.Store
+	store  ControllerStore
 	server *natsserver.Server
 	nc     *nats.Conn
 	js     nats.JetStreamContext
 }
 
-func NewController(cfg Config, memory *store.Store) (*Controller, error) {
+func NewController(cfg Config, memory ControllerStore) (*Controller, error) {
 	if memory == nil {
 		return nil, fmt.Errorf("event controller store is required")
 	}
@@ -266,7 +285,7 @@ func (c *Controller) Run(ctx context.Context) error {
 				}
 			}
 			if processErr == nil {
-				processErr = c.store.ApplyDurableEvent(store.DurableEvent{ID: event.ID, Type: event.Type, Project: event.Project, ExecutionKey: event.ExecutionKey, Payload: event.Payload})
+				processErr = c.store.ApplyDurableEvent(DurableEvent{ID: event.ID, Type: event.Type, Project: event.Project, ExecutionKey: event.ExecutionKey, Payload: event.Payload})
 			}
 			if processErr != nil {
 				// The event remains durable and is retried after the mapping or a

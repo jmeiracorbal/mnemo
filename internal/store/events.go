@@ -8,28 +8,9 @@ import (
 	"strings"
 
 	"github.com/jmeiracorbal/mnemo/adapters"
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
-
-const (
-	EventExecutionStarted     = "execution.started"
-	EventExecutionClosed      = "execution.closed"
-	EventSessionCompacted     = "session.compacted"
-	EventAgentToolResult      = "agent.tool_result"
-	EventWorkspaceFileChanged = "workspace.file_changed"
-	EventGitCommitCreated     = "git.commit_created"
-)
-
-// DurableEvent is the controller input persisted by the event broker. EventID
-// is globally unique and is the idempotency key; no delivery is acknowledged
-// until ApplyDurableEvent commits it with its effect.
-type DurableEvent struct {
-	ID           string
-	Type         string
-	Project      string
-	ExecutionKey string
-	Payload      json.RawMessage
-}
 
 // BindExecutionSession records the controller-owned session selected by an MCP
 // runtime for one native adapter execution identity. The controller derives the
@@ -58,7 +39,7 @@ func (s *Store) BindExecutionSession(project string, agent adapters.Agent, nativ
 // ApplyDurableEvent applies one typed broker event and its idempotency marker in
 // the same SQLite transaction. It is intentionally only called by the event
 // controller; hooks and publishers never open the store.
-func (s *Store) ApplyDurableEvent(event DurableEvent) error {
+func (s *Store) ApplyDurableEvent(event events.DurableEvent) error {
 	if strings.TrimSpace(event.ID) == "" || strings.TrimSpace(event.Type) == "" {
 		return fmt.Errorf("event id and type must not be empty")
 	}
@@ -81,7 +62,7 @@ func (s *Store) ApplyDurableEvent(event DurableEvent) error {
 			return nil
 		}
 
-		if event.Type == EventExecutionStarted {
+		if event.Type == events.EventExecutionStarted {
 			var payload struct {
 				Directory string `json:"directory"`
 			}
@@ -98,14 +79,14 @@ func (s *Store) ApplyDurableEvent(event DurableEvent) error {
 			return fmt.Errorf("resolve event session: %w", err)
 		}
 		switch event.Type {
-		case EventExecutionClosed:
+		case events.EventExecutionClosed:
 			return q.EndSession(context.Background(), dbgen.EndSessionParams{ID: sessionID})
-		case EventSessionCompacted:
+		case events.EventSessionCompacted:
 			if !json.Valid(event.Payload) {
 				return fmt.Errorf("invalid %s payload", event.Type)
 			}
 			return q.TouchSessionCompact(context.Background(), sessionID)
-		case EventAgentToolResult:
+		case events.EventAgentToolResult:
 			var payload struct {
 				Tool string `json:"tool"`
 			}
@@ -122,7 +103,7 @@ func (s *Store) ApplyDurableEvent(event DurableEvent) error {
 				NormalizedHash: sqlNullString(hashNormalized(string(event.Payload))),
 			})
 			return err
-		case EventWorkspaceFileChanged:
+		case events.EventWorkspaceFileChanged:
 			var payload struct {
 				Path   string `json:"path"`
 				Action string `json:"action"`
@@ -140,7 +121,7 @@ func (s *Store) ApplyDurableEvent(event DurableEvent) error {
 				NormalizedHash: sqlNullString(hashNormalized(string(event.Payload))),
 			})
 			return err
-		case EventGitCommitCreated:
+		case events.EventGitCommitCreated:
 			var payload struct {
 				Hash    string `json:"hash"`
 				Message string `json:"message"`

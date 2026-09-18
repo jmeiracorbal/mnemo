@@ -1,4 +1,4 @@
-package events
+package events_test
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jmeiracorbal/mnemo/adapters"
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -34,8 +35,8 @@ func TestControllerAppliesEventExactlyOnceAfterExecutionBinding(t *testing.T) {
 		t.Fatalf("bind execution session: %v", err)
 	}
 
-	cfg := Config{Port: freePort(t), DataDir: t.TempDir()}
-	controller, err := NewController(cfg, memory)
+	cfg := events.Config{Port: freePort(t), DataDir: t.TempDir()}
+	controller, err := events.NewController(cfg, memory)
 	if err != nil {
 		t.Fatalf("start controller: %v", err)
 	}
@@ -45,14 +46,14 @@ func TestControllerAppliesEventExactlyOnceAfterExecutionBinding(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- controller.Run(ctx) }()
 
-	event, err := NewEvent(EventWorkspaceFileChanged, project, identity.Execution, map[string]string{"path": "internal/events/events.go", "action": "modified"})
+	event, err := events.NewEvent(events.EventWorkspaceFileChanged, project, identity.Execution, map[string]string{"path": "internal/events/events.go", "action": "modified"})
 	if err != nil {
 		t.Fatalf("new event: %v", err)
 	}
-	if err := Publish(context.Background(), cfg, event); err != nil {
+	if err := events.Publish(context.Background(), cfg, event); err != nil {
 		t.Fatalf("publish first event: %v", err)
 	}
-	if err := Publish(context.Background(), cfg, event); err != nil {
+	if err := events.Publish(context.Background(), cfg, event); err != nil {
 		t.Fatalf("publish duplicate event: %v", err)
 	}
 
@@ -83,8 +84,8 @@ func TestControllerDerivesExecutionKeyFromNativeIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = memory.Close() })
-	cfg := Config{Port: freePort(t), DataDir: t.TempDir()}
-	controller, err := NewController(cfg, memory)
+	cfg := events.Config{Port: freePort(t), DataDir: t.TempDir()}
+	controller, err := events.NewController(cfg, memory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,8 +93,8 @@ func TestControllerDerivesExecutionKeyFromNativeIdentity(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = controller.Run(ctx) }()
-	event := Event{ID: "pi-start", Type: EventExecutionStarted, Project: "project-pi", Agent: adapters.AgentPi, NativeID: "native-pi-session", Payload: []byte(`{"directory":"/tmp/pi-project"}`), OccurredAt: time.Now().UTC()}
-	if err := Publish(context.Background(), cfg, event); err != nil {
+	event := events.Event{ID: "pi-start", Type: events.EventExecutionStarted, Project: "project-pi", Agent: adapters.AgentPi, NativeID: "native-pi-session", Payload: []byte(`{"directory":"/tmp/pi-project"}`), OccurredAt: time.Now().UTC()}
+	if err := events.Publish(context.Background(), cfg, event); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(5 * time.Second)
@@ -112,8 +113,8 @@ func TestControllerExecutesMCPMutationsThroughDurableCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = memory.Close() })
-	cfg := Config{Port: freePort(t), DataDir: t.TempDir()}
-	controller, err := NewController(cfg, memory)
+	cfg := events.Config{Port: freePort(t), DataDir: t.TempDir()}
+	controller, err := events.NewController(cfg, memory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func TestControllerExecutesMCPMutationsThroughDurableCommands(t *testing.T) {
 	go func() { _ = controller.Run(ctx) }()
 
 	var sessionID string
-	if err := Call(context.Background(), cfg, "resolve_session", struct {
+	if err := events.Call(context.Background(), cfg, "resolve_session", struct {
 		Project    string `json:"project"`
 		Directory  string `json:"directory"`
 		InstanceID string `json:"instance_id"`
@@ -132,7 +133,7 @@ func TestControllerExecutesMCPMutationsThroughDurableCommands(t *testing.T) {
 		t.Fatalf("resolve durable MCP session: %v", err)
 	}
 	var observationID int64
-	if err := Call(context.Background(), cfg, "add_observation", store.AddObservationParams{SessionID: sessionID, Type: "manual", Title: "Through controller", Content: "The MCP process did not open SQLite.", Project: "project-rpc"}, &observationID); err != nil {
+	if err := events.Call(context.Background(), cfg, "add_observation", store.AddObservationParams{SessionID: sessionID, Type: "manual", Title: "Through controller", Content: "The MCP process did not open SQLite.", Project: "project-rpc"}, &observationID); err != nil {
 		t.Fatalf("save durable MCP observation: %v", err)
 	}
 	if observationID == 0 {
@@ -143,7 +144,7 @@ func TestControllerExecutesMCPMutationsThroughDurableCommands(t *testing.T) {
 	}
 }
 
-func mustExecution(t *testing.T, event Event) string {
+func mustExecution(t *testing.T, event events.Event) string {
 	t.Helper()
 	identity, err := adapters.NewIdentity(event.Agent, event.Project, event.NativeID)
 	if err != nil {
@@ -154,13 +155,13 @@ func mustExecution(t *testing.T, event Event) string {
 
 func TestLoadConfigRequiresExplicitGlobalPort(t *testing.T) {
 	directory := t.TempDir()
-	if _, err := LoadConfig(directory); err == nil {
+	if _, err := events.LoadConfig(directory); err == nil {
 		t.Fatal("missing config.toml must fail")
 	}
 	if err := os.WriteFile(filepath.Join(directory, "config.toml"), []byte("[events]\nport = 4222\n"), 0600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	cfg, err := LoadConfig(directory)
+	cfg, err := events.LoadConfig(directory)
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
