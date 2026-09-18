@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/adapters"
+	"github.com/jmeiracorbal/mnemo-adapters/agents"
 )
 
 func TestApplyMCPCommandImportIsAtomic(t *testing.T) {
@@ -117,7 +117,7 @@ func TestApplyMCPCommandExecutesPiToolAgainstCanonicalExecutionSession(t *testin
 
 	project, nativeID, directory := "project-pi-tool", "pi-native-session", t.TempDir()
 	payload, err := json.Marshal(AgentToolRequest{
-		Agent: adapters.AgentPi, NativeID: nativeID, Project: project, Directory: directory,
+		Agent: agents.AgentPi, NativeID: nativeID, Project: project, Directory: directory,
 		Tool: "mem_save", Arguments: map[string]any{"title": "Pi identity", "content": "The adapter must use Pi's native session."},
 	})
 	if err != nil {
@@ -134,7 +134,7 @@ func TestApplyMCPCommandExecutesPiToolAgainstCanonicalExecutionSession(t *testin
 	if string(first) != string(second) {
 		t.Fatalf("replayed result = %s, want %s", second, first)
 	}
-	identity, err := adapters.NewIdentity(adapters.AgentPi, project, nativeID)
+	identity, err := agents.NewIdentity(agents.AgentPi, project, nativeID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -24,6 +24,14 @@
 </p>
 
 <p align="center">
+  <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-supported-6B46C1?logo=claudecode&logoColor=white">
+  <img alt="Codex" src="https://img.shields.io/badge/Codex-supported-00A67E?logo=openai&logoColor=white">
+  <img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-111111?logo=cursor&logoColor=white">
+  <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-supported-F97316?logo=opencode&logoColor=white">
+  <img alt="Pi" src="https://img.shields.io/badge/Pi-supported-0EA5E9">
+</p>
+
+<p align="center">
   <a href="#quick-start">Quick Start</a> ·
   <a href="#why-mnemo">Why mnemo?</a> ·
   <a href="#supported-agents">Agents</a> ·
@@ -99,15 +107,17 @@ The controller is installed as a per-user service during setup. See [Durable eve
 | **Project maintenance** | `mnemo projects list`, `mnemo projects merge` and `mnemo projects rename` help curate duplicate or unclear project identities. |
 | **Memory curation** | `mnemo memories review` surfaces duplicate or conflicting observations for approved repair. |
 
-## Supported Agents
+## Associated modules
 
-<p align="center">
-  <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-supported-6B46C1?logo=claudecode&logoColor=white">
-  <img alt="Codex" src="https://img.shields.io/badge/Codex-supported-00A67E?logo=openai&logoColor=white">
-  <img alt="Cursor" src="https://img.shields.io/badge/Cursor-supported-111111?logo=cursor&logoColor=white">
-  <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-supported-F97316?logo=opencode&logoColor=white">
-  <img alt="Pi" src="https://img.shields.io/badge/Pi-supported-0EA5E9">
-</p>
+mnemo uses these published modules as the single source of truth for its shared
+integration contracts:
+
+| Module | Purpose |
+|---|---|
+| [`mnemo-adapters`](https://github.com/jmeiracorbal/mnemo-adapters) | Agent adapter interfaces, registrations and mappings used by the CLI, controller and MCP integration. |
+| [`mnemo-events`](https://github.com/jmeiracorbal/mnemo-events) | Durable event and command contracts shared by publishers, the controller and store. |
+
+## Supported Agents
 
 | Agent | MCP | Hooks / runtime | Global instructions | Skill access | Status |
 |---|---:|---:|---:|---:|---|
