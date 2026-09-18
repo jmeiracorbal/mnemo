@@ -1,4 +1,4 @@
-package events_test
+package store_test
 
 import (
 	"context"
@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/adapters"
-	"github.com/jmeiracorbal/mnemo/internal/events"
+	"github.com/jmeiracorbal/mnemo-adapters/agents"
+	"github.com/jmeiracorbal/mnemo-events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -21,9 +21,9 @@ func TestControllerAppliesEventExactlyOnceAfterExecutionBinding(t *testing.T) {
 	t.Cleanup(func() { _ = memory.Close() })
 
 	project := "project-events"
-	agent := adapters.AgentCodex
+	agent := agents.AgentCodex
 	nativeID := "codex-session"
-	identity, err := adapters.NewIdentity(agent, project, nativeID)
+	identity, err := agents.NewIdentity(agent, project, nativeID)
 	if err != nil {
 		t.Fatalf("derive execution identity: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestControllerDerivesExecutionKeyFromNativeIdentity(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = controller.Run(ctx) }()
-	event := events.Event{ID: "pi-start", Type: events.EventExecutionStarted, Project: "project-pi", Agent: adapters.AgentPi, NativeID: "native-pi-session", Payload: []byte(`{"directory":"/tmp/pi-project"}`), OccurredAt: time.Now().UTC()}
+	event := events.Event{ID: "pi-start", Type: events.EventExecutionStarted, Project: "project-pi", Agent: agents.AgentPi, NativeID: "native-pi-session", Payload: []byte(`{"directory":"/tmp/pi-project"}`), OccurredAt: time.Now().UTC()}
 	if err := events.Publish(context.Background(), cfg, event); err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestControllerExecutesMCPMutationsThroughDurableCommands(t *testing.T) {
 
 func mustExecution(t *testing.T, event events.Event) string {
 	t.Helper()
-	identity, err := adapters.NewIdentity(event.Agent, event.Project, event.NativeID)
+	identity, err := agents.NewIdentity(event.Agent, event.Project, event.NativeID)
 	if err != nil {
 		t.Fatal(err)
 	}

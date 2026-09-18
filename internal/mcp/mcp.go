@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jmeiracorbal/mnemo/adapters"
+	"github.com/jmeiracorbal/mnemo-adapters/agents"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -186,7 +186,7 @@ func NewServerWithTools(s MemoryBackend, version string, allowlist map[string]bo
 type Runtime struct {
 	instanceID string
 	pid        int
-	agent      adapters.Agent
+	agent      agents.Agent
 	mu         sync.Mutex
 }
 
@@ -196,9 +196,9 @@ func NewServerWithRuntime(s MemoryBackend, version string, allowlist map[string]
 	if strings.TrimSpace(version) == "" {
 		return nil, nil, fmt.Errorf("mcp server version is required")
 	}
-	agent := adapters.Agent(strings.TrimSpace(os.Getenv("MNEMO_AGENT")))
+	agent := agents.Agent(strings.TrimSpace(os.Getenv("MNEMO_AGENT")))
 	if agent != "" {
-		if _, ok := adapters.AdapterFor(agent); !ok {
+		if _, ok := agents.AdapterFor(agent); !ok {
 			return nil, nil, fmt.Errorf("unknown MCP agent %q", agent)
 		}
 	}
@@ -241,41 +241,41 @@ func (r *Runtime) resolveSession(s MemoryBackend, project, directory string, req
 	return sessionID, nil
 }
 
-func (r *Runtime) executionIdentity(project string, req mcp.CallToolRequest) (adapters.Identity, bool, error) {
-	if adapter, ok := adapters.ToolCallAdapterFor(r.agent); ok {
+func (r *Runtime) executionIdentity(project string, req mcp.CallToolRequest) (agents.Identity, bool, error) {
+	if adapter, ok := agents.ToolCallAdapterFor(r.agent); ok {
 		if req.Params.Meta == nil {
-			return adapters.Identity{}, true, fmt.Errorf("%s tools/call metadata is required", r.agent)
+			return agents.Identity{}, true, fmt.Errorf("%s tools/call metadata is required", r.agent)
 		}
 		identity, err := adapter.ParseToolCallMeta(req.Params.Meta.AdditionalFields, project)
 		if err != nil {
-			return adapters.Identity{}, true, err
+			return agents.Identity{}, true, err
 		}
 		return identity, true, nil
 	}
-	if adapter, ok := adapters.EnvironmentAdapterFor(r.agent); ok {
+	if adapter, ok := agents.EnvironmentAdapterFor(r.agent); ok {
 		variable := adapter.NativeIDEnvironmentVariable()
 		nativeID := strings.TrimSpace(os.Getenv(variable))
 		if nativeID == "" {
-			return adapters.Identity{}, true, fmt.Errorf("%s requires %s", r.agent, variable)
+			return agents.Identity{}, true, fmt.Errorf("%s requires %s", r.agent, variable)
 		}
 		identity, err := adapter.Identity(project, nativeID)
 		if err != nil {
-			return adapters.Identity{}, true, err
+			return agents.Identity{}, true, err
 		}
 		return identity, true, nil
 	}
-	if adapter, ok := adapters.SideChannelAdapterFor(r.agent); ok {
+	if adapter, ok := agents.SideChannelAdapterFor(r.agent); ok {
 		nativeID, err := adapter.ReadNativeID(project)
 		if err != nil {
-			return adapters.Identity{}, true, err
+			return agents.Identity{}, true, err
 		}
 		identity, err := adapter.Identity(project, nativeID)
 		if err != nil {
-			return adapters.Identity{}, true, err
+			return agents.Identity{}, true, err
 		}
 		return identity, true, nil
 	}
-	return adapters.Identity{}, false, nil
+	return agents.Identity{}, false, nil
 }
 
 func shouldRegister(name string, allowlist map[string]bool) bool {

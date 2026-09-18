@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
-	"github.com/jmeiracorbal/mnemo/internal/events"
+	"github.com/jmeiracorbal/mnemo-events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
