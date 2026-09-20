@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
-	"github.com/jmeiracorbal/mnemo/internal/events"
+	"github.com/jmeiracorbal/mnemo-events"
 	"path/filepath"
 )
 

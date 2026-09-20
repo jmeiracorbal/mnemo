@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jmeiracorbal/mnemo/adapters"
-	"github.com/jmeiracorbal/mnemo/internal/events"
+	"github.com/jmeiracorbal/mnemo-adapters/agents"
+	"github.com/jmeiracorbal/mnemo-adapters/mapping"
+	"github.com/jmeiracorbal/mnemo-events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -29,7 +30,7 @@ func runEvents() {
 	}
 
 	if command == "map" {
-		data, err := adapters.EventMapJSON(adapters.Agent(values["agent"]))
+		data, err := mapping.EventMapJSON(agents.Agent(values["agent"]))
 		if err != nil {
 			eventFail(err)
 		}
@@ -53,7 +54,7 @@ func runEvents() {
 	switch command {
 	case "publish":
 		payload := json.RawMessage(values["payload"])
-		event := events.Event{ID: uuid.NewString(), Type: values["type"], Project: project, ExecutionKey: values["execution-key"], Agent: adapters.Agent(values["agent"]), NativeID: values["native-id"], Payload: payload, OccurredAt: time.Now().UTC()}
+		event := events.Event{ID: uuid.NewString(), Type: values["type"], Project: project, ExecutionKey: values["execution-key"], Agent: agents.Agent(values["agent"]), NativeID: values["native-id"], Payload: payload, OccurredAt: time.Now().UTC()}
 		if err := event.Validate(); err != nil {
 			eventFail(err)
 		}
@@ -72,13 +73,13 @@ func runEvents() {
 			Text string `json:"text"`
 		}
 		input := struct {
-			Agent     adapters.Agent  `json:"agent"`
+			Agent     agents.Agent    `json:"agent"`
 			NativeID  string          `json:"native_id"`
 			Project   string          `json:"project"`
 			Directory string          `json:"directory"`
 			Tool      string          `json:"tool"`
 			Arguments json.RawMessage `json:"arguments"`
-		}{adapters.Agent(values["agent"]), values["native-id"], project, directory, values["tool"], payload}
+		}{agents.Agent(values["agent"]), values["native-id"], project, directory, values["tool"], payload}
 		if err := events.Call(context.Background(), cfg, "agent_tool", input, &result); err != nil {
 			eventFail(err)
 		}

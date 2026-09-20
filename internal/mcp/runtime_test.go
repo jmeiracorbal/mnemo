@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/adapters"
+	"github.com/jmeiracorbal/mnemo-adapters/agents"
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -13,7 +13,7 @@ type recordingSessionBackend struct {
 	MemoryBackend
 	sessionID string
 	project   string
-	agent     adapters.Agent
+	agent     agents.Agent
 	nativeID  string
 }
 
@@ -21,7 +21,7 @@ func (b *recordingSessionBackend) ResolveMCPInstanceSession(project, directory, 
 	return b.sessionID, nil
 }
 
-func (b *recordingSessionBackend) BindExecutionSession(project string, agent adapters.Agent, nativeID, sessionID string) error {
+func (b *recordingSessionBackend) BindExecutionSession(project string, agent agents.Agent, nativeID, sessionID string) error {
 	b.project = project
 	b.agent = agent
 	b.nativeID = nativeID
@@ -29,7 +29,7 @@ func (b *recordingSessionBackend) BindExecutionSession(project string, agent ada
 }
 
 func TestRuntimeUsesCodexToolCallSessionIdentity(t *testing.T) {
-	runtime := Runtime{agent: adapters.AgentCodex}
+	runtime := Runtime{agent: agents.AgentCodex}
 	var request gomcp.CallToolRequest
 	if err := json.Unmarshal([]byte(`{
 		"params": {
@@ -51,7 +51,7 @@ func TestRuntimeUsesCodexToolCallSessionIdentity(t *testing.T) {
 	if !binds {
 		t.Fatal("Codex tools/call identity did not require an execution binding")
 	}
-	want, err := adapters.NewIdentity(adapters.AgentCodex, "project-codex", "codex-session")
+	want, err := agents.NewIdentity(agents.AgentCodex, "project-codex", "codex-session")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestRuntimeUsesCodexToolCallSessionIdentity(t *testing.T) {
 }
 
 func TestRuntimeRejectsCodexToolCallWithoutSessionIdentity(t *testing.T) {
-	runtime := Runtime{agent: adapters.AgentCodex}
+	runtime := Runtime{agent: agents.AgentCodex}
 	_, binds, err := runtime.executionIdentity("project-codex", gomcp.CallToolRequest{})
 	if !binds {
 		t.Fatal("Codex tools/call did not require an execution binding")
@@ -73,7 +73,7 @@ func TestRuntimeRejectsCodexToolCallWithoutSessionIdentity(t *testing.T) {
 
 func TestRuntimeUsesClaudeCodeEnvironmentSessionIdentity(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "claude-session")
-	runtime := Runtime{agent: adapters.AgentClaudeCode}
+	runtime := Runtime{agent: agents.AgentClaudeCode}
 	identity, binds, err := runtime.executionIdentity("project-claude", gomcp.CallToolRequest{})
 	if err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestRuntimeUsesClaudeCodeEnvironmentSessionIdentity(t *testing.T) {
 	if !binds {
 		t.Fatal("Claude Code environment carrier did not require an execution binding")
 	}
-	want, err := adapters.NewIdentity(adapters.AgentClaudeCode, "project-claude", "claude-session")
+	want, err := agents.NewIdentity(agents.AgentClaudeCode, "project-claude", "claude-session")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestRuntimeUsesClaudeCodeEnvironmentSessionIdentity(t *testing.T) {
 
 func TestRuntimeBindsClaudeCodeEnvironmentIdentityWhenResolvingSession(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "claude-session")
-	runtime := Runtime{instanceID: "mcp-instance", pid: 1, agent: adapters.AgentClaudeCode}
+	runtime := Runtime{instanceID: "mcp-instance", pid: 1, agent: agents.AgentClaudeCode}
 	backend := &recordingSessionBackend{sessionID: "mcp-session"}
 	sessionID, err := runtime.resolveSession(backend, "project-claude", "/workspace", gomcp.CallToolRequest{})
 	if err != nil {
@@ -101,14 +101,14 @@ func TestRuntimeBindsClaudeCodeEnvironmentIdentityWhenResolvingSession(t *testin
 	if sessionID != "mcp-session" {
 		t.Fatalf("session ID = %q", sessionID)
 	}
-	if backend.project != "project-claude" || backend.agent != adapters.AgentClaudeCode || backend.nativeID != "claude-session" {
+	if backend.project != "project-claude" || backend.agent != agents.AgentClaudeCode || backend.nativeID != "claude-session" {
 		t.Fatalf("binding = project=%q agent=%q nativeID=%q", backend.project, backend.agent, backend.nativeID)
 	}
 }
 
 func TestRuntimeRejectsClaudeCodeWithoutEnvironmentSessionIdentity(t *testing.T) {
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
-	runtime := Runtime{agent: adapters.AgentClaudeCode}
+	runtime := Runtime{agent: agents.AgentClaudeCode}
 	_, binds, err := runtime.executionIdentity("project-claude", gomcp.CallToolRequest{})
 	if !binds {
 		t.Fatal("Claude Code environment carrier did not require an execution binding")
@@ -122,13 +122,13 @@ func TestRuntimeUsesCursorSideChannelIdentity(t *testing.T) {
 	project := "project-cursor-mcp"
 	nativeID := "cursor-conv-mcp-1"
 
-	path := adapters.CursorSideChannelPath(project)
+	path := agents.CursorSideChannelPath(project)
 	if err := os.WriteFile(path, []byte(nativeID), 0600); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Remove(path) })
 
-	runtime := Runtime{agent: adapters.AgentCursor}
+	runtime := Runtime{agent: agents.AgentCursor}
 	identity, binds, err := runtime.executionIdentity(project, gomcp.CallToolRequest{})
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +136,7 @@ func TestRuntimeUsesCursorSideChannelIdentity(t *testing.T) {
 	if !binds {
 		t.Fatal("Cursor side-channel did not require an execution binding")
 	}
-	want, err := adapters.NewIdentity(adapters.AgentCursor, project, nativeID)
+	want, err := agents.NewIdentity(agents.AgentCursor, project, nativeID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestRuntimeUsesCursorSideChannelIdentity(t *testing.T) {
 }
 
 func TestRuntimeRejectsCursorWithoutSideChannelFile(t *testing.T) {
-	runtime := Runtime{agent: adapters.AgentCursor}
+	runtime := Runtime{agent: agents.AgentCursor}
 	_, binds, err := runtime.executionIdentity("project-cursor-no-file", gomcp.CallToolRequest{})
 	if !binds {
 		t.Fatal("Cursor side-channel did not require an execution binding")

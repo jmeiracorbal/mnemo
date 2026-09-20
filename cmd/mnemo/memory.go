@@ -7,7 +7,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/jmeiracorbal/mnemo/internal/events"
+	"github.com/jmeiracorbal/mnemo-events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 

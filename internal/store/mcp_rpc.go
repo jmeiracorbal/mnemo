@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/jmeiracorbal/mnemo/adapters"
+	"github.com/jmeiracorbal/mnemo-adapters/agents"
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
 
@@ -91,7 +91,7 @@ func (s *Store) ExecuteMCPAction(ctx context.Context, action string, payload jso
 	case "bind_execution_session":
 		var input struct {
 			Project   string         `json:"project"`
-			Agent     adapters.Agent `json:"agent"`
+			Agent     agents.Agent `json:"agent"`
 			NativeID  string         `json:"native_id"`
 			SessionID string         `json:"session_id"`
 		}

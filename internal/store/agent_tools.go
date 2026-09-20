@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/adapters"
+	"github.com/jmeiracorbal/mnemo-adapters/agents"
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
 
@@ -16,7 +16,7 @@ import (
 // Agent extensions submit their platform-native ID, never mnemo's session ID
 // nor a precomputed execution key.
 type AgentToolRequest struct {
-	Agent     adapters.Agent `json:"agent"`
+	Agent     agents.Agent `json:"agent"`
 	NativeID  string         `json:"native_id"`
 	Project   string         `json:"project"`
 	Directory string         `json:"directory"`
@@ -33,7 +33,7 @@ type AgentToolResult struct {
 // ExecuteAgentTool is the controller-only entry point for native adapters.
 // It intentionally covers the agent MCP profile; diagnostics remain CLI tools.
 func (s *Store) ExecuteAgentTool(input AgentToolRequest) (AgentToolResult, error) {
-	identity, err := adapters.NewIdentity(input.Agent, input.Project, input.NativeID)
+	identity, err := agents.NewIdentity(input.Agent, input.Project, input.NativeID)
 	if err != nil {
 		return AgentToolResult{}, fmt.Errorf("derive agent execution identity: %w", err)
 	}
@@ -137,7 +137,7 @@ func (s *Store) ExecuteAgentTool(input AgentToolRequest) (AgentToolResult, error
 	}
 }
 
-func (s *Store) ensureExecutionSession(identity adapters.Identity, directory string) (string, error) {
+func (s *Store) ensureExecutionSession(identity agents.Identity, directory string) (string, error) {
 	var sessionID string
 	err := s.withTx(func(tx *sql.Tx) error {
 		var err error
@@ -147,7 +147,7 @@ func (s *Store) ensureExecutionSession(identity adapters.Identity, directory str
 	return sessionID, err
 }
 
-func (s *Store) ensureExecutionSessionTx(tx *sql.Tx, identity adapters.Identity, directory string) (string, error) {
+func (s *Store) ensureExecutionSessionTx(tx *sql.Tx, identity agents.Identity, directory string) (string, error) {
 	q := s.q.WithTx(tx)
 	id := "execution-" + identity.Execution
 	endedAt, err := q.GetExecutionSessionEndedAt(context.Background(), dbgen.GetExecutionSessionEndedAtParams{ID: id, Project: identity.Project})

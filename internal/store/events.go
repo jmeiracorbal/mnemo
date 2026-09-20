@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/adapters"
-	"github.com/jmeiracorbal/mnemo/internal/events"
+	"github.com/jmeiracorbal/mnemo-adapters/agents"
+	"github.com/jmeiracorbal/mnemo-events"
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
 
@@ -17,8 +17,8 @@ import (
 // opaque execution key itself so MCP clients never submit a hash. Rebinding is
 // intentional: a new MCP runtime for the same execution supersedes the prior
 // runtime's session.
-func (s *Store) BindExecutionSession(project string, agent adapters.Agent, nativeID, sessionID string) error {
-	identity, err := adapters.NewIdentity(agent, project, nativeID)
+func (s *Store) BindExecutionSession(project string, agent agents.Agent, nativeID, sessionID string) error {
+	identity, err := agents.NewIdentity(agent, project, nativeID)
 	if err != nil {
 		return fmt.Errorf("derive execution identity: %w", err)
 	}
@@ -69,7 +69,7 @@ func (s *Store) ApplyDurableEvent(event events.DurableEvent) error {
 			if err := json.Unmarshal(event.Payload, &payload); err != nil || strings.TrimSpace(payload.Directory) == "" {
 				return fmt.Errorf("%s payload requires directory", event.Type)
 			}
-			_, err := s.ensureExecutionSessionTx(tx, adapters.Identity{Project: event.Project, Execution: event.ExecutionKey}, payload.Directory)
+			_, err := s.ensureExecutionSessionTx(tx, agents.Identity{Project: event.Project, Execution: event.ExecutionKey}, payload.Directory)
 			return err
 		}
 		sessionID, err := q.GetExecutionSessionID(context.Background(), dbgen.GetExecutionSessionIDParams{
