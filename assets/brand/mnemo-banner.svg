@@ -10,7 +10,6 @@
   <line x1="1" y1="240" x2="1099" y2="240" stroke="#c4d0de" stroke-width="1"/>
 
   <text x="64" y="26" font-family="ui-monospace, Menlo, monospace" font-size="11" letter-spacing="0.18em" fill="#4a6080">MNEMO / LOCAL MEMORY LAYER</text>
-  <text x="1036" y="26" text-anchor="end" font-family="ui-monospace, Menlo, monospace" font-size="11" letter-spacing="0.12em" fill="#8aa0b8">ALPHA</text>
 
   <g transform="translate(120, 92)">
     <circle cx="48" cy="18" r="10" fill="#0f1f38"/>
@@ -37,5 +36,4 @@
   </g>
 
   <text x="64" y="266" font-family="ui-monospace, Menlo, monospace" font-size="11" letter-spacing="0.14em" fill="#4a6080">CLAUDE CODE  |  CODEX  |  CURSOR  |  OPENCODE  |  PI</text>
-  <text x="1036" y="266" text-anchor="end" font-family="ui-monospace, Menlo, monospace" font-size="11" letter-spacing="0.12em" fill="#8aa0b8">PAPER / INK</text>
 </svg>
