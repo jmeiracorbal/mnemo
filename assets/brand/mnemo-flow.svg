@@ -1,37 +1,48 @@
-<svg width="920" height="320" viewBox="0 0 920 320" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+<svg width="920" height="300" viewBox="0 0 920 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">mnemo architecture flow</title>
-  <desc id="desc">Agents connect to mnemo through hooks, MCP tools, and skills. mnemo stores project-scoped memories in SQLite with FTS5.</desc>
-  <rect width="920" height="320" rx="28" fill="#F8FAFC"/>
-  <defs>
-    <linearGradient id="g" x1="70" y1="44" x2="850" y2="276" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0F5C7A"/>
-      <stop offset="1" stop-color="#14B8A6"/>
-    </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0F172A" flood-opacity="0.12"/>
-    </filter>
-  </defs>
-  <g filter="url(#shadow)">
-    <rect x="46" y="70" width="210" height="180" rx="22" fill="white" stroke="#E2E8F0"/>
-    <rect x="354" y="70" width="210" height="180" rx="22" fill="white" stroke="#E2E8F0"/>
-    <rect x="662" y="70" width="210" height="180" rx="22" fill="white" stroke="#E2E8F0"/>
-  </g>
-  <text x="151" y="108" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="19" font-weight="700" fill="#0F172A">AI coding agents</text>
-  <text x="151" y="142" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">Claude Code · Codex</text>
-  <text x="151" y="166" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">Cursor · Windsurf</text>
-  <text x="151" y="190" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">OpenCode</text>
-  <text x="459" y="108" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="19" font-weight="700" fill="#0F172A">mnemo</text>
-  <text x="459" y="142" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">MCP tools</text>
-  <text x="459" y="166" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">session hooks</text>
-  <text x="459" y="190" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">portable skills</text>
-  <text x="767" y="108" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="19" font-weight="700" fill="#0F172A">Local memory</text>
-  <text x="767" y="142" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">SQLite + FTS5</text>
-  <text x="767" y="166" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">project-scoped</text>
-  <text x="767" y="190" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="14" fill="#475569">offline-first</text>
-  <path d="M276 160H334" stroke="url(#g)" stroke-width="5" stroke-linecap="round"/>
-  <path d="M326 148L340 160L326 172" stroke="url(#g)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M584 160H642" stroke="url(#g)" stroke-width="5" stroke-linecap="round"/>
-  <path d="M634 148L648 160L634 172" stroke="url(#g)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="306" y="252" width="308" height="34" rx="17" fill="#ECFEFF" stroke="#A5F3FC"/>
-  <text x="460" y="274" text-anchor="middle" font-family="Inter, ui-sans-serif, system-ui" font-size="13" font-weight="600" fill="#0F5C7A">One memory layer across every agent</text>
+  <desc id="desc">Agents connect to mnemo through hooks, MCP and skills; memory stays in local SQLite</desc>
+
+  <rect width="920" height="300" fill="#f0f4f8"/>
+  <rect x="0.5" y="0.5" width="919" height="299" stroke="#c4d0de" stroke-width="1"/>
+
+  <text x="40" y="36" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="11" letter-spacing="0.16em" fill="#4a6080">ARCHITECTURE / ONE MEMORY LAYER</text>
+  <line x1="40" y1="48" x2="880" y2="48" stroke="#c4d0de" stroke-width="1"/>
+
+  <!-- panel: agents -->
+  <rect x="40" y="72" width="240" height="160" fill="#e2eaf2" stroke="#0f1f38" stroke-width="1"/>
+  <rect x="40" y="72" width="240" height="32" fill="#0f1f38"/>
+  <text x="160" y="93" text-anchor="middle" font-family="Archivo, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#f0f4f8">AI coding agents</text>
+  <text x="160" y="132" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="13" fill="#0f1f38">Claude Code</text>
+  <text x="160" y="156" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="13" fill="#0f1f38">Codex · Cursor</text>
+  <text x="160" y="180" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="13" fill="#0f1f38">OpenCode · Pi</text>
+  <text x="160" y="210" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="11" fill="#4a6080">hooks · MCP · skills</text>
+
+  <!-- arrow -->
+  <line x1="296" y1="152" x2="348" y2="152" stroke="#0f1f38" stroke-width="1.5"/>
+  <polyline points="340,144 352,152 340,160" fill="none" stroke="#0f1f38" stroke-width="1.5"/>
+
+  <!-- panel: mnemo -->
+  <rect x="360" y="72" width="240" height="160" fill="#f0f4f8" stroke="#0f1f38" stroke-width="1"/>
+  <rect x="360" y="72" width="240" height="32" fill="#0f1f38"/>
+  <text x="480" y="93" text-anchor="middle" font-family="Archivo, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#f0f4f8">mnemo</text>
+  <text x="480" y="132" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="13" fill="#0f1f38">event controller</text>
+  <text x="480" y="156" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="13" fill="#0f1f38">MCP tools</text>
+  <text x="480" y="180" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="13" fill="#0f1f38">portable skills</text>
+  <text x="480" y="210" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="11" fill="#4a6080">sole SQLite writer</text>
+
+  <!-- arrow -->
+  <line x1="616" y1="152" x2="668" y2="152" stroke="#0f1f38" stroke-width="1.5"/>
+  <polyline points="660,144 672,152 660,160" fill="none" stroke="#0f1f38" stroke-width="1.5"/>
+
+  <!-- panel: memory -->
+  <rect x="680" y="72" width="200" height="160" fill="#e2eaf2" stroke="#0f1f38" stroke-width="1"/>
+  <rect x="680" y="72" width="200" height="32" fill="#0f1f38"/>
+  <text x="780" y="93" text-anchor="middle" font-family="Archivo, 'Helvetica Neue', Arial, sans-serif" font-size="14" font-weight="600" fill="#f0f4f8">Local memory</text>
+  <text x="780" y="132" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="13" fill="#0f1f38">SQLite + FTS5</text>
+  <text x="780" y="156" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="13" fill="#0f1f38">project-scoped</text>
+  <text x="780" y="180" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="13" fill="#0f1f38">offline-first</text>
+  <text x="780" y="210" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="11" fill="#4a6080">~/.mnemo</text>
+
+  <rect x="40" y="252" width="840" height="28" fill="#0f1f38"/>
+  <text x="460" y="271" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="12" letter-spacing="0.08em" fill="#f0f4f8">ONE MEMORY AUTHORITY ACROSS EVERY SUPPORTED AGENT</text>
 </svg>
