@@ -1,11 +1,5 @@
 <p align="center">
   <a href="https://jmeiracorbal.github.io/mnemo/">
-    <img src="site/favicon.svg" alt="mnemo" width="96" height="96">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://jmeiracorbal.github.io/mnemo/">
     <img src="assets/brand/mnemo-banner.png" alt="mnemo — 面向 AI 编程代理的持久化记忆" width="920">
   </a>
 </p>
