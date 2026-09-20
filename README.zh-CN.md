@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://jmeiracorbal.github.io/mnemo/">
-    <img src="assets/brand/mnemo-banner.svg" alt="mnemo — 面向 AI 编程代理的持久化记忆" width="920">
+    <img src="assets/brand/mnemo-banner.png" alt="mnemo — 面向 AI 编程代理的持久化记忆" width="920">
   </a>
 </p>
 
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/brand/mnemo-terminal.svg" alt="mnemo 终端演示" width="920">
+  <img src="assets/brand/mnemo-terminal.png" alt="mnemo 终端演示" width="920">
 </p>
 
 ---
@@ -85,7 +85,7 @@ mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ## 工作原理
 
 <p align="center">
-  <img src="assets/brand/mnemo-flow.svg" alt="代理 → mnemo → 本地 SQLite 记忆" width="920">
+  <img src="assets/brand/mnemo-flow.png" alt="代理 → mnemo → 本地 SQLite 记忆" width="920">
 </p>
 
 1. **代理** 通过 MCP 工具、hooks 和可移植 Agent Skills 与 mnemo 交互。

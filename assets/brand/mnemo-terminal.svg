@@ -1,6 +1,6 @@
 <svg width="920" height="300" viewBox="0 0 920 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">mnemo terminal demo</title>
-  <desc id="desc">Terminal showing mnemo init, doctor, and context — paper ink style</desc>
+  <desc id="desc">Terminal showing mnemo init, doctor, and context â paper ink style</desc>
 
   <rect width="920" height="300" fill="#f0f4f8"/>
   <rect x="40" y="36" width="840" height="228" fill="#0b1422" stroke="#0f1f38" stroke-width="1"/>
@@ -10,16 +10,16 @@
   <rect x="56" y="50" width="10" height="10" fill="#0f1f38"/>
   <rect x="74" y="50" width="10" height="10" fill="#4a6080"/>
   <rect x="92" y="50" width="10" height="10" fill="#8aa0b8"/>
-  <text x="460" y="59" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="12" fill="#8aa0b8">~/project · mnemo</text>
+  <text x="460" y="59" text-anchor="middle" font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="12" fill="#8aa0b8">~/project Â| mnemo</text>
 
   <g font-family="'IBM Plex Mono', ui-monospace, Menlo, monospace" font-size="15">
     <text x="64" y="108" fill="#8aa0b8">$</text>
     <text x="84" y="108" fill="#dde8f4">mnemo init --agent=all</text>
-    <text x="84" y="132" fill="#7a9ab8">ok  project activated · .mnemo written</text>
+    <text x="84" y="132" fill="#7a9ab8">ok  project activated Â| .mnemo written</text>
 
     <text x="64" y="168" fill="#8aa0b8">$</text>
     <text x="84" y="168" fill="#dde8f4">mnemo doctor --agent=all --path=.</text>
-    <text x="84" y="192" fill="#7a9ab8">status: ok · MCP · hooks · instructions · store</text>
+    <text x="84" y="192" fill="#7a9ab8">status: ok Â| MCP Â| hooks Â| instructions Â| store</text>
 
     <text x="64" y="228" fill="#8aa0b8">$</text>
     <text x="84" y="228" fill="#dde8f4">mnemo context myapp</text>

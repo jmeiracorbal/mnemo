@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://jmeiracorbal.github.io/mnemo/">
-    <img src="assets/brand/mnemo-banner.svg" alt="mnemo — persistent memory for AI coding agents" width="920">
+    <img src="assets/brand/mnemo-banner.png" alt="mnemo — persistent memory for AI coding agents" width="920">
   </a>
 </p>
 
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/brand/mnemo-terminal.svg" alt="mnemo terminal demo" width="920">
+  <img src="assets/brand/mnemo-terminal.png" alt="mnemo terminal demo" width="920">
 </p>
 
 ---
@@ -85,7 +85,7 @@ Unpinned installs and `mnemo update` follow stable releases by default. Use `mne
 ## How it works
 
 <p align="center">
-  <img src="assets/brand/mnemo-flow.svg" alt="agents → mnemo → local SQLite memory" width="920">
+  <img src="assets/brand/mnemo-flow.png" alt="agents → mnemo → local SQLite memory" width="920">
 </p>
 
 1. **Agents** talk to mnemo through MCP tools, hooks and portable Agent Skills.

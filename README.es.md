@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://jmeiracorbal.github.io/mnemo/">
-    <img src="assets/brand/mnemo-banner.svg" alt="mnemo — memoria persistente para agentes de programación" width="920">
+    <img src="assets/brand/mnemo-banner.png" alt="mnemo — memoria persistente para agentes de programación" width="920">
   </a>
 </p>
 
@@ -42,7 +42,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/brand/mnemo-terminal.svg" alt="demo de terminal de mnemo" width="920">
+  <img src="assets/brand/mnemo-terminal.png" alt="demo de terminal de mnemo" width="920">
 </p>
 
 ---
@@ -91,7 +91,7 @@ Las instalaciones sin versión y `mnemo update` siguen releases estables por def
 ## Cómo funciona
 
 <p align="center">
-  <img src="assets/brand/mnemo-flow.svg" alt="agentes → mnemo → memoria SQLite local" width="920">
+  <img src="assets/brand/mnemo-flow.png" alt="agentes → mnemo → memoria SQLite local" width="920">
 </p>
 
 1. **Los agentes** hablan con mnemo mediante herramientas MCP, hooks y Agent Skills portables.
