@@ -12,7 +12,7 @@
     <meta property="og:title" content="mnemo" />
     <meta property="og:description" content="Persistent memory for AI coding agents." />
     <meta property="og:type" content="website" />
-    <meta name="theme-color" content="#f7f6f2" />
+    <meta name="theme-color" content="#f0f4f8" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -23,7 +23,18 @@
   <body>
     <div class="frame">
       <header class="nav">
-        <a class="wordmark" href="./">mnemo</a>
+        <a class="wordmark" href="./">
+          <svg class="wordmark-mark" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="16" cy="8" r="3.4" fill="currentColor" />
+            <circle cx="7" cy="24" r="3.4" fill="var(--cg-paper)" />
+            <circle cx="25" cy="24" r="3.4" fill="var(--cg-paper)" />
+            <line x1="16" y1="8" x2="7" y2="24" />
+            <line x1="16" y1="8" x2="25" y2="24" />
+            <line x1="16" y1="11.4" x2="16" y2="20" />
+            <circle cx="16" cy="22" r="2.4" fill="var(--cg-paper)" />
+          </svg>
+          mnemo
+        </a>
         <nav class="nav-links">
           <a href="https://github.com/jmeiracorbal/mnemo/wiki">Docs</a>
           <a class="opt" href="https://github.com/jmeiracorbal/mnemo#supported-agents">Agents</a>
@@ -38,80 +49,201 @@
       <main>
         <section class="hero">
           <div class="hero-left">
-            <h1>Persistent memory for AI coding agents</h1>
-            <p class="lede">
-              A local-first memory layer that gives Claude Code, Codex, Cursor and more
-              a searchable history of decisions across sessions.
-            </p>
-            <div class="cta">
-              <a class="btn btn-primary" href="https://github.com/jmeiracorbal/mnemo/wiki/Installation">Get started</a>
-              <a class="btn btn-ghost" href="https://github.com/jmeiracorbal/mnemo/wiki">View documentation</a>
-            </div>
-            <div class="install" data-install="mnemo init --agent=all">
-              <code>mnemo init --agent=all</code>
-              <button class="copy" type="button" aria-label="Copy install command">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6">
-                  <rect x="9" y="9" width="11" height="11" />
-                  <path d="M5 15V5a1 1 0 0 1 1-1h9" />
-                </svg>
-              </button>
+            <!-- Observation graph: faint memory constellation behind copy -->
+            <svg
+              class="hero-obs"
+              viewBox="0 0 700 480"
+              preserveAspectRatio="xMidYMid slice"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <g class="hero-obs-constellation">
+                <g class="hero-obs-edges">
+                  <line x1="90" y1="70" x2="180" y2="140" class="hero-obs-edge" />
+                  <line x1="180" y1="140" x2="310" y2="90" class="hero-obs-edge hero-obs-edge-b" />
+                  <line x1="180" y1="140" x2="250" y2="250" class="hero-obs-edge" />
+                  <line x1="250" y1="250" x2="120" y2="320" class="hero-obs-edge hero-obs-edge-b" />
+                  <line x1="250" y1="250" x2="400" y2="300" class="hero-obs-edge" />
+                  <line x1="400" y1="300" x2="520" y2="200" class="hero-obs-edge hero-obs-edge-b" />
+                  <line x1="520" y1="200" x2="610" y2="110" class="hero-obs-edge" />
+                  <line x1="520" y1="200" x2="580" y2="340" class="hero-obs-edge hero-obs-edge-b" />
+                  <line x1="400" y1="300" x2="480" y2="420" class="hero-obs-edge" />
+                  <line x1="310" y1="90" x2="420" y2="60" class="hero-obs-edge hero-obs-edge-b" />
+                  <line x1="120" y1="320" x2="60" y2="420" class="hero-obs-edge" />
+                  <line x1="310" y1="90" x2="250" y2="250" class="hero-obs-edge hero-obs-edge-b" />
+                </g>
+                <g class="hero-obs-nodes">
+                  <circle cx="90" cy="70" r="4.5" class="hero-obs-node" />
+                  <circle cx="180" cy="140" r="6" class="hero-obs-node hero-obs-node-core" />
+                  <circle cx="310" cy="90" r="4" class="hero-obs-node" />
+                  <circle cx="420" cy="60" r="3.5" class="hero-obs-node" />
+                  <circle cx="120" cy="320" r="4" class="hero-obs-node" />
+                  <circle cx="60" cy="420" r="3.5" class="hero-obs-node" />
+                  <circle cx="250" cy="250" r="5.5" class="hero-obs-node hero-obs-node-core" />
+                  <circle cx="400" cy="300" r="5" class="hero-obs-node" />
+                  <circle cx="520" cy="200" r="6" class="hero-obs-node hero-obs-node-core" />
+                  <circle cx="610" cy="110" r="4" class="hero-obs-node" />
+                  <circle cx="580" cy="340" r="4.5" class="hero-obs-node" />
+                  <circle cx="480" cy="420" r="3.5" class="hero-obs-node" />
+                </g>
+              </g>
+              <g class="hero-obs-labels">
+                <text x="200" y="125" class="hero-obs-label hero-obs-float-a">mem_save()</text>
+                <text x="430" y="185" class="hero-obs-label hero-obs-float-b">topic_key</text>
+                <text x="80" y="300" class="hero-obs-label hero-obs-float-c">observation</text>
+                <text x="540" y="320" class="hero-obs-label hero-obs-float-a">FTS5</text>
+                <text x="300" y="70" class="hero-obs-label hero-obs-float-b">tags</text>
+                <text x="360" y="340" class="hero-obs-label hero-obs-float-c">mem_context()</text>
+              </g>
+            </svg>
+            <div class="hero-copy">
+              <h1>Persistent memory for AI coding agents</h1>
+              <p class="lede">
+                A local-first memory layer that gives Claude Code, Codex, Cursor and more
+                a searchable history of decisions across sessions.
+              </p>
+              <div class="cta">
+                <a class="btn btn-primary" href="https://github.com/jmeiracorbal/mnemo/wiki/Installation">Get started</a>
+                <a class="btn btn-ghost" href="https://github.com/jmeiracorbal/mnemo/wiki">View documentation</a>
+              </div>
+              <div class="install" data-install="mnemo init --agent=all">
+                <code>mnemo init --agent=all</code>
+                <button class="copy" type="button" aria-label="Copy install command">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6">
+                    <rect x="9" y="9" width="11" height="11" />
+                    <path d="M5 15V5a1 1 0 0 1 1-1h9" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
           <div class="hero-right">
-            <!-- Architecture flow: agents → controller → memory.db → observations -->
+            <!-- Architecture: peer agents → durable controller → shared project memory → cross-agent recall -->
             <svg
               class="mn-graph"
-              viewBox="0 0 760 440"
+              viewBox="0 0 760 500"
               role="img"
-              aria-label="mnemo architecture: agents call mem_save to a controller event queue which writes to memory.db (SQLite FTS5). mem_search and mem_context query the store and return observations back to agents."
+              aria-label="mnemo architecture: Claude Code, Codex, Cursor, OpenCode and Pi publish through hooks and MCP into a durable controller that is the sole SQLite writer. Shared project memory keyed by .mnemo id stores observations; any agent recalls via mem_search and mem_context."
             >
               <defs>
                 <marker id="mn-arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
                   <path d="M0,0 L0,7 L7,3.5 z" fill="currentColor" />
                 </marker>
+                <path id="mn-path-a" d="M380,82 L380,145" fill="none"/>
+                <path id="mn-path-b" d="M380,220 L380,255" fill="none"/>
+                <path id="mn-path-c" d="M380,370 L380,405 L50,405 L50,82" fill="none"/>
+                <path id="mn-path-d" d="M380,370 L380,405 L710,405 L710,82" fill="none"/>
               </defs>
 
-              <!-- Agents group -->
-              <text x="97" y="76" class="mn-label-xs" text-anchor="middle">agents</text>
-              <rect x="15" y="84" width="165" height="172" class="mn-box" />
-              <rect x="25" y="100" width="145" height="30" class="mn-box" />
-              <text x="97" y="120" class="mn-label" text-anchor="middle">Claude Code</text>
-              <rect x="25" y="142" width="100" height="30" class="mn-box" />
-              <text x="75" y="162" class="mn-label" text-anchor="middle">Codex</text>
-              <rect x="25" y="184" width="115" height="30" class="mn-box" />
-              <text x="82" y="204" class="mn-label" text-anchor="middle">Cursor</text>
-              <rect x="25" y="226" width="140" height="30" class="mn-box" />
-              <text x="95" y="246" class="mn-label" text-anchor="middle">OpenCode</text>
+              <!-- Peer agents — one project identity -->
+              <g class="mn-group-agents">
+                <text x="380" y="24" class="mn-label-xs" text-anchor="middle">supported agents · one .mnemo id</text>
 
-              <!-- Arrow: agents → controller -->
-              <line x1="180" y1="170" x2="254" y2="170" class="mn-flow" marker-end="url(#mn-arr)" />
-              <text x="217" y="159" class="mn-fn" text-anchor="middle">mem_save()</text>
+                <rect x="87" y="40" width="128" height="34" class="mn-box" />
+                <text x="151" y="59" class="mn-label" text-anchor="middle">Claude Code</text>
 
-              <!-- Controller -->
-              <rect x="256" y="140" width="158" height="60" class="mn-box" />
-              <text x="335" y="165" class="mn-label" text-anchor="middle">controller</text>
-              <text x="335" y="183" class="mn-label-xs" text-anchor="middle">event queue</text>
+                <rect x="229" y="40" width="88" height="34" class="mn-box" />
+                <text x="273" y="59" class="mn-label" text-anchor="middle">Codex</text>
 
-              <!-- Arrow: controller → storage -->
-              <line x1="414" y1="170" x2="484" y2="170" class="mn-flow" marker-end="url(#mn-arr)" />
-              <text x="449" y="159" class="mn-fn" text-anchor="middle">write</text>
+                <rect x="331" y="40" width="98" height="34" class="mn-box" />
+                <text x="380" y="59" class="mn-label" text-anchor="middle">Cursor</text>
 
-              <!-- Storage -->
-              <rect x="486" y="120" width="220" height="100" class="mn-box" />
-              <line x1="486" y1="152" x2="706" y2="152" class="mn-rule" />
-              <text x="596" y="140" class="mn-label" text-anchor="middle">memory.db</text>
-              <text x="596" y="169" class="mn-label-xs" text-anchor="middle">SQLite · FTS5</text>
-              <text x="596" y="187" class="mn-label-xs" text-anchor="middle">tags · topic keys</text>
-              <text x="596" y="205" class="mn-label-xs" text-anchor="middle">review states</text>
+                <rect x="443" y="40" width="112" height="34" class="mn-box" />
+                <text x="499" y="59" class="mn-label" text-anchor="middle">OpenCode</text>
 
-              <!-- Return path: storage → down → left → up → agents -->
-              <line x1="596" y1="220" x2="596" y2="360" class="mn-flow" />
-              <line x1="596" y1="360" x2="97"  y2="360" class="mn-flow" />
-              <line x1="97"  y1="360" x2="97"  y2="257" class="mn-flow" marker-end="url(#mn-arr)" />
+                <rect x="569" y="40" width="64" height="34" class="mn-box" />
+                <text x="601" y="59" class="mn-label" text-anchor="middle">Pi</text>
+              </g>
 
-              <!-- Return labels -->
-              <text x="346" y="380" class="mn-fn" text-anchor="middle">mem_search() · mem_context()</text>
-              <text x="63" y="308" class="mn-fn" text-anchor="middle" transform="rotate(-90 63 308)">observations</text>
+              <!-- Converge into integration bus -->
+              <g class="mn-group-bus">
+                <line x1="151" y1="74" x2="151" y2="108" class="mn-flow" />
+                <line x1="273" y1="74" x2="273" y2="108" class="mn-flow" />
+                <line x1="380" y1="74" x2="380" y2="108" class="mn-flow" />
+                <line x1="499" y1="74" x2="499" y2="108" class="mn-flow" />
+                <line x1="601" y1="74" x2="601" y2="108" class="mn-flow" />
+                <line x1="151" y1="108" x2="601" y2="108" class="mn-flow" />
+                <line x1="380" y1="108" x2="380" y2="145" class="mn-flow" marker-end="url(#mn-arr)" />
+                <text x="380" y="128" class="mn-fn" text-anchor="middle">hooks · MCP · native tools</text>
+              </g>
+
+              <!-- Durable controller -->
+              <g class="mn-group-ctrl">
+                <rect x="200" y="145" width="360" height="70" class="mn-box" />
+                <text x="380" y="172" class="mn-label" text-anchor="middle">durable controller</text>
+                <text x="380" y="192" class="mn-label-xs" text-anchor="middle">event bus · sole SQLite writer</text>
+              </g>
+
+              <!-- Write path -->
+              <g class="mn-group-flows">
+                <line x1="380" y1="215" x2="380" y2="255" class="mn-flow" marker-end="url(#mn-arr)" />
+                <text x="398" y="240" class="mn-fn">mem_save() · lifecycle events</text>
+              </g>
+
+              <!-- Shared project memory -->
+              <g class="mn-group-db">
+                <rect x="160" y="255" width="440" height="110" class="mn-box" />
+                <line x1="160" y1="288" x2="600" y2="288" class="mn-rule" />
+                <text x="380" y="276" class="mn-label" text-anchor="middle">project memory</text>
+                <text x="380" y="310" class="mn-label-xs" text-anchor="middle">.mnemo id · SQLite · FTS5</text>
+                <text x="380" y="328" class="mn-label-xs" text-anchor="middle">observations · tags · topic keys</text>
+                <text x="380" y="346" class="mn-label-xs" text-anchor="middle">shared across every supported agent</text>
+              </g>
+
+              <!-- Cross-agent recall fan-out -->
+              <g class="mn-group-return">
+                <line x1="380" y1="365" x2="380" y2="405" class="mn-flow" />
+                <line x1="50" y1="405" x2="710" y2="405" class="mn-flow" />
+                <line x1="50" y1="405" x2="50" y2="82" class="mn-flow" marker-end="url(#mn-arr)" />
+                <line x1="710" y1="405" x2="710" y2="82" class="mn-flow" marker-end="url(#mn-arr)" />
+                <text x="380" y="428" class="mn-fn" text-anchor="middle">mem_search() · mem_context() → any agent</text>
+                <text x="380" y="448" class="mn-label-xs" text-anchor="middle">cross-agent recall</text>
+              </g>
+
+              <!-- Data particles -->
+              <circle r="3.5" class="mn-particle">
+                <animateMotion dur="2.0s" repeatCount="indefinite" begin="2.4s"
+                  keyTimes="0;0.35;1" keyPoints="0;1;1" calcMode="linear">
+                  <mpath href="#mn-path-a"/>
+                </animateMotion>
+                <animate attributeName="opacity"
+                  values="0;1;1;0;0"
+                  keyTimes="0;0.02;0.3;0.4;1"
+                  dur="2.0s" repeatCount="indefinite" begin="2.4s"/>
+              </circle>
+
+              <circle r="3.5" class="mn-particle">
+                <animateMotion dur="1.8s" repeatCount="indefinite" begin="3.0s"
+                  keyTimes="0;0.4;1" keyPoints="0;1;1" calcMode="linear">
+                  <mpath href="#mn-path-b"/>
+                </animateMotion>
+                <animate attributeName="opacity"
+                  values="0;1;1;0;0"
+                  keyTimes="0;0.02;0.35;0.45;1"
+                  dur="1.8s" repeatCount="indefinite" begin="3.0s"/>
+              </circle>
+
+              <circle r="3.5" class="mn-particle">
+                <animateMotion dur="4.8s" repeatCount="indefinite" begin="2.6s"
+                  keyTimes="0;0.55;1" keyPoints="0;1;1" calcMode="linear">
+                  <mpath href="#mn-path-c"/>
+                </animateMotion>
+                <animate attributeName="opacity"
+                  values="0;1;1;0;0"
+                  keyTimes="0;0.02;0.5;0.58;1"
+                  dur="4.8s" repeatCount="indefinite" begin="2.6s"/>
+              </circle>
+
+              <circle r="3.5" class="mn-particle">
+                <animateMotion dur="4.8s" repeatCount="indefinite" begin="3.4s"
+                  keyTimes="0;0.55;1" keyPoints="0;1;1" calcMode="linear">
+                  <mpath href="#mn-path-d"/>
+                </animateMotion>
+                <animate attributeName="opacity"
+                  values="0;1;1;0;0"
+                  keyTimes="0;0.02;0.5;0.58;1"
+                  dur="4.8s" repeatCount="indefinite" begin="3.4s"/>
+              </circle>
             </svg>
           </div>
         </section>
@@ -222,40 +354,40 @@
         --mn-font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
       }
 
-      /* ---- Colour tokens: light / paper (default) ---- */
+      /* ---- Colour tokens: light (cool slate) ---- */
       :root {
-        --cg-paper: #f7f6f2;
-        --cg-paper-2: #f1efe8;
-        --cg-paper-press: #e8e6dd;
-        --cg-ink: #16150f;
-        --cg-ink-2: #56544a;
-        --cg-ink-3: #87847a;
-        --cg-rule: #16150f;
-        --cg-rule-soft: #d6d3c8;
+        --cg-paper: #f0f4f8;
+        --cg-paper-2: #e2eaf2;
+        --cg-paper-press: #ccd8e8;
+        --cg-ink: #0f1f38;
+        --cg-ink-2: #4a6080;
+        --cg-ink-3: #8aa0b8;
+        --cg-rule: #0f1f38;
+        --cg-rule-soft: #c4d0de;
       }
 
-      /* ---- Colour tokens: dark / ink ---- */
+      /* ---- Colour tokens: dark ---- */
       @media (prefers-color-scheme: dark) {
         :root:not([data-theme='light']) {
-          --cg-paper: #16150f;
-          --cg-paper-2: #1e1c16;
-          --cg-paper-press: #23211a;
-          --cg-ink: #f3f1ea;
-          --cg-ink-2: #b8b5a8;
-          --cg-ink-3: #87847a;
-          --cg-rule: #f3f1ea;
-          --cg-rule-soft: #34322a;
+          --cg-paper: #0b1422;
+          --cg-paper-2: #111e30;
+          --cg-paper-press: #1a2d45;
+          --cg-ink: #dde8f4;
+          --cg-ink-2: #7a9ab8;
+          --cg-ink-3: #4a6080;
+          --cg-rule: #dde8f4;
+          --cg-rule-soft: #1a2d45;
         }
       }
       :root[data-theme='dark'] {
-        --cg-paper: #16150f;
-        --cg-paper-2: #1e1c16;
-        --cg-paper-press: #23211a;
-        --cg-ink: #f3f1ea;
-        --cg-ink-2: #b8b5a8;
-        --cg-ink-3: #87847a;
-        --cg-rule: #f3f1ea;
-        --cg-rule-soft: #34322a;
+        --cg-paper: #0b1422;
+        --cg-paper-2: #111e30;
+        --cg-paper-press: #1a2d45;
+        --cg-ink: #dde8f4;
+        --cg-ink-2: #7a9ab8;
+        --cg-ink-3: #4a6080;
+        --cg-rule: #dde8f4;
+        --cg-rule-soft: #1a2d45;
       }
 
       /* ---- Global resets ---- */
@@ -309,11 +441,20 @@
       }
 
       .wordmark {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
         font-weight: 800;
         font-size: 1.4rem;
         letter-spacing: -0.035em;
         color: var(--cg-ink);
         text-decoration: none;
+      }
+
+      .wordmark-mark {
+        width: 1.15em;
+        height: 1.15em;
+        flex-shrink: 0;
       }
 
       .nav-links {
@@ -352,23 +493,67 @@
 
       /* ---- Hero ---- */
       .hero {
-        display: grid;
-        grid-template-columns: 1.05fr 0.95fr;
+        display: flex;
+        flex-direction: column;
         border-bottom: 1px solid var(--cg-rule);
       }
 
       .hero-left {
-        padding: 4.5rem 3rem 4rem;
-        min-width: 0;
+        position: relative;
+        overflow: hidden;
+        padding: 4.5rem 3rem 3.5rem;
+        text-align: center;
+        max-width: 700px;
+        margin: 0 auto;
+        width: 100%;
+      }
+
+      .hero-obs {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        color: var(--cg-ink);
+        opacity: 0.16;
+        z-index: 0;
+      }
+
+      .hero-obs-edge {
+        stroke: currentColor;
+        stroke-width: 1;
+        fill: none;
+        opacity: 0.55;
+      }
+
+      .hero-obs-node {
+        fill: var(--cg-paper);
+        stroke: currentColor;
+        stroke-width: 1.25;
+      }
+
+      .hero-obs-node-core {
+        fill: currentColor;
+      }
+
+      .hero-obs-label {
+        font-family: var(--mn-font-mono);
+        font-size: 11px;
+        fill: currentColor;
+        opacity: 0.7;
+      }
+
+      .hero-copy {
+        position: relative;
+        z-index: 1;
       }
 
       .hero-right {
-        border-inline-start: 1px solid var(--cg-rule);
+        border-top: 1px solid var(--cg-rule);
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 2.5rem;
-        min-width: 0;
+        padding: 3rem 2.5rem;
       }
 
       h1 {
@@ -384,8 +569,8 @@
         font-size: 1.18rem;
         line-height: 1.5;
         color: var(--cg-ink-2);
-        max-width: 34ch;
-        margin: 0 0 2.2rem;
+        max-width: 46ch;
+        margin: 0 auto 2.2rem;
       }
 
       .cta {
@@ -393,6 +578,7 @@
         gap: 0.9rem;
         margin-bottom: 1.6rem;
         flex-wrap: wrap;
+        justify-content: center;
       }
 
       .btn {
@@ -468,11 +654,17 @@
         padding: 0 0.2rem;
       }
 
+      /* ---- Particles ---- */
+      .mn-graph .mn-particle {
+        fill: var(--cg-ink);
+        opacity: 0;
+      }
+
       /* ---- Architecture flow diagram ---- */
       .mn-graph {
         width: 100%;
         height: auto;
-        max-width: 560px;
+        max-width: 760px;
         min-width: 0;
         display: block;
         color: var(--cg-ink);
@@ -523,52 +715,48 @@
       }
 
       .feature {
-        display: grid;
-        grid-template-columns: auto 1px 1fr;
-        column-gap: 1.5rem;
+        display: flex;
+        flex-direction: column;
         align-items: center;
-        padding: 2.6rem 2rem;
+        text-align: center;
+        gap: 0;
+        padding: 2.8rem 1.75rem 2.6rem;
       }
 
       .feature + .feature {
         border-inline-start: 1px solid var(--cg-rule);
       }
 
-      .feature::before {
-        content: '';
-        grid-column: 2;
-        grid-row: 1 / 3;
-        align-self: stretch;
-        width: 1px;
-        background: var(--cg-rule);
-      }
-
       .ficon {
-        grid-column: 1;
-        grid-row: 1 / 3;
-        align-self: center;
-        width: 64px;
-        height: 64px;
+        width: 56px;
+        height: 56px;
         color: var(--cg-ink);
+        margin-bottom: 1.1rem;
       }
 
       .feature h2 {
-        grid-column: 3;
-        grid-row: 1;
-        font-size: 1.3rem;
+        font-size: 1.25rem;
         font-weight: 700;
-        margin: 0 0 0.6rem;
+        margin: 0 0 0.75rem;
         letter-spacing: -0.02em;
+        max-width: 18ch;
+      }
+
+      .feature h2::before {
+        content: '';
+        display: block;
+        width: 2rem;
+        height: 1px;
+        background: var(--cg-rule);
+        margin: 0 auto 1.1rem;
       }
 
       .feature p {
-        grid-column: 3;
-        grid-row: 2;
         font-size: 1rem;
         line-height: 1.55;
         color: var(--cg-ink-2);
         margin: 0;
-        max-width: 34ch;
+        max-width: 32ch;
       }
 
       .feature p code {
@@ -606,38 +794,105 @@
         text-underline-offset: 3px;
       }
 
-      /* ---- Entrance animation ---- */
+      /* ---- Entrance animations ---- */
       @media (prefers-reduced-motion: no-preference) {
-        .hero-left > * {
+        /* Hero text: staggered fade + rise + blur */
+        .hero-copy > * {
           opacity: 0;
-          transform: translateY(8px);
-          animation: mn-in 0.5s ease forwards;
+          transform: translateY(20px);
+          filter: blur(4px);
+          animation: mn-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
-
-        .hero-left > *:nth-child(1) { animation-delay: 0.04s; }
-        .hero-left > *:nth-child(2) { animation-delay: 0.10s; }
-        .hero-left > *:nth-child(3) { animation-delay: 0.16s; }
-        .hero-left > *:nth-child(4) { animation-delay: 0.22s; }
+        .hero-copy > *:nth-child(1) { animation-delay: 0.05s; }
+        .hero-copy > *:nth-child(2) { animation-delay: 0.14s; }
+        .hero-copy > *:nth-child(3) { animation-delay: 0.23s; }
+        .hero-copy > *:nth-child(4) { animation-delay: 0.32s; }
 
         @keyframes mn-in {
-          to {
-            opacity: 1;
-            transform: none;
-          }
+          to { opacity: 1; transform: none; filter: blur(0); }
+        }
+
+        /* Observation graph: constellation drift, edge pulse, label float */
+        .hero-obs-constellation {
+          animation: mn-obs-drift 20s ease-in-out infinite alternate;
+        }
+        .hero-obs-edge {
+          animation: mn-obs-pulse 4.5s ease-in-out infinite;
+        }
+        .hero-obs-edge-b {
+          animation-delay: -2.2s;
+        }
+        .hero-obs-float-a {
+          animation: mn-obs-float 9s ease-in-out infinite alternate;
+        }
+        .hero-obs-float-b {
+          animation: mn-obs-float 11s ease-in-out infinite alternate-reverse;
+          animation-delay: -3s;
+        }
+        .hero-obs-float-c {
+          animation: mn-obs-float 13s ease-in-out infinite alternate;
+          animation-delay: -6s;
+        }
+
+        @keyframes mn-obs-drift {
+          from { transform: translate(0, 0); }
+          to   { transform: translate(8px, -10px); }
+        }
+        @keyframes mn-obs-pulse {
+          0%, 100% { opacity: 0.3; }
+          50%      { opacity: 0.75; }
+        }
+        @keyframes mn-obs-float {
+          from { opacity: 0.35; transform: translateY(0); }
+          to   { opacity: 0.85; transform: translateY(-6px); }
+        }
+
+        /* SVG groups: sequential entrance */
+        .mn-group-agents {
+          opacity: 0;
+          animation: mn-slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.55s forwards;
+        }
+        .mn-group-bus {
+          opacity: 0;
+          animation: mn-fade 0.5s ease 0.85s forwards;
+        }
+        .mn-group-ctrl {
+          opacity: 0;
+          animation: mn-slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 1.0s forwards;
+        }
+        .mn-group-flows {
+          opacity: 0;
+          animation: mn-fade 0.45s ease 1.25s forwards;
+        }
+        .mn-group-db {
+          opacity: 0;
+          animation: mn-slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) 1.4s forwards;
+        }
+        .mn-group-return {
+          opacity: 0;
+          animation: mn-fade 0.6s ease 1.75s forwards;
+        }
+
+        @keyframes mn-slide-right {
+          from { opacity: 0; transform: translateX(-14px); }
+          to   { opacity: 1; transform: none; }
+        }
+        @keyframes mn-slide-left {
+          from { opacity: 0; transform: translateX(14px); }
+          to   { opacity: 1; transform: none; }
+        }
+        @keyframes mn-slide-up {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: none; }
+        }
+        @keyframes mn-fade {
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
       }
 
       /* ---- Responsive ---- */
       @media (max-width: 860px) {
-        .hero {
-          grid-template-columns: 1fr;
-        }
-
-        .hero-right {
-          border-inline-start: none;
-          border-top: 1px solid var(--cg-rule);
-        }
-
         .features {
           grid-template-columns: 1fr;
         }
@@ -648,8 +903,7 @@
         }
 
         .feature {
-          column-gap: 1rem;
-          padding: 2rem 1.25rem;
+          padding: 2.25rem 1.5rem;
         }
 
         .ficon {
