@@ -46,7 +46,7 @@ En lugar de repartir conocimiento entre `MEMORY.md`, memorias nativas del editor
 Instala el binario y configura los agentes detectados:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.3 bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.4 bash
 ```
 
 Esto fija la alpha actual. La instalación sin versión y `mnemo update` siguen las releases estables por defecto; usa `mnemo update --prerelease` para incluir versiones preliminares.
@@ -152,7 +152,7 @@ No potential memory conflicts found.
 
 | Vía | Cuándo usarla | Comando |
 |---|---|---|
-| Alpha actual | Quieres probar `v1.0.0-alpha.3` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.3 bash</code> |
+| Alpha actual | Quieres probar `v1.0.0-alpha.4` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.4 bash</code> |
 | Última estable | Quieres binario estable + setup de agentes detectados | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | Agente explícito | Solo quieres una integración | `bash -s -- --agent=codex` |
 | Todos los agentes | Quieres preparar todas las integraciones | `bash -s -- --agent=all` |

@@ -44,7 +44,7 @@ mnemo 是面向代理式开发的本地记忆层。它把决策、Bug、约定�
 安装二进制文件并配置检测到的代理：
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.3 bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.4 bash
 ```
 
 这会固定安装当前 alpha 版本。未指定版本的安装和 `mnemo update` 默认跟随稳定版；使用 `mnemo update --prerelease` 可选择预发布版。
@@ -147,7 +147,7 @@ No potential memory conflicts found.
 
 | 方式 | 适用场景 | 命令 |
 |---|---|---|
-| 当前 alpha | 体验 `v1.0.0-alpha.3` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.3 bash</code> |
+| 当前 alpha | 体验 `v1.0.0-alpha.4` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.4 bash</code> |
 | 最新稳定版 | 安装稳定版并配置检测到的代理 | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | 指定代理 | 只想配置某一个集成 | `bash -s -- --agent=codex` |
 | 所有代理 | 想准备所有支持的集成 | `bash -s -- --agent=all` |

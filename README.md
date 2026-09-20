@@ -52,7 +52,7 @@ Instead of spreading project knowledge across `MEMORY.md`, native editor memory,
 Install the binary and configure your detected agents:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.3 bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.4 bash
 ```
 
 This pins the current alpha. Unpinned installs and `mnemo update` follow stable releases by default; use `mnemo update --prerelease` to opt into prereleases.
@@ -158,7 +158,7 @@ No potential memory conflicts found.
 
 | Path | Use when | Command |
 |---|---|---|
-| Current alpha | You want to try `v1.0.0-alpha.3` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.3 bash</code> |
+| Current alpha | You want to try `v1.0.0-alpha.4` | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.4 bash</code> |
 | Latest stable | You want the latest stable binary plus detected agent setup | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | Explicit agent | You only want one integration | `bash -s -- --agent=codex` |
 | All agents | You want every supported integration prepared | `bash -s -- --agent=all` |
