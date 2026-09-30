@@ -145,6 +145,8 @@ Codex 安装后需要交互式 hook 信任审查 — 详见 [Agent Integrations]
 | Claude plugin | `claude plugin install mnemo@mnemo` |
 | 源码构建 | `go build -o ~/.local/bin/mnemo ./cmd/mnemo/` |
 
+安装 Codex 原生插件时，请先安装 `mnemo` 二进制，运行 `codex plugin marketplace add jmeiracorbal/mnemo`，然后打开 `/plugins` 并安装 mnemo。该插件包含 hooks 和 MCP 连接。你也可以继续使用 `mnemo init --agent=codex` 通过 CLI 直接配置 Codex。
+
 更新参数与卸载步骤：[Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation)。
 
 ## 文档

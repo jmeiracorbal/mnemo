@@ -1,0 +1,23 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "mnemo",
+  "description": "Persistent memory for Codex. Stores decisions, bugs, and discoveries across sessions in a local SQLite database.",
+  "version": "1.0.0-alpha.4",
+  "author": {
+    "name": "jmeiracorbal"
+  },
+  "homepage": "https://github.com/jmeiracorbal/mnemo",
+  "repository": "https://github.com/jmeiracorbal/mnemo",
+  "license": "Apache-2.0",
+  "keywords": ["memory", "persistence", "sessions", "sqlite", "mcp"],
+  "extensions": {
+    "com.openai": {
+      "hooks": "./hooks/hooks.json",
+      "interface": {
+        "displayName": "mnemo",
+        "shortDescription": "Persistent memory with session tracking, passive capture, and memory protocol. Gives Codex a brain that survives across sessions.",
+        "category": "productivity"
+      }
+    }
+  }
+}

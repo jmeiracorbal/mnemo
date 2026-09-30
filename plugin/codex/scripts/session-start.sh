@@ -1,0 +1,45 @@
+#!/bin/bash
+export MNEMO_AGENT="${MNEMO_AGENT:-codex}"
+export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
+# mnemo — SessionStart hook for Codex CLI
+# Fires on session startup and resume.
+#
+# Input: {
+#   "session_id": "...", "cwd": "...", "hook_event_name": "SessionStart"
+# }
+#
+# Output: { "continue": true, "systemMessage": "..." }
+
+HOOKS_DIR="$(dirname "$0")"
+
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | mnemo json session_id 2>/dev/null)
+CWD=$(echo "$INPUT" | mnemo json cwd 2>/dev/null)
+
+if [ -z "$SESSION_ID" ]; then
+  printf '{"continue":true}\n'
+  exit 0
+fi
+
+[ -z "$CWD" ] && CWD="$(pwd)"
+
+PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || echo "$CWD")
+MNEMO_FILE="${PROJECT_ROOT}/.mnemo"
+[ -f "$MNEMO_FILE" ] && PROJECT=$(mnemo json id < "$MNEMO_FILE" 2>/dev/null)
+if [ -z "$PROJECT" ]; then
+  printf '{"continue":true}\n'
+  exit 0
+fi
+
+STATUS="[mnemo] MCP memory connection active (project: ${PROJECT})"
+
+CONTEXT=$(mnemo context "$PROJECT" 2>/dev/null)
+PROTOCOL=$(cat "${HOOKS_DIR}/mnemo-protocol.md" 2>/dev/null)
+
+MSG=$(printf '%s\n\n%s\n\n%s' "$STATUS" "$CONTEXT" "$PROTOCOL")
+
+MSG_JSON=$(printf '%s' "$MSG" | awk 'BEGIN{ORS=""} NR>1{printf "\\n"} {gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t"); gsub(/\r/, "\\r"); print}')
+
+printf '{"continue":true,"systemMessage":"%s"}\n' "$MSG_JSON"
+
+exit 0

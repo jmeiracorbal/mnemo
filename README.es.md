@@ -153,6 +153,8 @@ Codex exige revisión interactiva de confianza de hooks tras instalar — detall
 | Plugin de Claude | `claude plugin install mnemo@mnemo` |
 | Desde fuente | `go build -o ~/.local/bin/mnemo ./cmd/mnemo/` |
 
+Para instalar el plugin nativo de Codex, instala primero el binario `mnemo`, ejecuta `codex plugin marketplace add jmeiracorbal/mnemo`, abre `/plugins` e instala mnemo. El plugin incluye sus hooks y conexión MCP. También puedes seguir usando `mnemo init --agent=codex` para configurar Codex directamente desde la CLI.
+
 Flags de update y desinstalación: [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation).
 
 <a id="documentacion"></a>
