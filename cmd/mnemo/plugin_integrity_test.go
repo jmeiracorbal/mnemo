@@ -71,9 +71,68 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 	}
 }
 
+// TestShippedCodexPluginHooksReferenceRealScripts validates that every command
+// in plugin/codex/hooks/hooks.json points to a script that exists in
+// plugin/codex/scripts/.
+func TestShippedCodexPluginHooksReferenceRealScripts(t *testing.T) {
+	hooksFile := filepath.Join("..", "..", "plugin", "codex", "hooks", "hooks.json")
+	data, err := os.ReadFile(hooksFile)
+	if err != nil {
+		t.Fatalf("could not read codex plugin hooks.json: %v", err)
+	}
+
+	var raw struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("could not parse codex plugin hooks.json: %v", err)
+	}
+
+	const prefix = "${PLUGIN_ROOT}/scripts/"
+	scriptsDir := filepath.Join("..", "..", "plugin", "codex", "scripts")
+	validatedCount := 0
+
+	for event, matchers := range raw.Hooks {
+		for _, matcher := range matchers {
+			for _, hook := range matcher.Hooks {
+				cmd := hook.Command
+				var scriptName string
+				for _, tok := range strings.Fields(cmd) {
+					tok = strings.Trim(tok, `"'`)
+					if strings.HasPrefix(tok, prefix) {
+						scriptName = strings.TrimPrefix(tok, prefix)
+						break
+					}
+				}
+				if scriptName == "" {
+					continue
+				}
+				validatedCount++
+				scriptName = filepath.Clean(scriptName)
+				if filepath.IsAbs(scriptName) || scriptName == ".." || strings.HasPrefix(scriptName, ".."+string(os.PathSeparator)) {
+					t.Errorf("codex plugin hooks.json [%s]: invalid script path %q", event, scriptName)
+					continue
+				}
+				scriptPath := filepath.Join(scriptsDir, scriptName)
+				if _, err := os.Stat(scriptPath); err != nil {
+					t.Errorf("codex plugin hooks.json [%s]: references %q but file does not exist at %s", event, scriptName, scriptPath)
+				}
+			}
+		}
+	}
+	if validatedCount == 0 {
+		t.Fatalf("no script references were validated from codex plugin hooks.json")
+	}
+}
+
 func TestShippedHooksResolveProjectFromMarker(t *testing.T) {
 	roots := []string{
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts"),
+		filepath.Join("..", "..", "plugin", "codex", "scripts"),
 		filepath.Join("..", "..", "scripts", "cursor", "hooks"),
 		filepath.Join("..", "..", "scripts", "codex", "hooks"),
 		filepath.Join("..", "..", "scripts", "opencode", "plugins"),
@@ -134,6 +193,7 @@ func TestShippedHooksResolveProjectFromMarker(t *testing.T) {
 func TestShippedHooksDoNotWriteSessionsDirectly(t *testing.T) {
 	roots := []string{
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts"),
+		filepath.Join("..", "..", "plugin", "codex", "scripts"),
 		filepath.Join("..", "..", "scripts", "cursor", "hooks"),
 		filepath.Join("..", "..", "scripts", "codex", "hooks"),
 	}

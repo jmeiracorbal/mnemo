@@ -1,0 +1,30 @@
+{
+  "description": "mnemo persistent memory hooks — context injection",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${PLUGIN_ROOT}/scripts/session-start.sh",
+            "statusMessage": "Loading mnemo memory...",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${PLUGIN_ROOT}/scripts/stop.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

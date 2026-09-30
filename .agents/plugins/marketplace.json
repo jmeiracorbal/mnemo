@@ -1,0 +1,19 @@
+{
+  "name": "mnemo",
+  "interface": {
+    "displayName": "mnemo"
+  },
+  "plugins": [
+    {
+      "name": "mnemo",
+      "source": {
+        "source": "local",
+        "path": "./plugin/codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

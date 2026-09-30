@@ -145,6 +145,8 @@ Codex requires an interactive hook trust review after install — details in [Ag
 | Claude plugin | `claude plugin install mnemo@mnemo` |
 | From source | `go build -o ~/.local/bin/mnemo ./cmd/mnemo/` |
 
+For the native Codex plugin, install the `mnemo` binary first, run `codex plugin marketplace add jmeiracorbal/mnemo`, then open `/plugins` and install mnemo. This packages the plugin's hooks and MCP connection. The existing `mnemo init --agent=codex` flow remains available to configure Codex directly through the CLI.
+
 Full update flags and uninstall steps: [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation).
 
 ## Documentation
