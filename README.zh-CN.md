@@ -64,7 +64,7 @@ mnemo 并不声称支持每一种 harness。它提供稳定的记忆契约，任
 
 ```bash
 # 1. 安装（固定当前 alpha）
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.5 bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.6 bash
 
 # 2. 在项目中启用
 cd your-project
@@ -138,7 +138,7 @@ Codex 安装后需要交互式 hook 信任审查 — 详见 [Agent Integrations]
 
 | 方式 | 命令 |
 |---|---|
-| 当前 alpha (`v1.0.0-alpha.5`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.5 bash</code> |
+| 当前 alpha (`v1.0.0-alpha.6`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.6 bash</code> |
 | 最新稳定版 | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | 指定代理 | `bash -s -- --agent=codex` |
 | 所有代理 | `bash -s -- --agent=all` |
