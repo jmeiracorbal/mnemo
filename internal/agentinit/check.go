@@ -90,7 +90,7 @@ func checkInstructionFile(agent, path string, requireMarkers bool) Check {
 		return checkError(agent, "global_instructions."+agent, "read global instructions: "+err.Error(), path)
 	}
 	content := string(data)
-	if !strings.Contains(content, ".mnemo") || !strings.Contains(content, "ONLY persistent memory system") {
+	if !strings.Contains(content, ".mnemo") || !strings.Contains(content, "mnemo init") {
 		return checkWarning(agent, "global_instructions."+agent, "global instructions do not look like mnemo instructions", path)
 	}
 	if requireMarkers && (!strings.Contains(content, "<!-- mnemo:start -->") || !strings.Contains(content, "<!-- mnemo:end -->")) {

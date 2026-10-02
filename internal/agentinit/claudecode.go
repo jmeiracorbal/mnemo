@@ -115,6 +115,7 @@ func claudeCodeCheckRuntime(home string) Check {
 		filepath.Join(installPath, "scripts", "post-compact.sh"),
 		filepath.Join(installPath, "scripts", "post-compact-resume.sh"),
 		filepath.Join(installPath, "scripts", "user-prompt-submit.sh"),
+		filepath.Join(installPath, "scripts", "pre-tool-use.sh"),
 		filepath.Join(installPath, "scripts", "post-file-edit.sh"),
 		filepath.Join(installPath, "scripts", "post-bash-git.sh"),
 	}
@@ -128,6 +129,7 @@ func claudeCodeCheckRuntime(home string) Check {
 		"Stop":             {"${CLAUDE_PLUGIN_ROOT}/scripts/session-stop.sh"},
 		"PostCompact":      {"${CLAUDE_PLUGIN_ROOT}/scripts/post-compact.sh"},
 		"UserPromptSubmit": {"${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit.sh"},
+		"PreToolUse":       {"${CLAUDE_PLUGIN_ROOT}/scripts/pre-tool-use.sh"},
 		"PostToolUse":      {"${CLAUDE_PLUGIN_ROOT}/scripts/post-file-edit.sh", "${CLAUDE_PLUGIN_ROOT}/scripts/post-bash-git.sh"},
 	})
 }

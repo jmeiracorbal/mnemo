@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -41,6 +43,9 @@ func runEvents() {
 	project, directory := values["project"], values["directory"]
 	if project == "" || directory == "" {
 		eventFail(fmt.Errorf("--project and --directory are required"))
+	}
+	if err := eventValidateMarker(project, directory); err != nil {
+		eventFail(err)
 	}
 	storeConfig, err := store.DefaultConfig()
 	if err != nil {
@@ -92,6 +97,36 @@ func runEvents() {
 func eventFail(err error) {
 	fmt.Fprintln(os.Stderr, "mnemo events:", err)
 	os.Exit(1)
+}
+
+// eventValidateMarker is the Capa-1 deterministic guardrail for the events
+// path (Pi, OpenCode). It confirms that directory (or its git root) contains a
+// .mnemo marker whose id matches project before any event or invoke call
+// reaches the controller over NATS.
+func eventValidateMarker(project, directory string) error {
+	root := eventGitRoot(directory)
+	data, err := os.ReadFile(filepath.Join(root, ".mnemo"))
+	if err != nil {
+		return fmt.Errorf("project not initialized at %s — run 'mnemo init' to activate persistent memory", root)
+	}
+	var m struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &m); err != nil || strings.TrimSpace(m.ID) == "" {
+		return fmt.Errorf("invalid .mnemo marker at %s — run 'mnemo init'", root)
+	}
+	if m.ID != project {
+		return fmt.Errorf("project id mismatch — .mnemo has %q but --project is %q", m.ID, project)
+	}
+	return nil
+}
+
+func eventGitRoot(dir string) string {
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return dir
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func eventArgs() []string {

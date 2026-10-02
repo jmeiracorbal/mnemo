@@ -6,9 +6,15 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 type ToolArguments = Record<string, unknown>;
 
+function gitRoot(cwd: string): string {
+  const r = spawnSync("git", ["-C", cwd, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
+  return r.status === 0 ? r.stdout.trim() : cwd;
+}
+
 function projectID(cwd: string): string | undefined {
+  const root = gitRoot(cwd);
   try {
-    const marker = JSON.parse(readFileSync(join(cwd, ".mnemo"), "utf8"));
+    const marker = JSON.parse(readFileSync(join(root, ".mnemo"), "utf8"));
     return typeof marker.id === "string" && marker.id.trim() ? marker.id.trim() : undefined;
   } catch { return undefined; }
 }

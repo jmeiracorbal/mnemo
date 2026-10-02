@@ -141,6 +141,7 @@ func TestBuildSetupStatusReportChecksClaudeCodePluginHooks(t *testing.T) {
 				"post-compact.sh",
 				"post-compact-resume.sh",
 				"user-prompt-submit.sh",
+				"pre-tool-use.sh",
 				"post-file-edit.sh",
 				"post-bash-git.sh",
 			} {
@@ -177,6 +178,7 @@ func TestBuildSetupStatusReportWarnsOnClaudeCodeMissingHookCommands(t *testing.T
 		"post-compact.sh",
 		"post-compact-resume.sh",
 		"user-prompt-submit.sh",
+		"pre-tool-use.sh",
 		"post-file-edit.sh",
 		"post-bash-git.sh",
 	} {
@@ -266,6 +268,9 @@ func writeClaudePluginHooksJSON(t *testing.T, path string) {
     ],
     "UserPromptSubmit": [
       {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit.sh"}]}
+    ],
+    "PreToolUse": [
+      {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/pre-tool-use.sh"}]}
     ],
     "PostToolUse": [
       {"hooks": [{"command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-file-edit.sh"}]},
