@@ -239,11 +239,11 @@ func TestShippedHooksDoNotWriteSessionsDirectly(t *testing.T) {
 }
 
 func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
-	files := []string{
+	// Per-project and per-session protocols injected only when mnemo is active must
+	// declare mnemo as the sole memory system and forbid plaintext fallbacks.
+	perProjectFiles := []string{
 		filepath.Join("..", "..", "templates", "rules", "generic.md"),
-		filepath.Join("..", "..", "templates", "rules", "global.md"),
 		filepath.Join("..", "..", "templates", "rules", "cursor.mdc"),
-		filepath.Join("..", "..", "templates", "rules", "cursor-global.mdc"),
 		filepath.Join("..", "..", "templates", "rules", "pi.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "mnemo.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "session-start-protocol.md"),
@@ -251,8 +251,7 @@ func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
 		filepath.Join("..", "..", "scripts", "codex", "hooks", "mnemo-protocol.md"),
 		filepath.Join("..", "..", "scripts", "cursor", "rules", "mnemo.mdc"),
 	}
-
-	for _, path := range files {
+	for _, path := range perProjectFiles {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Errorf("read %s: %v", path, err)
@@ -264,6 +263,28 @@ func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
 		}
 		if !strings.Contains(content, "plaintext files as a memory fallback") {
 			t.Errorf("%s does not forbid plaintext memory fallback", path)
+		}
+	}
+
+	// Global files are injected in every session regardless of .mnemo. Their
+	// contract is lighter: mention mnemo init and .mnemo so agents understand
+	// how activation works; enforcement is deterministic code, not text.
+	globalFiles := []string{
+		filepath.Join("..", "..", "templates", "rules", "global.md"),
+		filepath.Join("..", "..", "templates", "rules", "cursor-global.mdc"),
+	}
+	for _, path := range globalFiles {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("read %s: %v", path, err)
+			continue
+		}
+		content := string(data)
+		if !strings.Contains(content, "mnemo init") {
+			t.Errorf("%s does not mention mnemo init", path)
+		}
+		if !strings.Contains(content, ".mnemo") {
+			t.Errorf("%s does not mention .mnemo marker", path)
 		}
 	}
 }

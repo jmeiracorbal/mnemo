@@ -36,11 +36,8 @@ func TestInstallGlobalInstructionsWritesConditionalAgentFiles(t *testing.T) {
 			if !strings.Contains(content, ".mnemo") {
 				t.Fatalf("global instructions are not conditional on .mnemo:\n%s", content)
 			}
-			if !strings.Contains(content, "ONLY persistent memory system") {
-				t.Fatalf("global instructions do not declare memory authority:\n%s", content)
-			}
-			if !strings.Contains(content, "skip mnemo entirely") {
-				t.Fatalf("global instructions do not tell agents to skip uninitialized projects:\n%s", content)
+			if !strings.Contains(content, "mnemo init") {
+				t.Fatalf("global instructions do not reference mnemo init:\n%s", content)
 			}
 		})
 	}

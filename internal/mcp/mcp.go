@@ -15,8 +15,11 @@ package mcp
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -749,6 +752,44 @@ func registerTools(srv *server.MCPServer, s MemoryBackend, allowlist map[string]
 	registerDiagnosticTools(srv, allowlist)
 }
 
+// ─── Marker Validation ───────────────────────────────────────────────────────
+
+// validateMarker is the Capa-2 deterministic guardrail. It confirms that
+// directory contains a .mnemo marker whose id matches project before any write
+// reaches the controller. The git root of directory is resolved first so the
+// check works regardless of which subdirectory the agent passed.
+func validateMarker(project, directory string) error {
+	if strings.TrimSpace(project) == "" {
+		return fmt.Errorf("mnemo: project is required")
+	}
+	if strings.TrimSpace(directory) == "" {
+		return fmt.Errorf("mnemo: directory is required")
+	}
+	root := markerGitRoot(directory)
+	data, err := os.ReadFile(filepath.Join(root, ".mnemo"))
+	if err != nil {
+		return fmt.Errorf("mnemo: project not initialized at %s — run 'mnemo init' to activate persistent memory", root)
+	}
+	var marker struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &marker); err != nil || strings.TrimSpace(marker.ID) == "" {
+		return fmt.Errorf("mnemo: invalid .mnemo marker at %s — run 'mnemo init'", root)
+	}
+	if marker.ID != project {
+		return fmt.Errorf("mnemo: project id mismatch — .mnemo has %q but request carries %q", marker.ID, project)
+	}
+	return nil
+}
+
+func markerGitRoot(dir string) string {
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return dir
+	}
+	return strings.TrimSpace(string(out))
+}
+
 // ─── Tool Handlers ───────────────────────────────────────────────────────────
 
 func handleSearch(s MemoryBackend) server.ToolHandlerFunc {
@@ -819,6 +860,10 @@ func handleSave(s MemoryBackend, runtime *Runtime) server.ToolHandlerFunc {
 		topicKey, _ := req.GetArguments()["topic_key"].(string)
 		tagsRaw, _ := req.GetArguments()["tags"].(string)
 		tags := parseTags(tagsRaw)
+
+		if err := validateMarker(project, directory); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
 		if typ == "" {
 			typ = "manual"
@@ -961,6 +1006,10 @@ func handleSavePrompt(s MemoryBackend, runtime *Runtime) server.ToolHandlerFunc 
 		content, _ := req.GetArguments()["content"].(string)
 		project, _ := req.GetArguments()["project"].(string)
 		directory, _ := req.GetArguments()["directory"].(string)
+
+		if err := validateMarker(project, directory); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 
 		sessionID, err := runtime.resolveSession(s, project, directory, req)
 		if err != nil {
@@ -1327,6 +1376,10 @@ func handleSessionSummary(s MemoryBackend, runtime *Runtime) server.ToolHandlerF
 		project, _ := req.GetArguments()["project"].(string)
 		directory, _ := req.GetArguments()["directory"].(string)
 
+		if err := validateMarker(project, directory); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
 		sessionID, err := runtime.resolveSession(s, project, directory, req)
 		if err != nil {
 			return mcp.NewToolResultError("No active session: " + err.Error()), nil
@@ -1358,6 +1411,10 @@ func handleCapturePassive(s MemoryBackend, runtime *Runtime) server.ToolHandlerF
 
 		if content == "" {
 			return mcp.NewToolResultError("content is required — include text with a '## Key Learnings:' section"), nil
+		}
+
+		if err := validateMarker(project, directory); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		sessionID, err := runtime.resolveSession(s, project, directory, req)
