@@ -64,7 +64,7 @@ mnemo does not claim every harness. It ships a stable memory contract that any h
 
 ```bash
 # 1. Install (pins current alpha)
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-alpha.6 bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.1 bash
 
 # 2. Activate in a project
 cd your-project
@@ -138,7 +138,7 @@ Codex requires an interactive hook trust review after install — details in [Ag
 
 | Path | Command |
 |---|---|
-| Current alpha (`v1.0.0-alpha.6`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-alpha.6 bash</code> |
+| Current beta (`v1.0.0-beta.1`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.1 bash</code> |
 | Latest stable | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | One agent | `bash -s -- --agent=codex` |
 | All agents | `bash -s -- --agent=all` |
