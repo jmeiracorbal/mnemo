@@ -63,8 +63,8 @@ mnemo does not claim every harness. It ships a stable memory contract that any h
 ## Quick Start
 
 ```bash
-# 1. Install (pins current alpha)
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.1 bash
+# 1. Install (pins current beta)
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.2 bash
 
 # 2. Activate in a project
 cd your-project
@@ -127,6 +127,8 @@ See [Durable Events](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events) 
 
 Codex requires an interactive hook trust review after install — details in [Agent Integrations](https://github.com/jmeiracorbal/mnemo/wiki/Agent-Integrations).
 
+Claude Code uses `CLAUDE_CONFIG_DIR` for its config directory when set, and defaults to `~/.claude`. Its `~/.claude.json` MCP configuration remains under `$HOME`.
+
 ## Associated modules
 
 | Module | Purpose |
@@ -138,7 +140,7 @@ Codex requires an interactive hook trust review after install — details in [Ag
 
 | Path | Command |
 |---|---|
-| Current beta (`v1.0.0-beta.1`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.1 bash</code> |
+| Current beta (`v1.0.0-beta.2`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.2 bash</code> |
 | Latest stable | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | One agent | `bash -s -- --agent=codex` |
 | All agents | `bash -s -- --agent=all` |
