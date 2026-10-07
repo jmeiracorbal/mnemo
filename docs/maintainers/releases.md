@@ -19,9 +19,8 @@ Search for the previous version, update all required references, and confirm
 there are no stale values before committing or tagging. The release tag and
 plugin metadata version must match.
 
-The root `.mcp.json` is for development in this repository; the copy under
-`plugin/claude-code/.mcp.json` is for installed users. Update both whenever the
-MCP configuration changes.
+The `.mcp.json` under `plugin/claude-code/` is for installed users. Update it
+whenever the MCP configuration changes.
 
 ## Post-merge release workflow
 
