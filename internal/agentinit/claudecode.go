@@ -18,16 +18,23 @@ var (
 
 func claudeCodeLabel() string { return "Claude" }
 
+func claudeConfigDir(home string) string {
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		return dir
+	}
+	return filepath.Join(home, ".claude")
+}
+
 func claudeCodeDetectionPaths(home string) []string {
-	return []string{filepath.Join(home, ".claude")}
+	return []string{claudeConfigDir(home)}
 }
 
 func claudeCodeInstructionPath(home string) string {
-	return filepath.Join(home, ".claude", "CLAUDE.md")
+	return filepath.Join(claudeConfigDir(home), "CLAUDE.md")
 }
 
 func claudeCodeSkillLinkPath(home string) string {
-	return filepath.Join(home, ".claude", "skills", globalSkillName)
+	return filepath.Join(claudeConfigDir(home), "skills", globalSkillName)
 }
 
 func claudeCodeMCPPath(home string) string {
@@ -103,7 +110,7 @@ func claudeCodeCheckRuntime(home string) Check {
 		if errors.Is(err, errClaudePluginRegistryNotFound) || errors.Is(err, errClaudeMnemoPluginNotFound) {
 			return Check{}
 		}
-		path := filepath.Join(home, ".claude", "plugins", "installed_plugins.json")
+		path := filepath.Join(claudeConfigDir(home), "plugins", "installed_plugins.json")
 		return checkError("claudecode", "runtime_files.claudecode", err.Error(), path)
 	}
 	paths := []string{
@@ -135,7 +142,7 @@ func claudeCodeCheckRuntime(home string) Check {
 }
 
 func claudeMnemoPluginInstallPath(home string) (string, error) {
-	path := filepath.Join(home, ".claude", "plugins", "installed_plugins.json")
+	path := filepath.Join(claudeConfigDir(home), "plugins", "installed_plugins.json")
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", errClaudePluginRegistryNotFound
