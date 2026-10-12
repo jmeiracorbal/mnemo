@@ -90,8 +90,7 @@ func ensureDirSymlink(link, target string) error {
 	switch {
 	case err == nil:
 		if info.Mode()&os.ModeSymlink != 0 {
-			current, readErr := filepath.EvalSymlinks(link)
-			if readErr == nil && current == target {
+			if sameSymlinkTarget(link, target) {
 				return nil
 			}
 			if removeErr := os.Remove(link); removeErr != nil {
@@ -108,4 +107,18 @@ func ensureDirSymlink(link, target string) error {
 		return fmt.Errorf("create skill symlink %s -> %s: %w", link, target, err)
 	}
 	return nil
+}
+
+// sameSymlinkTarget reports whether link already points at target, comparing
+// resolved paths so symlinked parents (such as /var on macOS) still match.
+func sameSymlinkTarget(link, target string) bool {
+	if current, err := os.Readlink(link); err == nil && current == target {
+		return true
+	}
+	current, err := filepath.EvalSymlinks(link)
+	if err != nil {
+		return false
+	}
+	resolved, err := filepath.EvalSymlinks(target)
+	return err == nil && current == resolved
 }

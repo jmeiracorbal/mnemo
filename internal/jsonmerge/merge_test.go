@@ -203,3 +203,48 @@ func TestDeepMerge_TypeMismatchPatchWins(t *testing.T) {
 		t.Errorf("expected hooks to be a map after type mismatch, got %T", result["hooks"])
 	}
 }
+
+func TestMergeValueReplacingReplacesStaleEntryAndSkipsNoop(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "opencode.json")
+	stale := `{"theme":"dark","mcp":{"mnemo":{"command":["old"],"stale":true},"servers":{"mnemo":{"command":"older"}}}}`
+	if err := os.WriteFile(path, []byte(stale), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var patch any
+	if err := json.Unmarshal([]byte(`{"mcp":{"mnemo":{"command":["new"]}}}`), &patch); err != nil {
+		t.Fatal(err)
+	}
+	replace := [][]string{{"mcp", "mnemo"}, {"mcp", "servers", "mnemo"}}
+
+	changed, err := MergeValueReplacing(path, patch, replace...)
+	if err != nil || !changed {
+		t.Fatalf("first merge changed=%v err=%v, want true/nil", changed, err)
+	}
+	got := readJSON(t, path)
+	mcp := got["mcp"].(map[string]any)
+	if _, ok := mcp["servers"]; ok {
+		t.Fatalf("empty legacy servers object not pruned: %v", got)
+	}
+	if _, ok := mcp["mnemo"].(map[string]any)["stale"]; ok {
+		t.Fatalf("stale key survived replacement: %v", got)
+	}
+	if got["theme"] != "dark" {
+		t.Fatalf("unrelated key lost: %v", got)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err = MergeValueReplacing(path, patch, replace...)
+	if err != nil || changed {
+		t.Fatalf("second merge changed=%v err=%v, want false/nil", changed, err)
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(info.ModTime()) {
+		t.Fatal("no-op merge rewrote the file")
+	}
+}

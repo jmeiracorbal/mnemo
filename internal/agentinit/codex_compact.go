@@ -57,9 +57,5 @@ func upsertCodexCompactPromptFile(path, promptPath string) error {
 	copy(out[insertAt+1:], out[insertAt:])
 	out[insertAt] = line
 	content := strings.TrimRight(strings.Join(out, "\n"), "\n") + "\n"
-
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(content), 0644)
+	return WriteFile(path, []byte(content))
 }
