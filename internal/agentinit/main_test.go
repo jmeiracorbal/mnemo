@@ -9,8 +9,11 @@ import (
 // profile: tests use temporary home directories, and the Claude environment
 // (or managed settings) would otherwise redirect Claude paths outside them.
 func TestMain(m *testing.M) {
-	os.Unsetenv("CLAUDE_CONFIG_DIR")
-	os.Unsetenv("CLAUDE_CODE_PROJECT_DIR_NAME")
+	for _, key := range []string{"CLAUDE_CONFIG_DIR", "CLAUDE_CODE_PROJECT_DIR_NAME"} {
+		if err := os.Unsetenv(key); err != nil {
+			panic(err)
+		}
+	}
 	claudeManagedSettingsDir = ""
 	os.Exit(m.Run())
 }
