@@ -64,7 +64,7 @@ mnemo does not claim every harness. It ships a stable memory contract that any h
 
 ```bash
 # 1. Install (pins current beta)
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.2 bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.3 bash
 
 # 2. Activate in a project
 cd your-project
@@ -140,7 +140,7 @@ Claude Code uses `CLAUDE_CONFIG_DIR` for its config directory when set, and defa
 
 | Path | Command |
 |---|---|
-| Current beta (`v1.0.0-beta.2`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.2 bash</code> |
+| Current beta (`v1.0.0-beta.3`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.3 bash</code> |
 | Latest stable | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | One agent | `bash -s -- --agent=codex` |
 | All agents | `bash -s -- --agent=all` |
