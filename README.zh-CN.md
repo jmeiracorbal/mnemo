@@ -127,7 +127,7 @@ project/
 
 Codex 安装后需要交互式 hook 信任审查 — 详见 [Agent Integrations](https://github.com/jmeiracorbal/mnemo/wiki/Agent-Integrations)。
 
-Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否则使用 `~/.claude`。其 MCP 配置文件 `~/.claude.json` 仍位于 `$HOME` 下。
+Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否则使用 `~/.claude`。设置了 `CLAUDE_CONFIG_DIR` 时，其 MCP 配置文件 `.claude.json` 位于该目录下，否则位于 `$HOME` 下。
 
 ## 关联模块
 

@@ -188,7 +188,7 @@ setup_agent() {
 agent_detected() {
   case "$1" in
     claudecode)
-      command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ] || [ -f "$HOME/.claude.json" ]
+      command -v claude >/dev/null 2>&1 || [ -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" ] || [ -f "${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json" ]
       ;;
     cursor)
       command -v cursor >/dev/null 2>&1 || [ -d "$HOME/.cursor" ]

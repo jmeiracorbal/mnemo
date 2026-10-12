@@ -135,7 +135,7 @@ Consulta [Durable Events](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Eve
 
 Codex exige revisión interactiva de confianza de hooks tras instalar — detalles en [Agent Integrations](https://github.com/jmeiracorbal/mnemo/wiki/Agent-Integrations).
 
-Claude Code usa `CLAUDE_CONFIG_DIR` como directorio de configuración cuando está definida y, si no, usa `~/.claude`. Su configuración MCP `~/.claude.json` permanece en `$HOME`.
+Claude Code usa `CLAUDE_CONFIG_DIR` como directorio de configuración cuando está definida y, si no, usa `~/.claude`. Su configuración MCP `.claude.json` está en ese directorio cuando `CLAUDE_CONFIG_DIR` está definida y, si no, en `$HOME`.
 
 ## Módulos asociados
 

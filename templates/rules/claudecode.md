@@ -1,6 +1,6 @@
 ### MEMORY SYSTEM
 
-The Claude Code file-based memory system that writes under `~/.claude/projects/*/memory/` and maintains `MEMORY.md` is DISABLED for this workspace.
+The Claude Code file-based memory system that writes under `~/.claude/projects/*/memory/` (or `$CLAUDE_CONFIG_DIR/projects/*/memory/`) and maintains `MEMORY.md` is DISABLED for this workspace.
 Never use it or any plaintext file as a fallback. The mandatory memory authority and fallback behavior are defined in `AGENTS.md`.
 
 ### RECOVER CONTEXT

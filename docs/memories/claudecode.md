@@ -14,19 +14,23 @@ The official docs describe `CLAUDE.md` files as persistent context and auto memo
 Instruction files:
 
 - Managed policy: `/Library/Application Support/ClaudeCode/CLAUDE.md`, `/etc/claude-code/CLAUDE.md`, or `C:\Program Files\ClaudeCode\CLAUDE.md`.
-- User instructions: `~/.claude/CLAUDE.md`.
-- User rules: `~/.claude/rules/**/*.md`.
+- User instructions: `~/.claude/CLAUDE.md` (`$CLAUDE_CONFIG_DIR/CLAUDE.md` when set).
+- User rules: `~/.claude/rules/**/*.md` (under `$CLAUDE_CONFIG_DIR` when set).
 - Project instructions: `./CLAUDE.md` or `./.claude/CLAUDE.md`.
 - Project rules: `./.claude/rules/**/*.md`.
 - Local project preferences: `./CLAUDE.local.md`.
 
 Auto memory:
 
-- Default: `~/.claude/projects/<project>/memory/`.
+- Default: `~/.claude/projects/<project>/memory/`, or `$CLAUDE_CONFIG_DIR/projects/<project>/memory/` when `CLAUDE_CONFIG_DIR` is set.
 - The directory contains `MEMORY.md` as an index/entrypoint and one markdown topic file per memory.
 - `MEMORY.md` is not necessarily the full memory body. It is the startup-loaded index that points Claude to the more detailed topic files that hold the real memory references/content.
-- The project key is derived from the git repository; worktrees/subdirectories of the same repository share the same auto memory directory.
-- `autoMemoryDirectory` can override the storage directory.
+- The project key is derived from the git repository; worktrees/subdirectories of the same repository share the same auto memory directory. Outside git, the project root is used.
+- `<project>` is the absolute path with every non-alphanumeric character replaced by `-`, case preserved; names over 200 characters are truncated and suffixed with a hash of the full path.
+- `CLAUDE_CODE_PROJECT_DIR_NAME` replaces `<project>` only when `CLAUDE_CONFIG_DIR` is also set.
+- `autoMemoryDirectory` can override the storage directory. It is read from managed, local, project and user settings (in that precedence) and must be absolute or start with `~/`.
+
+`mnemo doctor` resolves this location the same way to warn about competing memory. Managed settings delivered through MDM, the registry or the claude.ai console, and `--settings` values, are not visible to it.
 
 ## Shape and retrieval
 
