@@ -40,8 +40,11 @@ intentional; report only inconsistencies between the two surfaces.
 
 Before changing hooks, verify names and paths across
 `plugin/claude-code/hooks/hooks.json`, shipped scripts, installer code and
-tests. A prior critical defect referenced `post-compaction.sh` while the actual
-script was `post-compact.sh`.
+tests. Prior critical defects referenced a script name that did not exist and
+shipped a hook script without its executable bit: plugins install from a git
+checkout, so commit hook scripts with mode `100755`. Keep `doctor`'s runtime
+check aligned with the shipped `hooks.json`; its test runs against the real
+plugin directory.
 
 Hooks and extensions may inject context and publish durable events, but must
 not write SQLite or invoke retired `mnemo save`, `mnemo capture`, or `mnemo

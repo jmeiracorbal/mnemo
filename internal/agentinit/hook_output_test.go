@@ -17,7 +17,6 @@ func TestStopHooksDoNotEmitZeroMemoryWarning(t *testing.T) {
 	for _, path := range []string{
 		"scripts/codex/hooks/stop.sh",
 		"scripts/cursor/hooks/stop.sh",
-		"plugin/claude-code/scripts/session-stop.sh",
 	} {
 		t.Run(path, func(t *testing.T) {
 			content, err := os.ReadFile(filepath.Join(repoRoot, path))

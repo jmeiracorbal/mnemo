@@ -123,27 +123,20 @@ func claudeCodeCheckRuntime(home string) Check {
 		filepath.Join(installPath, ".claude-plugin", "plugin.json"),
 		filepath.Join(installPath, "hooks", "hooks.json"),
 		filepath.Join(installPath, "scripts", "session-start.sh"),
-		filepath.Join(installPath, "scripts", "session-stop.sh"),
-		filepath.Join(installPath, "scripts", "subagent-stop.sh"),
-		filepath.Join(installPath, "scripts", "post-compact.sh"),
 		filepath.Join(installPath, "scripts", "post-compact-resume.sh"),
 		filepath.Join(installPath, "scripts", "user-prompt-submit.sh"),
 		filepath.Join(installPath, "scripts", "pre-tool-use.sh"),
-		filepath.Join(installPath, "scripts", "post-file-edit.sh"),
-		filepath.Join(installPath, "scripts", "post-bash-git.sh"),
 	}
 	check := checkFiles("claudecode", "runtime_files.claudecode", "Claude Code plugin hooks installed", paths, true)
 	if check.Status != "ok" {
 		return check
 	}
+	// Session lifecycle belongs to the MCP connection, so the plugin only
+	// ships context-injection hooks.
 	return checkJSONHookCommands(filepath.Join(installPath, "hooks", "hooks.json"), "runtime_files.claudecode", "claudecode", "Claude Code plugin hooks installed", map[string][]string{
 		"SessionStart":     {"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh", "${CLAUDE_PLUGIN_ROOT}/scripts/post-compact-resume.sh"},
-		"SubagentStop":     {"${CLAUDE_PLUGIN_ROOT}/scripts/subagent-stop.sh"},
-		"Stop":             {"${CLAUDE_PLUGIN_ROOT}/scripts/session-stop.sh"},
-		"PostCompact":      {"${CLAUDE_PLUGIN_ROOT}/scripts/post-compact.sh"},
 		"UserPromptSubmit": {"${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit.sh"},
 		"PreToolUse":       {"${CLAUDE_PLUGIN_ROOT}/scripts/pre-tool-use.sh"},
-		"PostToolUse":      {"${CLAUDE_PLUGIN_ROOT}/scripts/post-file-edit.sh", "${CLAUDE_PLUGIN_ROOT}/scripts/post-bash-git.sh"},
 	})
 }
 
