@@ -37,7 +37,13 @@ func claudeCodeSkillLinkPath(home string) string {
 	return filepath.Join(claudeConfigDir(home), "skills", globalSkillName)
 }
 
+// claudeCodeMCPPath returns the user-scope Claude Code config. With
+// CLAUDE_CONFIG_DIR set, Claude keeps .claude.json inside that directory
+// instead of the home directory.
 func claudeCodeMCPPath(home string) string {
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		return filepath.Join(dir, ".claude.json")
+	}
 	return filepath.Join(home, ".claude.json")
 }
 

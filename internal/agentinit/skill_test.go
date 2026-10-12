@@ -100,3 +100,15 @@ func TestUpsertCodexCompactPromptFile(t *testing.T) {
 		t.Fatalf("compact prompt key must be top-level before TOML tables, got: %s", content)
 	}
 }
+
+func TestClaudeCodeMCPPathRespectsConfigDir(t *testing.T) {
+	home := t.TempDir()
+	if got, want := claudeCodeMCPPath(home), filepath.Join(home, ".claude.json"); got != want {
+		t.Fatalf("default path = %q, want %q", got, want)
+	}
+	configDir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", configDir)
+	if got, want := claudeCodeMCPPath(home), filepath.Join(configDir, ".claude.json"); got != want {
+		t.Fatalf("profile path = %q, want %q", got, want)
+	}
+}
