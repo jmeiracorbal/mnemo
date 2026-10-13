@@ -118,58 +118,28 @@ func TestBuildSetupStatusReportReportsConfiguredPi(t *testing.T) {
 	}
 }
 
-// TestBuildSetupStatusReportChecksClaudeCodePluginHooks runs the runtime
-// check against the shipped plugin, so doctor cannot drift from the hooks
-// and file modes users actually install.
-func TestBuildSetupStatusReportChecksClaudeCodePluginHooks(t *testing.T) {
-	installPath, err := filepath.Abs(filepath.Join("..", "..", "plugin", "claude-code"))
-	if err != nil {
-		t.Fatal(err)
+func TestBuildSetupStatusReportChecksClaudeCodeHooks(t *testing.T) {
+	home := t.TempDir()
+	if _, err := refreshSetup(setupRefreshOptions{Agent: "claudecode", Home: home, MnemoBin: "/bin/mnemo"}); err != nil {
+		t.Fatalf("refresh setup: %v", err)
 	}
-	for name, registry := range map[string]string{
-		"array":  `{"plugins":{"mnemo@mnemo":[{"installPath":"%s"}]}}`,
-		"object": `{"plugins":{"mnemo@mnemo":{"installPath":"%s"}}}`,
-	} {
-		t.Run(name, func(t *testing.T) {
-			home := t.TempDir()
 
-			if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
-				t.Fatalf("install instructions: %v", err)
-			}
-			writeFile(t, filepath.Join(home, ".claude.json"), claudeMCPFixture())
-			writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), fmt.Sprintf(registry, installPath))
-
-			report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
-			if report.Status != "ok" {
-				t.Fatalf("status = %q, want ok: %+v", report.Status, report)
-			}
-			row := report.Rows[0]
-			if row.Agent != "Claude" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "yes" || row.Instructions != "yes" {
-				t.Fatalf("unexpected row: %+v", row)
-			}
-		})
+	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
+	if report.Status != "ok" {
+		t.Fatalf("status = %q, want ok: %+v", report.Status, report)
+	}
+	row := report.Rows[0]
+	if row.Agent != "Claude" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "yes" || row.Instructions != "yes" {
+		t.Fatalf("unexpected row: %+v", row)
 	}
 }
 
 func TestBuildSetupStatusReportWarnsOnClaudeCodeMissingHookCommands(t *testing.T) {
 	home := t.TempDir()
-	installPath := filepath.Join(home, "plugin-cache", "mnemo")
-
-	if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
-		t.Fatalf("install instructions: %v", err)
+	if _, err := refreshSetup(setupRefreshOptions{Agent: "claudecode", Home: home, MnemoBin: "/bin/mnemo"}); err != nil {
+		t.Fatalf("refresh setup: %v", err)
 	}
-	writeFile(t, filepath.Join(home, ".claude.json"), claudeMCPFixture())
-	writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), fmt.Sprintf(`{"plugins":{"mnemo@mnemo":{"installPath":"%s"}}}`, installPath))
-	writeFile(t, filepath.Join(installPath, ".claude-plugin", "plugin.json"), `{"name":"mnemo"}`)
-	writeFile(t, filepath.Join(installPath, "hooks", "hooks.json"), `{"hooks":{}}`)
-	for _, script := range []string{
-		"session-start.sh",
-		"post-compact-resume.sh",
-		"user-prompt-submit.sh",
-		"pre-tool-use.sh",
-	} {
-		writeExecutable(t, filepath.Join(installPath, "scripts", script))
-	}
+	writeFile(t, filepath.Join(home, ".claude", "settings.json"), `{"theme":"dark"}`)
 
 	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
 	if report.Status != "warning" || report.Summary.Warnings != 1 {
@@ -180,32 +150,28 @@ func TestBuildSetupStatusReportWarnsOnClaudeCodeMissingHookCommands(t *testing.T
 	}
 }
 
-func TestBuildSetupStatusReportAllowsClaudeCodeWithoutPluginRegistry(t *testing.T) {
+func TestBuildSetupStatusReportWarnsWhenClaudeCodeHooksAreNotInstalled(t *testing.T) {
 	home := t.TempDir()
-
 	if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
 		t.Fatalf("install instructions: %v", err)
 	}
 	writeFile(t, filepath.Join(home, ".claude.json"), claudeMCPFixture())
 
 	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
-	if report.Status != "ok" || report.Summary.OK != 1 || report.Summary.Warnings != 0 || report.Summary.Errors != 0 {
+	if report.Status != "warning" {
 		t.Fatalf("unexpected report: %+v", report)
 	}
-	row := report.Rows[0]
-	if row.Agent != "Claude" || row.Detected != "yes" || row.MCP != "yes" || row.Hooks != "n/a" || row.Instructions != "yes" {
+	if row := report.Rows[0]; row.MCP != "yes" || row.Hooks != "no" || row.Instructions != "yes" {
 		t.Fatalf("unexpected row: %+v", row)
 	}
 }
 
 func TestBuildSetupStatusReportCountsRuntimeErrors(t *testing.T) {
 	home := t.TempDir()
-
-	if _, err := agentinit.InstallGlobalInstructions(home, "claudecode"); err != nil {
-		t.Fatalf("install instructions: %v", err)
+	if _, err := refreshSetup(setupRefreshOptions{Agent: "claudecode", Home: home, MnemoBin: "/bin/mnemo"}); err != nil {
+		t.Fatalf("refresh setup: %v", err)
 	}
-	writeFile(t, filepath.Join(home, ".claude.json"), claudeMCPFixture())
-	writeFile(t, filepath.Join(home, ".claude", "plugins", "installed_plugins.json"), `{`)
+	writeFile(t, filepath.Join(home, ".claude", "settings.json"), `{`)
 
 	report := buildSetupStatusReport(setupStatusOptions{Agent: "claudecode", Home: home})
 	if report.Status != "error" || report.Summary.Errors != 1 {

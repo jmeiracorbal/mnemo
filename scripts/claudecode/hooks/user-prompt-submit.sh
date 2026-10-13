@@ -1,5 +1,5 @@
 #!/bin/bash
-# mnemo — UserPromptSubmit hook for Claude Code plugin
+# mnemo — UserPromptSubmit hook for Claude Code
 # Re-emits deferred tool loading on the first user message and periodic save nudges.
 #
 # Input: {

@@ -41,6 +41,8 @@ func TestInstallGlobalSkillCopiesCanonicalFiles(t *testing.T) {
 	for _, link := range []string{
 		filepath.Join(home, ".claude", "skills", globalSkillName),
 		filepath.Join(home, ".pi", "agent", "skills", globalSkillName),
+		filepath.Join(home, ".claude", "skills", "mnemo-doctor"),
+		filepath.Join(home, ".pi", "agent", "skills", "mnemo-doctor"),
 	} {
 		info, err := os.Lstat(link)
 		if err != nil {

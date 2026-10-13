@@ -42,6 +42,8 @@ type Check struct {
 	Agent    string            `json:"agent,omitempty"`
 	Path     string            `json:"path,omitempty"`
 	Details  map[string]string `json:"details,omitempty"`
+	// Fix is the command that repairs a failing check.
+	Fix string `json:"fix,omitempty"`
 }
 
 // BuildReport assembles the mnemo integration diagnostic report.
@@ -81,9 +83,24 @@ func BuildReport(opts Options) Report {
 			report.addCheck(errorCheck("agent", err.Error(), opts.Agent))
 		} else {
 			for _, agent := range agents {
-				report.addCheck(toCheck(agentinit.CheckInstructions(home, agent)))
-				report.addCheck(toCheck(agentinit.CheckMCP(home, agent)))
-				if check := agentinit.CheckRuntime(home, agent); check.ID != "" {
+				// Without an explicit agent, report only the agents installed
+				// on this machine, as setup does.
+				if opts.Agent == "all" && !agentinit.Detected(home, agent) {
+					continue
+				}
+				checks := []agentinit.Check{
+					agentinit.CheckInstructions(home, agent),
+					agentinit.CheckMCP(home, agent),
+					agentinit.CheckRuntime(home, agent),
+					agentinit.CheckLegacy(home, agent),
+				}
+				for _, check := range checks {
+					if check.ID == "" {
+						continue
+					}
+					if check.Status != "ok" && check.Fix == "" {
+						check.Fix = "mnemo doctor --fix --agent=" + agent
+					}
 					report.addCheck(toCheck(check))
 				}
 			}
@@ -135,6 +152,7 @@ func toCheck(c agentinit.Check) Check {
 		Agent:    c.Agent,
 		Path:     c.Path,
 		Details:  c.Details,
+		Fix:      c.Fix,
 	}
 }
 

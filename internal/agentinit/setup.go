@@ -18,10 +18,20 @@ type ConfigSnippet struct {
 	Content string
 }
 
+// assetTarget installs an embedded asset. Path is relative to the home
+// directory unless it is absolute, as for agents whose config directory can
+// live elsewhere.
 type assetTarget struct {
 	Asset string
 	Path  string
 	Mode  os.FileMode
+}
+
+func (t assetTarget) target(home string) string {
+	if filepath.IsAbs(t.Path) {
+		return t.Path
+	}
+	return filepath.Join(home, t.Path)
 }
 
 // Refresh writes global instructions, config, and runtime files for agent.
@@ -57,6 +67,18 @@ func Refresh(home, mnemoBin, agent string) ([]string, error) {
 		return nil, err
 	}
 	updated = append(updated, runtimeFiles...)
+	if spec, ok := Spec(agent); ok {
+		for _, hook := range spec.Hooks {
+			if hook.Install == nil {
+				continue
+			}
+			registered, err := hook.Install(home)
+			if err != nil {
+				return nil, err
+			}
+			updated = append(updated, registered...)
+		}
+	}
 
 	if agent == "codex" {
 		codexFiles, err := writeCodexCompactionPrompt(home)
@@ -85,6 +107,19 @@ func Uninstall(home, agent string) ([]string, error) {
 	removed = append(removed, configFiles...)
 	if err != nil {
 		return removed, err
+	}
+
+	if spec, ok := Spec(agent); ok {
+		for _, hook := range spec.Hooks {
+			if hook.Remove == nil {
+				continue
+			}
+			unregistered, err := hook.Remove(home)
+			removed = append(removed, unregistered...)
+			if err != nil {
+				return removed, err
+			}
+		}
 	}
 
 	runtimeFiles, err := removeRuntime(home, agent)
@@ -138,7 +173,7 @@ func uninstallConfig(home, agent string) ([]string, error) {
 	return spec.MCP.Uninstall(home)
 }
 
-func runtimeAssets(agent string) ([]assetTarget, error) {
+func runtimeAssets(home, agent string) ([]assetTarget, error) {
 	spec, ok := Spec(agent)
 	if !ok {
 		return nil, fmt.Errorf("unsupported agent %q for setup runtime files", agent)
@@ -146,14 +181,14 @@ func runtimeAssets(agent string) ([]assetTarget, error) {
 	var targets []assetTarget
 	for _, hook := range spec.Hooks {
 		if hook.RuntimeAssets != nil {
-			targets = append(targets, hook.RuntimeAssets()...)
+			targets = append(targets, hook.RuntimeAssets(home)...)
 		}
 	}
 	return targets, nil
 }
 
 func writeRuntime(home, agent string) ([]string, error) {
-	targets, err := runtimeAssets(agent)
+	targets, err := runtimeAssets(home, agent)
 	if err != nil {
 		return nil, err
 	}
@@ -161,13 +196,13 @@ func writeRuntime(home, agent string) ([]string, error) {
 }
 
 func removeRuntime(home, agent string) ([]string, error) {
-	targets, err := runtimeAssets(agent)
+	targets, err := runtimeAssets(home, agent)
 	if err != nil {
 		return nil, err
 	}
 	removed := make([]string, 0, len(targets))
 	for _, target := range targets {
-		path := filepath.Join(home, target.Path)
+		path := target.target(home)
 		if err := os.Remove(path); err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -186,7 +221,7 @@ func writeSetupAssets(home string, targets []assetTarget) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read embedded asset %s: %w", target.Asset, err)
 		}
-		path := filepath.Join(home, target.Path)
+		path := target.target(home)
 		if _, err := WriteFileIfChanged(path, data, target.Mode); err != nil {
 			return nil, err
 		}

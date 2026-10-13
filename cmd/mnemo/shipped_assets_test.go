@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,147 +9,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestShippedHooksReferenceRealScripts validates that every command in
-// plugin/claude-code/hooks/hooks.json points to a script that actually
-// exists in plugin/claude-code/scripts/. This catches filename mismatches
-// before they reach a published release.
-func TestShippedHooksReferenceRealScripts(t *testing.T) {
-	hooksFile := filepath.Join("..", "..", "plugin", "claude-code", "hooks", "hooks.json")
-	data, err := os.ReadFile(hooksFile)
-	if err != nil {
-		t.Fatalf("could not read shipped hooks.json: %v", err)
-	}
-
-	var raw struct {
-		Hooks map[string][]struct {
-			Hooks []struct {
-				Command string `json:"command"`
-			} `json:"hooks"`
-		} `json:"hooks"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("could not parse hooks.json: %v", err)
-	}
-
-	const prefix = "${CLAUDE_PLUGIN_ROOT}/scripts/"
-	scriptsDir := filepath.Join("..", "..", "plugin", "claude-code", "scripts")
-	validatedCount := 0
-
-	for event, matchers := range raw.Hooks {
-		for _, matcher := range matchers {
-			for _, hook := range matcher.Hooks {
-				cmd := hook.Command
-				// Search all tokens so commands like "bash ${CLAUDE_PLUGIN_ROOT}/scripts/foo.sh"
-				// are also validated, not only commands that start with the prefix.
-				var scriptName string
-				directExec := false
-				for i, tok := range strings.Fields(cmd) {
-					tok = strings.Trim(tok, `"'`)
-					if strings.HasPrefix(tok, prefix) {
-						scriptName = strings.TrimPrefix(tok, prefix)
-						directExec = i == 0
-						break
-					}
-				}
-				if scriptName == "" {
-					continue
-				}
-				validatedCount++
-				scriptName = filepath.Clean(scriptName)
-				if filepath.IsAbs(scriptName) || scriptName == ".." || strings.HasPrefix(scriptName, ".."+string(os.PathSeparator)) {
-					t.Errorf("hooks.json [%s]: invalid script path %q", event, scriptName)
-					continue
-				}
-				scriptPath := filepath.Join(scriptsDir, scriptName)
-				info, err := os.Stat(scriptPath)
-				if err != nil {
-					t.Errorf("hooks.json [%s]: references %q but file does not exist at %s", event, scriptName, scriptPath)
-					continue
-				}
-				// Plugins install from a git checkout, so the executable bit
-				// must be committed for directly executed scripts.
-				if directExec && info.Mode()&0111 == 0 {
-					t.Errorf("hooks.json [%s]: %s is run directly but is not executable", event, scriptPath)
-				}
-			}
-		}
-	}
-	if validatedCount == 0 {
-		t.Fatalf("no script references were validated from hooks.json")
-	}
-}
-
-// TestShippedCodexPluginHooksReferenceRealScripts validates that every command
-// in plugin/codex/hooks/hooks.json points to a script that exists in
-// plugin/codex/scripts/.
-func TestShippedCodexPluginHooksReferenceRealScripts(t *testing.T) {
-	hooksFile := filepath.Join("..", "..", "plugin", "codex", "hooks", "hooks.json")
-	data, err := os.ReadFile(hooksFile)
-	if err != nil {
-		t.Fatalf("could not read codex plugin hooks.json: %v", err)
-	}
-
-	var raw struct {
-		Hooks map[string][]struct {
-			Hooks []struct {
-				Command string `json:"command"`
-			} `json:"hooks"`
-		} `json:"hooks"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("could not parse codex plugin hooks.json: %v", err)
-	}
-
-	const prefix = "${PLUGIN_ROOT}/scripts/"
-	scriptsDir := filepath.Join("..", "..", "plugin", "codex", "scripts")
-	validatedCount := 0
-
-	for event, matchers := range raw.Hooks {
-		for _, matcher := range matchers {
-			for _, hook := range matcher.Hooks {
-				cmd := hook.Command
-				var scriptName string
-				directExec := false
-				for i, tok := range strings.Fields(cmd) {
-					tok = strings.Trim(tok, `"'`)
-					if strings.HasPrefix(tok, prefix) {
-						scriptName = strings.TrimPrefix(tok, prefix)
-						directExec = i == 0
-						break
-					}
-				}
-				if scriptName == "" {
-					continue
-				}
-				validatedCount++
-				scriptName = filepath.Clean(scriptName)
-				if filepath.IsAbs(scriptName) || scriptName == ".." || strings.HasPrefix(scriptName, ".."+string(os.PathSeparator)) {
-					t.Errorf("codex plugin hooks.json [%s]: invalid script path %q", event, scriptName)
-					continue
-				}
-				scriptPath := filepath.Join(scriptsDir, scriptName)
-				info, err := os.Stat(scriptPath)
-				if err != nil {
-					t.Errorf("codex plugin hooks.json [%s]: references %q but file does not exist at %s", event, scriptName, scriptPath)
-					continue
-				}
-				// Plugins install from a git checkout, so the executable bit
-				// must be committed for directly executed scripts.
-				if directExec && info.Mode()&0111 == 0 {
-					t.Errorf("codex plugin hooks.json [%s]: %s is run directly but is not executable", event, scriptPath)
-				}
-			}
-		}
-	}
-	if validatedCount == 0 {
-		t.Fatalf("no script references were validated from codex plugin hooks.json")
-	}
-}
-
 func TestShippedHooksResolveProjectFromMarker(t *testing.T) {
 	roots := []string{
-		filepath.Join("..", "..", "plugin", "claude-code", "scripts"),
-		filepath.Join("..", "..", "plugin", "codex", "scripts"),
+		filepath.Join("..", "..", "scripts", "claudecode", "hooks"),
 		filepath.Join("..", "..", "scripts", "cursor", "hooks"),
 		filepath.Join("..", "..", "scripts", "codex", "hooks"),
 		filepath.Join("..", "..", "scripts", "opencode", "plugins"),
@@ -210,8 +71,7 @@ func TestShippedHooksResolveProjectFromMarker(t *testing.T) {
 
 func TestShippedHooksDoNotWriteSessionsDirectly(t *testing.T) {
 	roots := []string{
-		filepath.Join("..", "..", "plugin", "claude-code", "scripts"),
-		filepath.Join("..", "..", "plugin", "codex", "scripts"),
+		filepath.Join("..", "..", "scripts", "claudecode", "hooks"),
 		filepath.Join("..", "..", "scripts", "cursor", "hooks"),
 		filepath.Join("..", "..", "scripts", "codex", "hooks"),
 	}
@@ -263,8 +123,7 @@ func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
 		filepath.Join("..", "..", "templates", "rules", "generic.md"),
 		filepath.Join("..", "..", "templates", "rules", "cursor.mdc"),
 		filepath.Join("..", "..", "templates", "rules", "pi.md"),
-		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "mnemo.md"),
-		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "session-start-protocol.md"),
+		filepath.Join("..", "..", "scripts", "claudecode", "hooks", "session-start-protocol.md"),
 		filepath.Join("..", "..", "scripts", "codex", "hooks", "mnemo-protocol.md"),
 		filepath.Join("..", "..", "scripts", "cursor", "rules", "mnemo.mdc"),
 	}
@@ -403,6 +262,11 @@ func TestShippedSkillsHaveOpenAIMetadata(t *testing.T) {
 			DisplayName:      "mnemo Memory",
 			ShortDescription: "Use persistent memory safely across sessions",
 			DefaultPrompt:    "Use $mnemo-memory to recover relevant context and persist important learnings for this project.",
+		},
+		"mnemo-doctor": {
+			DisplayName:      "mnemo Doctor",
+			ShortDescription: "Diagnose and repair the mnemo installation",
+			DefaultPrompt:    "Use $mnemo-doctor to check the mnemo installation and repair it with mnemo doctor --fix.",
 		},
 		"mnemo-project-maintenance": {
 			DisplayName:      "mnemo Project Maintenance",

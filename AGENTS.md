@@ -2,9 +2,11 @@
 
 ## Purpose
 
-This repository ships the `mnemo` Go binary and the Claude Code plugin. They
-are deliberately separate: the plugin provides metadata, hooks and MCP
-integration; the binary performs setup and file changes that the plugin cannot.
+This repository ships the `mnemo` Go binary. The binary is the only owner of
+every agent integration: `mnemo setup refresh`, which `install.sh` and
+`mnemo update` run, installs global instructions, the MCP server registration,
+hooks and skills, and `mnemo doctor --fix` repairs them. mnemo ships no agent
+plugins: a second registration path drifts and makes agents start mnemo twice.
 
 ## Core invariants
 
@@ -16,14 +18,14 @@ integration; the binary performs setup and file changes that the plugin cannot.
   agent. Hooks may inject context, but must not create, close or write sessions.
 - Schema changes require a new incremental migration and an updated
   `database/target_schema.sql`; never edit an existing migration.
-- Binary and plugin version metadata are a single consistency boundary. The MCP
-  server reports the build-injected binary version, never a separate constant.
+- The binary version is the single consistency boundary. The MCP server reports
+  the build-injected binary version, never a separate constant.
 
 ## Required reading by change area
 
 | Before changing… | Read first |
 |---|---|
-| hooks, plugin setup, or an agent integration | [`docs/maintainers/agent-integrations.md`](docs/maintainers/agent-integrations.md) |
+| hooks, setup, or an agent integration | [`docs/maintainers/agent-integrations.md`](docs/maintainers/agent-integrations.md) |
 | versions, installer/update behavior, or a release | [`docs/maintainers/releases.md`](docs/maintainers/releases.md) |
 | database schema or sqlc queries | [`docs/maintainers/migrations.md`](docs/maintainers/migrations.md) |
 
@@ -32,7 +34,7 @@ Do not make an area-specific change until its required guide has been read.
 ## Verification and reporting
 
 Run `go test ./...`, `go build ./...`, and `git diff --check` for every code
-change. For a changed hook/plugin/setup flow, also follow the relevant guide's
+change. For a changed hook or setup flow, also follow the relevant guide's
 validation checklist. State exact files, user impact, minimal fix, and evidence
 of verification; distinguish bugs, documentation issues and design decisions.
 

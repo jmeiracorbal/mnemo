@@ -31,7 +31,7 @@ func TestAgentSpecsDefineSupportedAgents(t *testing.T) {
 		if spec.Supports.Instructions && len(spec.Instructions) == 0 {
 			t.Fatalf("%s: instructions capability missing specs", id)
 		}
-		if spec.Skill.GlobalLinkPath != nil && !spec.Supports.Skills {
+		if spec.Skill.SkillsDir != nil && !spec.Supports.Skills {
 			t.Fatalf("%s: skill link configured without skills capability", id)
 		}
 	}
@@ -47,8 +47,8 @@ func TestAgentSpecCapabilitiesNameBelongsToAgentSpec(t *testing.T) {
 func TestAgentSpecsDeclareSkillLinkSurfaces(t *testing.T) {
 	home := t.TempDir()
 	wantLinks := map[string]string{
-		AgentClaudeCode: filepath.Join(home, ".claude", "skills", globalSkillName),
-		AgentPi:         filepath.Join(home, ".pi", "agent", "skills", globalSkillName),
+		AgentClaudeCode: filepath.Join(home, ".claude", "skills"),
+		AgentPi:         filepath.Join(home, ".pi", "agent", "skills"),
 	}
 	canonicalSkillAgents := map[string]bool{
 		AgentCursor:   true,
@@ -60,14 +60,14 @@ func TestAgentSpecsDeclareSkillLinkSurfaces(t *testing.T) {
 		want, shouldLink := wantLinks[spec.ID]
 		switch {
 		case shouldLink:
-			if spec.Skill.GlobalLinkPath == nil {
-				t.Fatalf("%s: missing skill link path", spec.ID)
+			if spec.Skill.SkillsDir == nil {
+				t.Fatalf("%s: missing skills dir", spec.ID)
 			}
-			if got := spec.Skill.GlobalLinkPath(home); got != want {
-				t.Fatalf("%s: skill link path = %q, want %q", spec.ID, got, want)
+			if got := spec.Skill.SkillsDir(home); got != want {
+				t.Fatalf("%s: skills dir = %q, want %q", spec.ID, got, want)
 			}
 		case canonicalSkillAgents[spec.ID]:
-			if spec.Skill.GlobalLinkPath != nil {
+			if spec.Skill.SkillsDir != nil {
 				t.Fatalf("%s: unexpected skill link for canonical ~/.agents/skills consumer", spec.ID)
 			}
 		}

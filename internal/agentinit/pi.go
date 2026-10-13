@@ -16,8 +16,8 @@ func piInstructionPath(home string) string {
 	return filepath.Join(home, ".pi", "agent", "APPEND_SYSTEM.md")
 }
 
-func piSkillLinkPath(home string) string {
-	return filepath.Join(home, ".pi", "agent", "skills", globalSkillName)
+func piSkillsDir(home string) string {
+	return filepath.Join(home, ".pi", "agent", "skills")
 }
 
 func piInstallInstructions(home string) (string, error) {
@@ -41,7 +41,7 @@ func piConfigSnippets(home, mnemoBin string) []ConfigSnippet {
 	return nil
 }
 
-func piRuntimeAssets() []assetTarget {
+func piRuntimeAssets(_ string) []assetTarget {
 	return []assetTarget{{Asset: "scripts/pi/extensions/mnemo.ts", Path: filepath.Join(".pi", "agent", "extensions", "mnemo.ts"), Mode: 0644}}
 }
 

@@ -52,7 +52,7 @@ func openCodeConfigSnippets(home, mnemoBin string) []ConfigSnippet {
 	}}
 }
 
-func openCodeRuntimeAssets() []assetTarget {
+func openCodeRuntimeAssets(_ string) []assetTarget {
 	return []assetTarget{
 		{Asset: "scripts/opencode/plugins/mnemo.ts", Path: filepath.Join(".config", "opencode", "plugins", "mnemo.ts"), Mode: 0644},
 		{Asset: "scripts/opencode/plugins/mnemo-protocol.md", Path: filepath.Join(".config", "opencode", "plugins", "mnemo-protocol.md"), Mode: 0644},

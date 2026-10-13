@@ -11,7 +11,7 @@ with the core invariants in [`AGENTS.md`](AGENTS.md).
 
 | Change area | Read first |
 |---|---|
-| Hooks, plugin setup, agent integration | [`docs/maintainers/agent-integrations.md`](docs/maintainers/agent-integrations.md) |
+| Hooks, setup, agent integration | [`docs/maintainers/agent-integrations.md`](docs/maintainers/agent-integrations.md) |
 | Versions, installer, releases | [`docs/maintainers/releases.md`](docs/maintainers/releases.md) |
 | Database schema or sqlc | [`docs/maintainers/migrations.md`](docs/maintainers/migrations.md) |
 
@@ -42,7 +42,7 @@ go build ./...
 git diff --check
 ```
 
-For hook, plugin, or setup changes, also follow the validation checklist in the
+For hook or setup changes, also follow the validation checklist in the
 relevant maintainer guide.
 
 ## Pull requests

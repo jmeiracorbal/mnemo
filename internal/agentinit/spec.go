@@ -14,6 +14,7 @@ type AgentSpec struct {
 	Instructions []InstructionSpec
 	Hooks        []HookSpec
 	Skill        AgentSkillSpec
+	Legacy       LegacySpec
 	Supports     AgentSpecCapabilities
 }
 
@@ -55,13 +56,27 @@ type InstructionSpec struct {
 
 // HookSpec describes agent runtime assets or hook/plugin validation.
 type HookSpec struct {
-	RuntimeAssets func() []assetTarget
+	RuntimeAssets func(home string) []assetTarget
 	Check         func(home string) Check
+	// Install and Remove register the runtime assets with the agent when it
+	// reads hooks from a settings file setup shares with the user.
+	Install func(home string) ([]string, error)
+	Remove  func(home string) ([]string, error)
 }
 
-// AgentSkillSpec describes how an agent discovers the canonical global skill.
+// LegacySpec detects and removes an integration from earlier releases that
+// would register mnemo a second time, such as an agent plugin.
+type LegacySpec struct {
+	Check  func(home string) Check
+	Remove func(home string) ([]string, error)
+}
+
+// AgentSkillSpec describes how an agent discovers the canonical global
+// skills. SkillsDir is the agent's own skills directory, where each mnemo
+// skill is linked to its copy under ~/.agents/skills; nil means the agent
+// reads ~/.agents/skills directly.
 type AgentSkillSpec struct {
-	GlobalLinkPath func(home string) string
+	SkillsDir func(home string) string
 }
 
 var agentSpecs = []AgentSpec{
@@ -88,8 +103,11 @@ var agentSpecs = []AgentSpec{
 		Hooks: []HookSpec{{
 			RuntimeAssets: claudeCodeRuntimeAssets,
 			Check:         claudeCodeCheckRuntime,
+			Install:       claudeCodeInstallHooks,
+			Remove:        claudeCodeRemoveHooks,
 		}},
-		Skill:    AgentSkillSpec{GlobalLinkPath: claudeCodeSkillLinkPath},
+		Legacy:   LegacySpec{Check: claudeCodeCheckLegacy, Remove: claudeCodeRemoveLegacy},
+		Skill:    AgentSkillSpec{SkillsDir: claudeCodeSkillsDir},
 		Supports: AgentSpecCapabilities{MCP: true, Instructions: true, Skills: true, Hooks: true},
 	},
 	{
@@ -138,6 +156,7 @@ var agentSpecs = []AgentSpec{
 			RuntimeAssets: codexRuntimeAssets,
 			Check:         codexCheckRuntime,
 		}},
+		Legacy:   LegacySpec{Check: codexCheckLegacy, Remove: codexRemoveLegacy},
 		Supports: AgentSpecCapabilities{MCP: true, Instructions: true, Hooks: true, SessionLifecycle: true},
 	},
 	{
@@ -183,7 +202,7 @@ var agentSpecs = []AgentSpec{
 			Install: piInstallProjectInstructions,
 		}},
 		Hooks:    []HookSpec{{RuntimeAssets: piRuntimeAssets, Check: piCheckRuntime}},
-		Skill:    AgentSkillSpec{GlobalLinkPath: piSkillLinkPath},
+		Skill:    AgentSkillSpec{SkillsDir: piSkillsDir},
 		Supports: AgentSpecCapabilities{Instructions: true, Skills: true, Hooks: true, SessionLifecycle: true, RPC: true},
 	},
 }

@@ -12,8 +12,8 @@ import (
 
 // ResolveMCPInstanceSession returns this MCP instance's open session for a
 // project, creating it on the first write. The opaque instance ID is generated
-// by the MCP server at startup; mcpPID is diagnostic only and never used for
-// identity or lookup.
+// by the MCP server at startup; mcpPID is never used for identity or lookup,
+// only by CloseOrphanedMCPSessions to detect a server that already exited.
 func (s *Store) ResolveMCPInstanceSession(project, directory, instanceID string, mcpPID int) (string, error) {
 	if strings.TrimSpace(project) == "" {
 		return "", fmt.Errorf("project id must not be empty")
@@ -63,6 +63,29 @@ func (s *Store) CloseMCPInstanceSessions(instanceID string) error {
 	return s.withTx(func(tx *sql.Tx) error {
 		return s.q.WithTx(tx).CloseMCPInstanceSessions(context.Background(), sql.NullString{String: instanceID, Valid: true})
 	})
+}
+
+// CloseOrphanedMCPSessions closes open sessions whose MCP server process no
+// longer exists. A server normally closes its sessions when its stdio
+// connection ends; this covers servers that were killed or exited while the
+// controller was unavailable. A live PID, even if reused by another process,
+// keeps the session open. It returns the number of MCP instances closed.
+func (s *Store) CloseOrphanedMCPSessions(alive func(pid int) bool) (int, error) {
+	rows, err := s.q.ListOpenMCPInstanceSessions(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	closed := 0
+	for _, row := range rows {
+		if alive(int(row.McpPid.Int64)) {
+			continue
+		}
+		if err := s.CloseMCPInstanceSessions(row.McpInstanceID.String); err != nil {
+			return closed, err
+		}
+		closed++
+	}
+	return closed, nil
 }
 
 func (s *Store) EndSession(id string, summary string) error {

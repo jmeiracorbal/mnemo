@@ -72,6 +72,7 @@ type Querier interface {
 	ListObservationTags(ctx context.Context, observationID int64) ([]string, error)
 	ListObservations(ctx context.Context, arg ListObservationsParams) ([]ListObservationsRow, error)
 	ListObservationsAffectedByTag(ctx context.Context, tag string) ([]ListObservationsAffectedByTagRow, error)
+	ListOpenMCPInstanceSessions(ctx context.Context) ([]ListOpenMCPInstanceSessionsRow, error)
 	ListProjectSummaries(ctx context.Context) ([]ListProjectSummariesRow, error)
 	ListProjects(ctx context.Context) ([]Project, error)
 	ListRecentObservations(ctx context.Context, arg ListRecentObservationsParams) ([]ListRecentObservationsRow, error)

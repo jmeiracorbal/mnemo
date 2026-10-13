@@ -8,13 +8,14 @@ import (
 	mnemoassets "github.com/jmeiracorbal/mnemo"
 )
 
-var globalSkillFiles = []struct {
-	asset string
-	rel   string
-	mode  os.FileMode
+// globalSkills are the embedded skills installed under ~/.agents/skills and
+// linked into the skill directory of every agent that needs one.
+var globalSkills = []struct {
+	name  string
+	files []string
 }{
-	{asset: "skills/mnemo-memory/SKILL.md", rel: "SKILL.md", mode: 0644},
-	{asset: "skills/mnemo-memory/agents/openai.yaml", rel: "agents/openai.yaml", mode: 0644},
+	{name: globalSkillName, files: []string{"SKILL.md", "agents/openai.yaml"}},
+	{name: "mnemo-doctor", files: []string{"SKILL.md", "agents/openai.yaml"}},
 }
 
 type skillSymlink struct {
@@ -22,59 +23,53 @@ type skillSymlink struct {
 	target string
 }
 
-// InstallGlobalSkill copies the embedded mnemo-memory skill to the canonical
-// global path and links agent-specific skill directories to it.
+// InstallGlobalSkill copies the embedded mnemo skills to the canonical global
+// path and links agent-specific skill directories to them.
 func InstallGlobalSkill(home string) ([]string, error) {
 	return installGlobalSkill(home, SupportedAgents)
 }
 
-// InstallGlobalSkillForAgents copies the embedded mnemo-memory skill to the
-// canonical global path and links only the requested agents' skill directories.
+// InstallGlobalSkillForAgents copies the embedded mnemo skills to the canonical
+// global path and links only the requested agents' skill directories.
 func InstallGlobalSkillForAgents(home string, agents []string) ([]string, error) {
 	return installGlobalSkill(home, agents)
 }
 
 func installGlobalSkill(home string, agents []string) ([]string, error) {
-	destRoot := filepath.Join(home, ".agents", "skills", globalSkillName)
 	var updated []string
-
-	for _, file := range globalSkillFiles {
-		data, err := mnemoassets.SetupAssets.ReadFile(file.asset)
-		if err != nil {
-			return nil, fmt.Errorf("read embedded skill asset %s: %w", file.asset, err)
+	for _, skill := range globalSkills {
+		destRoot := filepath.Join(home, ".agents", "skills", skill.name)
+		for _, rel := range skill.files {
+			asset := "skills/" + skill.name + "/" + rel
+			data, err := mnemoassets.SetupAssets.ReadFile(asset)
+			if err != nil {
+				return nil, fmt.Errorf("read embedded skill asset %s: %w", asset, err)
+			}
+			path := filepath.Join(destRoot, filepath.FromSlash(rel))
+			if _, err := WriteFileIfChanged(path, data, 0644); err != nil {
+				return nil, fmt.Errorf("write skill file %s: %w", path, err)
+			}
+			updated = append(updated, path)
 		}
-		path := filepath.Join(destRoot, file.rel)
-		if err := WriteFile(path, data); err != nil {
-			return nil, fmt.Errorf("write skill file %s: %w", path, err)
+		for _, link := range globalSkillSymlinks(home, destRoot, skill.name, agents) {
+			if err := ensureDirSymlink(link.link, link.target); err != nil {
+				return nil, err
+			}
+			updated = append(updated, link.link)
 		}
-		if err := os.Chmod(path, file.mode); err != nil {
-			return nil, fmt.Errorf("chmod skill file %s: %w", path, err)
-		}
-		updated = append(updated, path)
 	}
-
-	for _, spec := range globalSkillSymlinks(home, destRoot, agents) {
-		if err := ensureDirSymlink(spec.link, spec.target); err != nil {
-			return nil, err
-		}
-		updated = append(updated, spec.link)
-	}
-
 	return updated, nil
 }
 
-func globalSkillSymlinks(home, destRoot string, agents []string) []skillSymlink {
+func globalSkillSymlinks(home, destRoot, name string, agents []string) []skillSymlink {
 	var symlinks []skillSymlink
 	for _, agent := range agents {
 		spec, ok := Spec(agent)
-		if !ok {
-			continue
-		}
-		if spec.Skill.GlobalLinkPath == nil {
+		if !ok || spec.Skill.SkillsDir == nil {
 			continue
 		}
 		symlinks = append(symlinks, skillSymlink{
-			link:   spec.Skill.GlobalLinkPath(home),
+			link:   filepath.Join(spec.Skill.SkillsDir(home), name),
 			target: destRoot,
 		})
 	}
