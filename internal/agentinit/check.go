@@ -18,6 +18,8 @@ type Check struct {
 	Agent    string
 	Path     string
 	Details  map[string]string
+	// Fix is the command that repairs a failing check.
+	Fix string
 }
 
 // Label returns the display name owned by agent.
@@ -60,6 +62,25 @@ func CheckMCP(home, agent string) Check {
 		return checkError(agent, "mcp_config."+agent, "unknown agent", "")
 	}
 	return spec.MCP.Check(home)
+}
+
+// CheckLegacy reports an integration from earlier releases that would register
+// mnemo a second time. A zero Check means the agent never had one.
+func CheckLegacy(home, agent string) Check {
+	spec, ok := Spec(agent)
+	if !ok || spec.Legacy.Check == nil {
+		return Check{}
+	}
+	return spec.Legacy.Check(home)
+}
+
+// RemoveLegacy removes agent's legacy integration through the agent's own CLI.
+func RemoveLegacy(home, agent string) ([]string, error) {
+	spec, ok := Spec(agent)
+	if !ok || spec.Legacy.Remove == nil {
+		return nil, nil
+	}
+	return spec.Legacy.Remove(home)
 }
 
 // CheckRuntime reports whether agent's runtime files (hooks/plugin) are present.

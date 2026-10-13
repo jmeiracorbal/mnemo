@@ -46,7 +46,7 @@ func newRootCommand() *cobra.Command {
 		command("json-merge <file>", "Deep-merge JSON from stdin into a file", runJSONMerge),
 		command("extract-transcript <file>", "Extract assistant text from a JSONL transcript", runExtractTranscript),
 		command("install-instructions [--agent=AGENT]", "Install global agent instructions", runInstallInstructions),
-		command("doctor [--json] [--agent=AGENT] [--path=DIR] [--home=DIR] [--data-dir=DIR]", "Run read-only diagnostics", runDoctor),
+		command("doctor [--json] [--fix] [--agent=AGENT] [--path=DIR] [--home=DIR] [--data-dir=DIR]", "Diagnose the installation; --fix repairs it", runDoctor),
 		command("db", "Validate or apply database migrations", runDB),
 		command("update [--check] [--yes] [--agent=AGENT] [--json] [--prerelease]", "Check for and install a newer mnemo release", runUpdate),
 		command("setup", "Manage global agent setup", runSetup),

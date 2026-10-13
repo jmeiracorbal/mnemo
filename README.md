@@ -56,7 +56,7 @@ Agents forget. Markdown memory drifts. Hooks race. Setup fails silently.
 | Decisions vanish between sessions | Durable project memory in local SQLite |
 | `MEMORY.md`, editor memory and chat notes diverge | One project-scoped source of truth for every supported agent |
 | Global hooks run everywhere, or nowhere useful | Opt-in via `.mnemo`; unmarked projects are ignored |
-| Silent misconfiguration | `mnemo doctor` explains exactly what is wired |
+| Silent misconfiguration | `mnemo doctor` explains exactly what is wired; `mnemo doctor --fix` repairs it |
 
 mnemo does not claim every harness. It ships a stable memory contract that any harness can implement and validate.
 
@@ -112,14 +112,14 @@ See [Durable Events](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events) 
 - **Portable skills** — teach agents to use mnemo instead of falling back to native memory
 - **Passive capture** — extract learnings from agent-provided output
 - **Provenance** — SQL-queryable agent, tool, model and MCP client metadata
-- **Diagnostics & repair** — `mnemo doctor`, project merge/rename, `mnemo memories review`
+- **Diagnostics & repair** — `mnemo doctor` / `mnemo doctor --fix`, project merge/rename, `mnemo memories review`
 - **Safe migrations & self-update** — schema upgrades on open; `mnemo update` for releases
 
 ## Supported Agents
 
 | Agent | MCP | Hooks / runtime | Global instructions | Skill | Status |
 |---|---:|---:|---:|---:|---|
-| Claude Code | Yes | Plugin hooks or installer setup | Yes | Yes | Supported |
+| Claude Code | Yes | Session hooks | Yes | Yes | Supported |
 | Codex | Yes | Session hooks | Yes | Yes | Supported |
 | Cursor | Yes | Prompt hook | Yes | Yes | Supported |
 | OpenCode | Yes | Plugin events | Yes | Yes | Supported |
@@ -144,10 +144,9 @@ Claude Code uses `CLAUDE_CONFIG_DIR` for its config directory when set, and defa
 | Latest stable | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | One agent | `bash -s -- --agent=codex` |
 | All agents | `bash -s -- --agent=all` |
-| Claude plugin | `claude plugin install mnemo@mnemo` |
 | From source | `go build -o ~/.local/bin/mnemo ./cmd/mnemo/` |
 
-For the native Codex plugin, install the `mnemo` binary first, run `codex plugin marketplace add jmeiracorbal/mnemo`, then open `/plugins` and install mnemo. This packages the plugin's hooks and MCP connection. The existing `mnemo init --agent=codex` flow remains available to configure Codex directly through the CLI.
+The installer configures every agent: instructions, MCP server, hooks and skills. mnemo ships no agent plugins. If you installed the mnemo Claude Code or Codex plugin from an earlier release, `mnemo doctor` reports it and `mnemo doctor --fix` removes it and restores the installer setup.
 
 Full update flags and uninstall steps: [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation).
 
@@ -169,7 +168,7 @@ Full update flags and uninstall steps: [Installation](https://github.com/jmeirac
 - **Local-first** — memory stays on your machine in SQLite
 - **Agent-neutral** — one memory authority across supported coding agents
 - **Opt-in by project** — global integrations are inert without `.mnemo`
-- **Diagnosable** — every setup surface can be checked without mutation
+- **Diagnosable** — every setup surface can be checked without mutation, and `mnemo doctor --fix` repairs it
 - **Repairable** — duplicate projects and memory conflicts are visible and fixable via CLI
 
 ## Community

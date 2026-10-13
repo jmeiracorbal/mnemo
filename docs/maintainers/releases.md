@@ -1,26 +1,17 @@
 # Releases and version metadata
 
 Read this guide before changing version references, installer/update behavior,
-plugin metadata, or preparing a release.
+or preparing a release.
 
 ## Version boundary
 
 The binary version is injected with build flags. The MCP server must advertise
 that same binary version and must not use an independent constant.
 
-Every version bump updates all shipped plugin versions to match the release
-tag:
-
-- `.claude-plugin/marketplace.json` — `plugins[0].version`
-- `plugin/claude-code/.claude-plugin/plugin.json` — `version`
-- `plugin/codex/plugin.json` — `version`
-
-Search for the previous version, update all required references, and confirm
-there are no stale values before committing or tagging. The release tag and
-plugin metadata version must match.
-
-The `.mcp.json` under `plugin/claude-code/` is for installed users. Update it
-whenever the MCP configuration changes.
+Every version bump updates the pinned version in `install.sh` and the README
+installation commands (English, Spanish and Chinese). Search for the previous
+version and confirm there are no stale values before committing or tagging.
+The release tag and those references must match.
 
 ## Post-merge release workflow
 

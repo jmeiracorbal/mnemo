@@ -1,7 +1,7 @@
 #!/bin/bash
 export MNEMO_AGENT="${MNEMO_AGENT:-claudecode}"
 export MNEMO_SOURCE="${MNEMO_SOURCE:-hook}"
-# mnemo — SessionStart hook for Claude Code plugin
+# mnemo — SessionStart hook for Claude Code
 # Claude Code passes hook input via stdin as JSON:
 #   { "session_id": "...", "cwd": "..." }
 

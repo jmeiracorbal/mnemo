@@ -1,0 +1,4 @@
+interface:
+  display_name: "mnemo Doctor"
+  short_description: "Diagnose and repair the mnemo installation"
+  default_prompt: "Use $mnemo-doctor to check the mnemo installation and repair it with mnemo doctor --fix."

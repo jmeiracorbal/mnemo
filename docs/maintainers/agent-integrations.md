@@ -1,7 +1,7 @@
 # Agent integrations and hooks
 
-Read this guide before changing a hook, plugin metadata, setup flow or supported
-agent integration.
+Read this guide before changing a hook, setup flow or supported agent
+integration.
 
 ## Canonical MCP write contract
 
@@ -32,19 +32,33 @@ static MCP configuration: it cannot inject a Pi session ID into its child
 process. Register tools synchronously while loading the extension, not from an
 asynchronous session event.
 
-## Hooks and plugin boundaries
+## Integration ownership
 
-The plugin owns metadata, hooks and MCP registration. The binary owns setup,
-environment preparation, file modifications and protocol installation. This is
-intentional; report only inconsistencies between the two surfaces.
+The `mnemo` binary is the only owner of every agent integration. `mnemo setup
+refresh` installs global instructions, the MCP server registration, hooks and
+skills; `install.sh` and `mnemo update` run it, and `mnemo doctor --fix` runs it
+to repair an agent. Do not ship agent plugins or marketplace entries: earlier
+releases did, Claude Code and Codex then started two mnemo MCP servers, and the
+plugin and setup drifted apart.
 
-Before changing hooks, verify names and paths across
-`plugin/claude-code/hooks/hooks.json`, shipped scripts, installer code and
-tests. Prior critical defects referenced a script name that did not exist and
-shipped a hook script without its executable bit: plugins install from a git
-checkout, so commit hook scripts with mode `100755`. Keep `doctor`'s runtime
-check aligned with the shipped `hooks.json`; its test runs against the real
-plugin directory.
+Hook scripts are embedded assets under `scripts/<agent>/hooks/`. Setup installs
+them with explicit file modes and registers them with absolute paths in the
+agent's own configuration:
+
+- Claude Code: scripts in `<config dir>/hooks/mnemo/`, registered in
+  `<config dir>/settings.json` in exec form (`command` plus `args`), where
+  `<config dir>` is `CLAUDE_CONFIG_DIR` or `~/.claude`. Every hook whose command
+  lives in that directory belongs to mnemo; setup replaces those entries and
+  leaves the user's other hooks and settings untouched.
+- Codex and Cursor: scripts and `hooks.json` under `~/.codex` and `~/.cursor`.
+
+Before changing hooks, verify names and paths across the embedded scripts, the
+registration in the agent spec, the `doctor` runtime check and tests.
+
+Earlier releases installed a `mnemo@mnemo` plugin for Claude Code and Codex.
+`mnemo doctor` reports it as `legacy_plugin.<agent>` and `mnemo doctor --fix`
+removes it through the agent's own CLI (`claude plugin uninstall`, `codex
+plugin remove`); setup never edits an agent's plugin registry directly.
 
 Hooks and extensions may inject context and publish durable events, but must
 not write SQLite or invoke retired `mnemo save`, `mnemo capture`, or `mnemo
@@ -56,21 +70,22 @@ not calculate it. Do not substitute a path, PID, another agent's native ID or
 a latest-session lookup when it is unavailable; report the adapter capability
 instead. See [`docs/DURABLE_EVENTS.md`](../DURABLE_EVENTS.md).
 
-Shipped hooks and plugins resolve `PROJECT` exclusively from `.mnemo.id`.
+Shipped hooks and extensions resolve `PROJECT` exclusively from `.mnemo.id`.
 They must never use a filesystem-derived identity.
 
 ## Skills
 
-Keep the canonical skill at `~/.agents/skills/mnemo-memory/`. If an agent reads
-that path directly, do not create a redundant copy or symlink. Otherwise,
-declare its link through `AgentSkillSpec.GlobalLinkPath` in the agent spec; do
-not add hard-coded global skill paths. Validate the resulting layout in an
-isolated `HOME`.
+Setup installs every embedded skill (`mnemo-memory` and `mnemo-doctor`) under
+`~/.agents/skills/<name>/`. If an agent reads that path directly, do not create
+a redundant copy or symlink. Otherwise, declare the agent's skills directory
+through `AgentSkillSpec.SkillsDir` in the agent spec; setup links each skill
+into it. Do not add hard-coded global skill paths. Validate the resulting
+layout in an isolated `HOME`.
 
 ## Required validation
 
 - Test shipped hook configuration against real script paths and filenames.
 - Test that hooks contain no direct session-associated writes.
 - Test metadata consistency and the affected hook/setup flow end to end.
-- Run `claude plugin validate plugin/claude-code` when the Claude plugin changes.
-- Update user documentation whenever installation, plugin or MCP behavior changes.
+- Test `mnemo doctor` and `mnemo doctor --fix` for the affected agent.
+- Update user documentation whenever installation, hook or MCP behavior changes.

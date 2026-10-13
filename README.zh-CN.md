@@ -56,7 +56,7 @@
 | 决策在会话之间消失 | 本地 SQLite 中的持久化项目记忆 |
 | `MEMORY.md`、编辑器记忆和聊天笔记分叉 | 所有支持代理共享同一个按项目隔离的可信来源 |
 | 全局 hooks 到处运行，或几乎无用 | 通过 `.mnemo` 显式启用；无标记项目会被忽略 |
-| 静默配置错误 | `mnemo doctor` 明确说明当前接线状态 |
+| 静默配置错误 | `mnemo doctor` 明确说明当前接线状态；`mnemo doctor --fix` 进行修复 |
 
 mnemo 并不声称支持每一种 harness。它提供稳定的记忆契约，任何 harness 都可以实现并验证。
 
@@ -112,14 +112,14 @@ project/
 - **可移植 skills** — 引导代理使用 mnemo，而不是回退原生记忆
 - **被动捕获** — 从代理输出中提取有价值的学习
 - **溯源** — 可通过 SQL 查询的代理、工具、模型和 MCP 客户端元数据
-- **诊断与修复** — `mnemo doctor`、项目 merge/rename、`mnemo memories review`
+- **诊断与修复** — `mnemo doctor` / `mnemo doctor --fix`、项目 merge/rename、`mnemo memories review`
 - **安全迁移与自更新** — 打开时升级 schema；`mnemo update` 管理 releases
 
 ## 支持的代理
 
 | 代理 | MCP | Hooks / runtime | 全局指令 | Skill | 状态 |
 |---|---:|---:|---:|---:|---|
-| Claude Code | 是 | 插件 hooks 或安装器配置 | 是 | 是 | 支持 |
+| Claude Code | 是 | 会话 hooks | 是 | 是 | 支持 |
 | Codex | 是 | 会话 hooks | 是 | 是 | 支持 |
 | Cursor | 是 | 提示词 hook | 是 | 是 | 支持 |
 | OpenCode | 是 | 插件事件 | 是 | 是 | 支持 |
@@ -144,10 +144,9 @@ Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否�
 | 最新稳定版 | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | 指定代理 | `bash -s -- --agent=codex` |
 | 所有代理 | `bash -s -- --agent=all` |
-| Claude plugin | `claude plugin install mnemo@mnemo` |
 | 源码构建 | `go build -o ~/.local/bin/mnemo ./cmd/mnemo/` |
 
-安装 Codex 原生插件时，请先安装 `mnemo` 二进制，运行 `codex plugin marketplace add jmeiracorbal/mnemo`，然后打开 `/plugins` 并安装 mnemo。该插件包含 hooks 和 MCP 连接。你也可以继续使用 `mnemo init --agent=codex` 通过 CLI 直接配置 Codex。
+安装器会配置所有 agent：指令、MCP 服务器、hooks 和 skills。mnemo 不再提供 agent 插件。如果你安装过旧版本的 mnemo Claude Code 或 Codex 插件，`mnemo doctor` 会报告它，`mnemo doctor --fix` 会将其移除并恢复安装器配置。
 
 更新参数与卸载步骤：[Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation)。
 
@@ -169,7 +168,7 @@ Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否�
 - **本地优先** — 记忆保存在你机器上的 SQLite 中
 - **代理中立** — 所有支持的编程代理共享同一个记忆权威
 - **按项目 opt-in** — 没有 `.mnemo` 的项目不会触发全局集成
-- **可诊断** — 每个 setup surface 都可在不修改状态的情况下检查
+- **可诊断** — 每个 setup surface 都可在不修改状态的情况下检查，`mnemo doctor --fix` 可进行修复
 - **可修复** — 重复项目身份与记忆冲突可通过 CLI 查看并修复
 
 ## 社区

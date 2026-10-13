@@ -72,7 +72,7 @@ func codexConfigSnippets(home, mnemoBin string) []ConfigSnippet {
 	}
 }
 
-func codexRuntimeAssets() []assetTarget {
+func codexRuntimeAssets(_ string) []assetTarget {
 	return []assetTarget{
 		{Asset: "scripts/codex/hooks/session-start.sh", Path: filepath.Join(".codex", "hooks", "session-start.sh"), Mode: 0755},
 		{Asset: "scripts/codex/hooks/stop.sh", Path: filepath.Join(".codex", "hooks", "stop.sh"), Mode: 0755},
@@ -509,4 +509,43 @@ func tomlTableName(line string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// codexLegacyFixCommands returns the Codex CLI commands that remove the mnemo
+// plugin and marketplace earlier releases shipped. Codex records both in
+// config.toml; setup now owns the hooks and MCP server the plugin declared.
+func codexLegacyFixCommands(home string) ([]legacyCommand, error) {
+	data, err := os.ReadFile(filepath.Join(home, ".codex", "config.toml"))
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	content := string(data)
+	var commands []legacyCommand
+	if tomlHasSection(content, `[plugins."mnemo@mnemo"]`) {
+		commands = append(commands, legacyCommand{Name: "codex", Args: []string{"plugin", "remove", "mnemo@mnemo"}})
+	}
+	if tomlHasSection(content, "[marketplaces.mnemo]") {
+		commands = append(commands, legacyCommand{Name: "codex", Args: []string{"plugin", "marketplace", "remove", "mnemo"}})
+	}
+	return commands, nil
+}
+
+func codexCheckLegacy(home string) Check {
+	path := filepath.Join(home, ".codex", "config.toml")
+	commands, err := codexLegacyFixCommands(home)
+	if err != nil {
+		return checkError("codex", "legacy_plugin.codex", "read Codex config: "+err.Error(), path)
+	}
+	return legacyCheck("codex", "Codex", commands, path)
+}
+
+func codexRemoveLegacy(home string) ([]string, error) {
+	commands, err := codexLegacyFixCommands(home)
+	if err != nil {
+		return nil, err
+	}
+	return runLegacyCommands(home, commands)
 }
