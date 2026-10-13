@@ -64,7 +64,7 @@ mnemo 并不声称支持每一种 harness。它提供稳定的记忆契约，任
 
 ```bash
 # 1. 安装（固定当前 beta）
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.3 bash
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.4 bash
 
 # 2. 在项目中启用
 cd your-project
@@ -140,7 +140,7 @@ Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否�
 
 | 方式 | 命令 |
 |---|---|
-| 当前 beta (`v1.0.0-beta.3`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.3 bash</code> |
+| 当前 beta (`v1.0.0-beta.4`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.4 bash</code> |
 | 最新稳定版 | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | 指定代理 | `bash -s -- --agent=codex` |
 | 所有代理 | `bash -s -- --agent=all` |

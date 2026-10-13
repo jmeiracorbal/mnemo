@@ -12,7 +12,7 @@
 #
 # Environment overrides:
 #   MNEMO_AGENT=cursor bash install.sh
-#   MNEMO_VERSION=v1.0.0-beta.3 bash install.sh
+#   MNEMO_VERSION=v1.0.0-beta.4 bash install.sh
 #   MNEMO_DRY_RUN=true bash install.sh
 
 set -e
