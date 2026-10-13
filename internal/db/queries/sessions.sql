@@ -79,3 +79,10 @@ SET ended_at = datetime('now')
 WHERE mcp_instance_id = sqlc.arg('mcp_instance_id')
   AND ended_at IS NULL
   AND is_deleted = 0;
+
+-- name: ListOpenMCPInstanceSessions :many
+SELECT DISTINCT mcp_instance_id, mcp_pid FROM sessions
+WHERE mcp_instance_id IS NOT NULL
+  AND mcp_pid IS NOT NULL
+  AND ended_at IS NULL
+  AND is_deleted = 0;

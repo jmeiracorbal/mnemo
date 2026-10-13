@@ -237,6 +237,42 @@ func (q *Queries) InsertSessionTag(ctx context.Context, arg InsertSessionTagPara
 	return err
 }
 
+const listOpenMCPInstanceSessions = `-- name: ListOpenMCPInstanceSessions :many
+SELECT DISTINCT mcp_instance_id, mcp_pid FROM sessions
+WHERE mcp_instance_id IS NOT NULL
+  AND mcp_pid IS NOT NULL
+  AND ended_at IS NULL
+  AND is_deleted = 0
+`
+
+type ListOpenMCPInstanceSessionsRow struct {
+	McpInstanceID sql.NullString `json:"mcp_instance_id"`
+	McpPid        sql.NullInt64  `json:"mcp_pid"`
+}
+
+func (q *Queries) ListOpenMCPInstanceSessions(ctx context.Context) ([]ListOpenMCPInstanceSessionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOpenMCPInstanceSessions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOpenMCPInstanceSessionsRow{}
+	for rows.Next() {
+		var i ListOpenMCPInstanceSessionsRow
+		if err := rows.Scan(&i.McpInstanceID, &i.McpPid); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSessionTags = `-- name: ListSessionTags :many
 SELECT tag FROM session_tags WHERE session_id = ? AND is_deleted = 0 ORDER BY tag
 `

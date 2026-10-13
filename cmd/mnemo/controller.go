@@ -6,8 +6,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jmeiracorbal/mnemo-events"
+	"github.com/jmeiracorbal/mnemo/internal/procstate"
+	"github.com/jmeiracorbal/mnemo/internal/sessionreaper"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
@@ -31,7 +34,15 @@ func runController(s *store.Store) {
 	defer controller.Close()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go sessionreaper.Reaper{
+		Store:    s,
+		Alive:    procstate.Alive,
+		Interval: orphanedSessionSweepInterval,
+		Log:      os.Stderr,
+	}.Run(ctx)
 	if err := controller.Run(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo controller: %v\n", err)
 	}
 }
+
+const orphanedSessionSweepInterval = 5 * time.Minute
