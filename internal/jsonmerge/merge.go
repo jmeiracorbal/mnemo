@@ -31,6 +31,14 @@ func MergeFile(filePath string) (changed bool, err error) {
 // MergeValue reads filePath (or starts from {} if it does not exist),
 // deep-merges patch into it, and writes the result back atomically.
 func MergeValue(filePath string, patch any) (changed bool, err error) {
+	return MergeValueReplacing(filePath, patch)
+}
+
+// MergeValueReplacing behaves like MergeValue but first deletes each key path
+// in replace from the existing content, pruning objects left empty, so stale
+// entries are replaced instead of deep-merged. The file is written only when
+// the final result differs from its current content.
+func MergeValueReplacing(filePath string, patch any, replace ...[]string) (changed bool, err error) {
 	// If filePath is a symlink, resolve it so we write to the real file and
 	// do not replace the symlink with a regular file (e.g. dotfiles setups).
 	if fi, statErr := os.Lstat(filePath); statErr == nil && fi.Mode()&os.ModeSymlink != 0 {
@@ -55,6 +63,9 @@ func MergeValue(filePath string, patch any) (changed bool, err error) {
 		}
 	}
 
+	for _, keys := range replace {
+		deletePath(target, keys)
+	}
 	merged := deepMerge(target, patch)
 
 	mergedBytes, err := json.MarshalIndent(merged, "", "  ")
@@ -103,6 +114,26 @@ func MergeValue(filePath string, patch any) (changed bool, err error) {
 		return false, fmt.Errorf("rename: %w", err)
 	}
 	return true, nil
+}
+
+// deletePath removes keys from target and prunes objects it leaves empty.
+func deletePath(target any, keys []string) {
+	obj, ok := target.(map[string]any)
+	if !ok || len(keys) == 0 {
+		return
+	}
+	if len(keys) == 1 {
+		delete(obj, keys[0])
+		return
+	}
+	child, ok := obj[keys[0]].(map[string]any)
+	if !ok {
+		return
+	}
+	deletePath(child, keys[1:])
+	if len(child) == 0 {
+		delete(obj, keys[0])
+	}
 }
 
 // deepMerge merges patch into target following the rules described in MergeFile.

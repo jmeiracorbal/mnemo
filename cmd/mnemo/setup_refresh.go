@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
-
-	"github.com/jmeiracorbal/mnemo/internal/agentinit"
-	"github.com/jmeiracorbal/mnemo-events"
 	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/jmeiracorbal/mnemo-events"
+	"github.com/jmeiracorbal/mnemo/internal/agentinit"
 )
 
 type setupRefreshOptions struct {
@@ -23,14 +24,26 @@ func runSetupRefresh() {
 		fmt.Fprintf(os.Stderr, "mnemo setup refresh: %v\n", err)
 		os.Exit(1)
 	}
-	updated, err := refreshSetup(opts)
+	result, err := refreshSetup(opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo setup refresh: %v\n", err)
 		os.Exit(1)
 	}
-	for _, path := range updated {
+	for _, path := range result.Updated {
 		fmt.Printf("mnemo setup refresh: updated %s\n", path)
 	}
+	if result.ControllerRestarted {
+		fmt.Println("mnemo setup refresh: restarted controller service")
+	}
+	if len(result.Updated) == 0 && !result.ControllerRestarted {
+		fmt.Println("mnemo setup refresh: already up to date")
+	}
+}
+
+type setupRefreshResult struct {
+	// Updated lists the managed paths created, modified or removed by this run.
+	Updated             []string
+	ControllerRestarted bool
 }
 
 func parseSetupRefreshArgs(args []string, userHomeDir func() (string, error), lookPath func(string) (string, error)) (setupRefreshOptions, error) {
@@ -67,41 +80,66 @@ func parseSetupRefreshArgs(args []string, userHomeDir func() (string, error), lo
 	return opts, nil
 }
 
-func refreshSetup(opts setupRefreshOptions) ([]string, error) {
+func refreshSetup(opts setupRefreshOptions) (setupRefreshResult, error) {
+	var result setupRefreshResult
 	agents, err := agentinit.ExpandAgents(opts.Agent)
 	if err != nil {
-		return nil, err
+		return result, err
 	}
-	var updated []string
+	// Writers leave identical files untouched, so a path counts as updated
+	// when this run modified or removed it.
+	start := time.Now()
+	var managed []string
 	configPath, err := events.EnsureConfig(filepath.Join(opts.Home, ".mnemo"))
 	if err != nil {
-		return nil, fmt.Errorf("event config: %w", err)
+		return result, fmt.Errorf("event config: %w", err)
 	}
-	updated = append(updated, configPath)
+	managed = append(managed, configPath)
 	actualHome, homeErr := os.UserHomeDir()
 	if homeErr != nil {
-		return nil, fmt.Errorf("resolve service home: %w", homeErr)
+		return result, fmt.Errorf("resolve service home: %w", homeErr)
 	}
 	if filepath.Clean(opts.Home) == filepath.Clean(actualHome) {
-		servicePath, err := installControllerService(opts.Home, opts.MnemoBin)
+		servicePath, restarted, err := installControllerService(opts.Home, opts.MnemoBin)
 		if err != nil {
-			return nil, fmt.Errorf("controller service: %w", err)
+			return result, fmt.Errorf("controller service: %w", err)
 		}
-		updated = append(updated, servicePath)
+		managed = append(managed, servicePath)
+		result.ControllerRestarted = restarted
 	}
 
 	skillFiles, err := agentinit.InstallGlobalSkillForAgents(opts.Home, agents)
 	if err != nil {
-		return nil, fmt.Errorf("global skill: %w", err)
+		return result, fmt.Errorf("global skill: %w", err)
 	}
-	updated = append(updated, skillFiles...)
+	managed = append(managed, skillFiles...)
 
 	for _, agent := range agents {
 		agentUpdated, err := agentinit.Refresh(opts.Home, opts.MnemoBin, agent)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", agent, err)
+			return result, fmt.Errorf("%s: %w", agent, err)
 		}
-		updated = append(updated, agentUpdated...)
+		managed = append(managed, agentUpdated...)
 	}
-	return updated, nil
+	result.Updated = changedSince(managed, start)
+	return result, nil
+}
+
+// changedSince returns the unique paths modified at or after start, or no
+// longer present.
+func changedSince(paths []string, start time.Time) []string {
+	seen := make(map[string]struct{}, len(paths))
+	var changed []string
+	for _, path := range paths {
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		info, err := os.Lstat(path)
+		if err == nil && info.ModTime().Before(start) {
+			continue
+		}
+		changed = append(changed, path)
+	}
+	return changed
 }

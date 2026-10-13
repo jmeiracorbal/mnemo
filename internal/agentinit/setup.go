@@ -107,19 +107,17 @@ func ConfigSnippets(home, mnemoBin, agent string) ([]ConfigSnippet, error) {
 func applyConfig(snippet ConfigSnippet) error {
 	switch snippet.Format {
 	case "json":
-		if snippet.Agent == openCodeLabel() {
-			if _, err := removeMCPServer(snippet.Path, "mcp", "mnemo"); err != nil {
-				return err
-			}
-			if _, err := removeNestedMCPServer(snippet.Path, "mcp", "servers", "mnemo"); err != nil {
-				return err
-			}
-		}
 		var patch any
 		if err := json.Unmarshal([]byte(snippet.Content), &patch); err != nil {
 			return fmt.Errorf("parse generated JSON for %s: %w", snippet.Path, err)
 		}
-		if _, err := jsonmerge.MergeValue(snippet.Path, patch); err != nil {
+		var replace [][]string
+		if snippet.Agent == openCodeLabel() {
+			// Replace the mnemo entry, including the legacy nested location,
+			// instead of deep-merging into a stale one.
+			replace = [][]string{{"mcp", "mnemo"}, {"mcp", "servers", "mnemo"}}
+		}
+		if _, err := jsonmerge.MergeValueReplacing(snippet.Path, patch, replace...); err != nil {
 			return err
 		}
 	case "toml":
@@ -189,13 +187,7 @@ func writeSetupAssets(home string, targets []assetTarget) ([]string, error) {
 			return nil, fmt.Errorf("read embedded asset %s: %w", target.Asset, err)
 		}
 		path := filepath.Join(home, target.Path)
-		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(path, data, target.Mode); err != nil {
-			return nil, err
-		}
-		if err := os.Chmod(path, target.Mode); err != nil {
+		if _, err := WriteFileIfChanged(path, data, target.Mode); err != nil {
 			return nil, err
 		}
 		updated = append(updated, path)

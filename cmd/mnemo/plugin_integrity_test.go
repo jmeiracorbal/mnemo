@@ -43,10 +43,12 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 				// Search all tokens so commands like "bash ${CLAUDE_PLUGIN_ROOT}/scripts/foo.sh"
 				// are also validated, not only commands that start with the prefix.
 				var scriptName string
-				for _, tok := range strings.Fields(cmd) {
+				directExec := false
+				for i, tok := range strings.Fields(cmd) {
 					tok = strings.Trim(tok, `"'`)
 					if strings.HasPrefix(tok, prefix) {
 						scriptName = strings.TrimPrefix(tok, prefix)
+						directExec = i == 0
 						break
 					}
 				}
@@ -60,8 +62,15 @@ func TestShippedHooksReferenceRealScripts(t *testing.T) {
 					continue
 				}
 				scriptPath := filepath.Join(scriptsDir, scriptName)
-				if _, err := os.Stat(scriptPath); err != nil {
+				info, err := os.Stat(scriptPath)
+				if err != nil {
 					t.Errorf("hooks.json [%s]: references %q but file does not exist at %s", event, scriptName, scriptPath)
+					continue
+				}
+				// Plugins install from a git checkout, so the executable bit
+				// must be committed for directly executed scripts.
+				if directExec && info.Mode()&0111 == 0 {
+					t.Errorf("hooks.json [%s]: %s is run directly but is not executable", event, scriptPath)
 				}
 			}
 		}
@@ -101,10 +110,12 @@ func TestShippedCodexPluginHooksReferenceRealScripts(t *testing.T) {
 			for _, hook := range matcher.Hooks {
 				cmd := hook.Command
 				var scriptName string
-				for _, tok := range strings.Fields(cmd) {
+				directExec := false
+				for i, tok := range strings.Fields(cmd) {
 					tok = strings.Trim(tok, `"'`)
 					if strings.HasPrefix(tok, prefix) {
 						scriptName = strings.TrimPrefix(tok, prefix)
+						directExec = i == 0
 						break
 					}
 				}
@@ -118,8 +129,15 @@ func TestShippedCodexPluginHooksReferenceRealScripts(t *testing.T) {
 					continue
 				}
 				scriptPath := filepath.Join(scriptsDir, scriptName)
-				if _, err := os.Stat(scriptPath); err != nil {
+				info, err := os.Stat(scriptPath)
+				if err != nil {
 					t.Errorf("codex plugin hooks.json [%s]: references %q but file does not exist at %s", event, scriptName, scriptPath)
+					continue
+				}
+				// Plugins install from a git checkout, so the executable bit
+				// must be committed for directly executed scripts.
+				if directExec && info.Mode()&0111 == 0 {
+					t.Errorf("codex plugin hooks.json [%s]: %s is run directly but is not executable", event, scriptPath)
 				}
 			}
 		}
@@ -247,7 +265,6 @@ func TestShippedProtocolsForbidFallbackMemory(t *testing.T) {
 		filepath.Join("..", "..", "templates", "rules", "pi.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "mnemo.md"),
 		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "session-start-protocol.md"),
-		filepath.Join("..", "..", "plugin", "claude-code", "scripts", "post-compact-protocol-header.md"),
 		filepath.Join("..", "..", "scripts", "codex", "hooks", "mnemo-protocol.md"),
 		filepath.Join("..", "..", "scripts", "cursor", "rules", "mnemo.mdc"),
 	}

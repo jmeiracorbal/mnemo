@@ -181,10 +181,7 @@ func upsertCodexMCPConfig(path, section string) error {
 		content += strings.TrimRight(section, "\n")
 	}
 	content += "\n"
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := WriteFile(path, []byte(content)); err != nil {
 		return err
 	}
 	_, err = migrateCodexHookFeatureFlag(path)

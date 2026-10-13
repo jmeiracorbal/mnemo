@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/xml"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,12 +33,12 @@ func TestParseSetupRefreshArgs(t *testing.T) {
 
 func TestRefreshSetupWritesCodexFiles(t *testing.T) {
 	home := t.TempDir()
-	updated, err := refreshSetup(setupRefreshOptions{Agent: "codex", Home: home, MnemoBin: "/bin/mnemo"})
+	result, err := refreshSetup(setupRefreshOptions{Agent: "codex", Home: home, MnemoBin: "/bin/mnemo"})
 	if err != nil {
 		t.Fatalf("refresh setup: %v", err)
 	}
-	if len(updated) != 11 {
-		t.Fatalf("updated paths = %d, want 11 (%v)", len(updated), updated)
+	if len(result.Updated) != 10 {
+		t.Fatalf("updated paths = %d, want 10 (%v)", len(result.Updated), result.Updated)
 	}
 
 	config := readTestFile(t, filepath.Join(home, ".codex", "config.toml"))
@@ -226,4 +227,49 @@ func TestControllerWindowsTaskXML(t *testing.T) {
 	if err := xml.Unmarshal([]byte(content), new(struct{})); err != nil {
 		t.Fatalf("Windows task XML is not valid: %v", err)
 	}
+}
+
+func TestRefreshSetupIsIdempotent(t *testing.T) {
+	home := t.TempDir()
+	for _, agent := range []string{"claudecode", "cursor", "codex", "opencode", "pi"} {
+		if _, err := refreshSetup(setupRefreshOptions{Agent: agent, Home: home, MnemoBin: "/bin/mnemo"}); err != nil {
+			t.Fatalf("first refresh %s: %v", agent, err)
+		}
+	}
+	before := snapshotTree(t, home)
+	for _, agent := range []string{"claudecode", "cursor", "codex", "opencode", "pi"} {
+		result, err := refreshSetup(setupRefreshOptions{Agent: agent, Home: home, MnemoBin: "/bin/mnemo"})
+		if err != nil {
+			t.Fatalf("second refresh %s: %v", agent, err)
+		}
+		if len(result.Updated) != 0 {
+			t.Fatalf("second refresh %s reported updates: %v", agent, result.Updated)
+		}
+	}
+	after := snapshotTree(t, home)
+	for path, state := range before {
+		if after[path] != state {
+			t.Errorf("%s changed on an idempotent refresh: %q -> %q", path, state, after[path])
+		}
+	}
+	if len(after) != len(before) {
+		t.Errorf("file count changed: %d -> %d", len(before), len(after))
+	}
+}
+
+// snapshotTree records mode, modification time and size for every entry.
+func snapshotTree(t *testing.T, root string) map[string]string {
+	t.Helper()
+	states := map[string]string{}
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		states[path] = fmt.Sprintf("%v %d %d", info.Mode(), info.ModTime().UnixNano(), info.Size())
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return states
 }

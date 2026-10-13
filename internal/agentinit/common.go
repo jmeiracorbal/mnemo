@@ -4,6 +4,7 @@
 package agentinit
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -319,10 +320,32 @@ func removeManagedSection(path, startMarker, endMarker string) (bool, error) {
 	return true, os.WriteFile(path, []byte(updated), 0644)
 }
 
-// WriteFile writes data to path, creating parent directories. Overwrites if exists.
+// WriteFile writes data to path, creating parent directories. An existing file
+// with the same content is left untouched.
 func WriteFile(path string, data []byte) error {
+	if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, data) {
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, 0644)
+}
+
+// WriteFileIfChanged writes data with mode unless path already holds the same
+// content and permissions, so repeated setup runs leave files untouched. It
+// reports whether the file changed.
+func WriteFileIfChanged(path string, data []byte, mode os.FileMode) (bool, error) {
+	if info, err := os.Stat(path); err == nil && info.Mode().Perm() == mode.Perm() {
+		if current, err := os.ReadFile(path); err == nil && bytes.Equal(current, data) {
+			return false, nil
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(path, data, mode); err != nil {
+		return false, err
+	}
+	return true, os.Chmod(path, mode)
 }
