@@ -63,8 +63,8 @@ mnemo does not claim every harness. It ships a stable memory contract that any h
 ## Quick Start
 
 ```bash
-# 1. Install the current v1 preview (v1.0.0 is not published yet)
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.5 bash
+# 1. Install the latest stable release
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
 
 # 2. Activate in a project
 cd your-project
@@ -80,7 +80,7 @@ Then in your agent: `mem_save` a decision, close the session, open another — `
 mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
 
-**Release status:** `v1.0.0` is being prepared and has not been published. The Quick Start explicitly selects the available `v1.0.0-beta.5` preview so its commands match the documented features. Without `MNEMO_VERSION`, the installer and `mnemo update` select the latest published stable release (currently `v0.39.0`). Use `mnemo update --prerelease` to opt into previews. See the [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) guide.
+The installer and `mnemo update` follow the latest published stable release (`v1.0.0`). Use `mnemo update --prerelease` only to opt into prereleases. See the [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) guide for updates and agent-specific setup.
 
 ## How it works
 
@@ -140,7 +140,7 @@ Claude Code uses `CLAUDE_CONFIG_DIR` for its config directory when set, and defa
 
 | Path | Command |
 |---|---|
-| Published v1 preview (`v1.0.0-beta.5`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.5 bash</code> |
+| Pinned stable (`v1.0.0`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0 bash</code> |
 | Latest stable | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | One agent | `bash -s -- --agent=codex` |
 | All agents | `bash -s -- --agent=all` |
