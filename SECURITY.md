@@ -2,9 +2,11 @@
 
 ## Supported versions
 
-mnemo is in **alpha**. Security fixes target the latest published release on
-[GitHub Releases](https://github.com/jmeiracorbal/mnemo/releases). Older alphas
-may not receive backports.
+Security fixes target the latest published stable release on
+[GitHub Releases](https://github.com/jmeiracorbal/mnemo/releases). During the
+`v1.0.0` release-candidate period, security fixes also target the latest
+published `v1.0.0` prerelease. Older stable versions and prereleases are not
+guaranteed backports.
 
 ## Reporting a vulnerability
 
