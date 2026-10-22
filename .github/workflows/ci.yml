@@ -1,14 +1,23 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [main]
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -17,13 +26,15 @@ jobs:
           go-version-file: go.mod
 
       - name: Verify sqlc generated code
+        if: runner.os == 'Linux'
         run: |
           go tool sqlc generate
           git diff --exit-code -- internal/db/generated
 
       - name: Reject runtime SQL construction
+        if: runner.os == 'Linux'
         run: |
-          if grep -R -n -E '(^|[[:space:]])(query|q|sql)[[:space:]]*(\+=|(:=|=)[^;]*\+)' internal/store --include='*.go'; then
+          if grep -R -n -E '(^|[[:space:]])(query|q|sql)[[:space:]]*(\\+=|(:=|=)[^;]*\\+)' internal/store --include='*.go'; then
             echo "runtime SQL concatenation is forbidden; add a sqlc query instead"
             exit 1
           fi
@@ -32,6 +43,7 @@ jobs:
         run: go test ./...
 
       - name: Race test
+        if: runner.os == 'Linux'
         run: go test -race ./...
 
       - name: Build
