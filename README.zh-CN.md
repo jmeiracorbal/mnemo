@@ -63,8 +63,8 @@ mnemo 并不声称支持每一种 harness。它提供稳定的记忆契约，任
 ## 快速开始
 
 ```bash
-# 1. 安装当前 v1 预览版（v1.0.0 尚未发布）
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.5 bash
+# 1. 安装最新稳定版
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
 
 # 2. 在项目中启用
 cd your-project
@@ -80,7 +80,7 @@ mnemo doctor --agent=all --path=.
 mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
 
-**版本状态：** `v1.0.0` 正在准备中，尚未发布。快速入门明确固定到已发布的预览版 `v1.0.0-beta.5`，确保命令对应本文介绍的功能。未指定 `MNEMO_VERSION` 时，安装脚本和 `mnemo update` 默认选择最新的正式稳定版（目前为 `v0.39.0`）。使用 `mnemo update --prerelease` 可选择预览版。详见 [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation)。
+安装脚本和 `mnemo update` 默认使用最新发布的稳定版（`v1.0.0`）。只有希望使用预发布版本时才运行 `mnemo update --prerelease`。更新方法与代理配置见 [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation)。
 
 ## 工作原理
 
@@ -140,7 +140,7 @@ Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否�
 
 | 方式 | 命令 |
 |---|---|
-| 已发布的 v1 预览版 (`v1.0.0-beta.5`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.5 bash</code> |
+| 固定稳定版 (`v1.0.0`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0 bash</code> |
 | 最新稳定版 | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | 指定代理 | `bash -s -- --agent=codex` |
 | 所有代理 | `bash -s -- --agent=all` |
