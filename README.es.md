@@ -67,8 +67,8 @@ mnemo no afirma soportar todo harness. Ofrece un contrato de memoria estable que
 ## Inicio rápido
 
 ```bash
-# 1. Instalar la versión preliminar de v1 (v1.0.0 aún no está publicada)
-curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.5 bash
+# 1. Instalar la última versión estable
+curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | bash
 
 # 2. Activar en un proyecto
 cd tu-proyecto
@@ -84,7 +84,7 @@ Luego en tu agente: `mem_save` una decisión, cierra la sesión, abre otra — `
 mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
 
-**Estado de la versión:** `v1.0.0` está en preparación y todavía no se ha publicado. El inicio rápido fija la versión preliminar disponible `v1.0.0-beta.5` para que los comandos coincidan con las funcionalidades documentadas. Sin `MNEMO_VERSION`, el instalador y `mnemo update` seleccionan la última versión estable publicada (actualmente `v0.39.0`). Usa `mnemo update --prerelease` para instalar versiones preliminares. Más información en [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation).
+El instalador y `mnemo update` siguen la última versión estable publicada (`v1.0.0`). Usa `mnemo update --prerelease` únicamente para optar por versiones preliminares. Consulta [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) para las actualizaciones y la configuración por agente.
 
 <a id="como-funciona"></a>
 
@@ -148,7 +148,7 @@ Claude Code usa `CLAUDE_CONFIG_DIR` como directorio de configuración cuando est
 
 | Vía | Comando |
 |---|---|
-| Versión preliminar v1 publicada (`v1.0.0-beta.5`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.5 bash</code> |
+| Estable fijada (`v1.0.0`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0 bash</code> |
 | Última estable | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | Un agente | `bash -s -- --agent=codex` |
 | Todos los agentes | `bash -s -- --agent=all` |
