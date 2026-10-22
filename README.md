@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
-  <a href="https://github.com/jmeiracorbal/mnemo/releases"><img alt="Release" src="https://img.shields.io/github/v/release/jmeiracorbal/mnemo?include_prereleases&label=release&labelColor=e2eaf2&color=0f1f38"></a>
+  <a href="https://github.com/jmeiracorbal/mnemo/releases"><img alt="Release" src="https://img.shields.io/github/v/release/jmeiracorbal/mnemo?label=release&labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://github.com/jmeiracorbal/mnemo/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/jmeiracorbal/mnemo?style=flat&labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://go.dev"><img alt="Go" src="https://img.shields.io/badge/go-1.26-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://sqlite.org"><img alt="Storage" src="https://img.shields.io/badge/storage-SQLite%2BFTS5-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
@@ -63,7 +63,7 @@ mnemo does not claim every harness. It ships a stable memory contract that any h
 ## Quick Start
 
 ```bash
-# 1. Install (pins current beta)
+# 1. Install the current v1 preview (v1.0.0 is not published yet)
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.5 bash
 
 # 2. Activate in a project
@@ -80,7 +80,7 @@ Then in your agent: `mem_save` a decision, close the session, open another — `
 mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
 
-Unpinned installs and `mnemo update` follow stable releases by default. Use `mnemo update --prerelease` for alphas and betas. Full install paths, updates and agent-specific setup live in the [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) guide.
+**Release status:** `v1.0.0` is being prepared and has not been published. The Quick Start explicitly selects the available `v1.0.0-beta.5` preview so its commands match the documented features. Without `MNEMO_VERSION`, the installer and `mnemo update` select the latest published stable release (currently `v0.39.0`). Use `mnemo update --prerelease` to opt into previews. See the [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) guide.
 
 ## How it works
 
@@ -140,7 +140,7 @@ Claude Code uses `CLAUDE_CONFIG_DIR` for its config directory when set, and defa
 
 | Path | Command |
 |---|---|
-| Current beta (`v1.0.0-beta.5`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.5 bash</code> |
+| Published v1 preview (`v1.0.0-beta.5`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.5 bash</code> |
 | Latest stable | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | One agent | `bash -s -- --agent=codex` |
 | All agents | `bash -s -- --agent=all` |
