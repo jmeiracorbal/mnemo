@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="许可证" src="https://img.shields.io/badge/license-Apache%202.0-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
-  <a href="https://github.com/jmeiracorbal/mnemo/releases"><img alt="Release" src="https://img.shields.io/github/v/release/jmeiracorbal/mnemo?include_prereleases&label=release&labelColor=e2eaf2&color=0f1f38"></a>
+  <a href="https://github.com/jmeiracorbal/mnemo/releases"><img alt="Release" src="https://img.shields.io/github/v/release/jmeiracorbal/mnemo?label=release&labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://github.com/jmeiracorbal/mnemo/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/jmeiracorbal/mnemo?style=flat&labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://go.dev"><img alt="Go" src="https://img.shields.io/badge/go-1.26-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://sqlite.org"><img alt="存储" src="https://img.shields.io/badge/storage-SQLite%2BFTS5-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
@@ -63,7 +63,7 @@ mnemo 并不声称支持每一种 harness。它提供稳定的记忆契约，任
 ## 快速开始
 
 ```bash
-# 1. 安装（固定当前 beta）
+# 1. 安装当前 v1 预览版（v1.0.0 尚未发布）
 curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh | MNEMO_VERSION=v1.0.0-beta.5 bash
 
 # 2. 在项目中启用
@@ -80,7 +80,7 @@ mnemo doctor --agent=all --path=.
 mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
 
-未指定版本的安装和 `mnemo update` 默认跟随稳定版。使用 `mnemo update --prerelease` 可选 alphas/betas。完整安装路径、更新与按代理配置见 [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation)。
+**版本状态：** `v1.0.0` 正在准备中，尚未发布。快速入门明确固定到已发布的预览版 `v1.0.0-beta.5`，确保命令对应本文介绍的功能。未指定 `MNEMO_VERSION` 时，安装脚本和 `mnemo update` 默认选择最新的正式稳定版（目前为 `v0.39.0`）。使用 `mnemo update --prerelease` 可选择预览版。详见 [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation)。
 
 ## 工作原理
 
@@ -140,7 +140,7 @@ Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否�
 
 | 方式 | 命令 |
 |---|---|
-| 当前 beta (`v1.0.0-beta.5`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.5 bash</code> |
+| 已发布的 v1 预览版 (`v1.0.0-beta.5`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0-beta.5 bash</code> |
 | 最新稳定版 | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | 指定代理 | `bash -s -- --agent=codex` |
 | 所有代理 | `bash -s -- --agent=all` |
