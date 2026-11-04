@@ -3,10 +3,9 @@
 ## Supported versions
 
 Security fixes target the latest published stable release on
-[GitHub Releases](https://github.com/jmeiracorbal/mnemo/releases). During the
-`v1.0.0` release-candidate period, security fixes also target the latest
-published `v1.0.0` prerelease. Older stable versions and prereleases are not
-guaranteed backports.
+[GitHub Releases](https://github.com/jmeiracorbal/mnemo/releases). During
+prerelease periods, security fixes also target the latest published
+prerelease. Older stable versions and prereleases are not guaranteed backports.
 
 ## Reporting a vulnerability
 

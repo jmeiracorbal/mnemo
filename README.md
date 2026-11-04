@@ -80,7 +80,7 @@ Then in your agent: `mem_save` a decision, close the session, open another — `
 mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
 
-The installer and `mnemo update` follow the latest published stable release (`v1.0.0`). Use `mnemo update --prerelease` only to opt into prereleases. See the [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) guide for updates and agent-specific setup.
+The installer and `mnemo update` follow the latest published stable release (`v1.0.1`). Use `mnemo update --prerelease` only to opt into prereleases. See the [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) guide for updates and agent-specific setup.
 
 ## How it works
 
@@ -140,7 +140,7 @@ Claude Code uses `CLAUDE_CONFIG_DIR` for its config directory when set, and defa
 
 | Path | Command |
 |---|---|
-| Pinned stable (`v1.0.0`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0 bash</code> |
+| Pinned stable (`v1.0.1`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.1 bash</code> |
 | Latest stable | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | One agent | `bash -s -- --agent=codex` |
 | All agents | `bash -s -- --agent=all` |
