@@ -80,7 +80,7 @@ mnemo doctor --agent=all --path=.
 mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
 
-安装脚本和 `mnemo update` 默认使用最新发布的稳定版（`v1.0.0`）。只有希望使用预发布版本时才运行 `mnemo update --prerelease`。更新方法与代理配置见 [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation)。
+安装脚本和 `mnemo update` 默认使用最新发布的稳定版（`v1.0.1`）。只有希望使用预发布版本时才运行 `mnemo update --prerelease`。更新方法与代理配置见 [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation)。
 
 ## 工作原理
 
@@ -140,7 +140,7 @@ Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否�
 
 | 方式 | 命令 |
 |---|---|
-| 固定稳定版 (`v1.0.0`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.0 bash</code> |
+| 固定稳定版 (`v1.0.1`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.1 bash</code> |
 | 最新稳定版 | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | 指定代理 | `bash -s -- --agent=codex` |
 | 所有代理 | `bash -s -- --agent=all` |
