@@ -100,14 +100,14 @@ El instalador y `mnemo update` siguen la última versión estable publicada (`v1
 
 ```text
 project/
-├── .mnemo      # ID estable + agentes activados (versionado en Git)
+├── .mnemo      # ID de proyecto + agentes activados (versionable en Git)
 ├── AGENTS.md   # autoridad de memoria compartida
 ├── CLAUDE.md   # reglas de Claude cuando se selecciona
 ├── .cursor/    # reglas de Cursor cuando se selecciona
 └── .pi/        # extensiones de prompt de Pi cuando se selecciona
 ```
 
-**Identidad del proyecto en Git:** `mnemo init` añade `.mnemo` al índice de Git si existe un repositorio. En proyectos previamente inicializados, vuelve a ejecutar `mnemo init` para eliminar la exclusión heredada de `.gitignore` y preparar el archivo sin cambiar su ID. Revisa y confirma los cambios normalmente: mnemo no crea commits ni ejecuta push. El marcador contiene el ID y los agentes activados, no las memorias ni las credenciales. Este ID no concede permisos: un futuro servicio cloud deberá comprobar la autorización de usuario u organización en cada operación (OWASP API1:2023, Broken Object Level Authorization).
+**Seguimiento Git opcional:** `mnemo init` ya no añade `.mnemo` a `.gitignore` ni modifica el seguimiento de Git. Para compartir el ID del proyecto entre clones, ejecuta `mnemo track` dentro del repositorio. Este comando explícito elimina las reglas de exclusión heredadas y añade únicamente `.mnemo` al índice de Git sin cambiar su ID. Revisa y confirma los cambios: mnemo no crea commits ni ejecuta push. **Instalaciones existentes:** después de actualizar mnemo, ejecuta `mnemo track` en cada repositorio que quieras migrar; la actualización no modifica Git por sí sola. Actualmente el marcador incluye el ID y los agentes activados, pero no memorias ni credenciales. El ID no concede acceso: un futuro servicio cloud deberá comprobar los permisos de usuario u organización en cada operación (OWASP API1:2023, Broken Object Level Authorization).
 
 Consulta [Durable Events](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events) para entrega y errores.
 
