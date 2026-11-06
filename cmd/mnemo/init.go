@@ -84,7 +84,7 @@ func printSkillRecommendation(w io.Writer, home string) {
 //
 // Steps:
 //  1. Resolve the current project root.
-//  2. Compute the deterministic UUID v5 from the absolute path.
+//  2. Preserve an existing project ID; derive a UUID v5 only for legacy markers without one.
 //  3. Compute what the legacy derived key would have been for this path.
 //  4. Rekey existing observations/sessions from legacy key → UUID.
 //  5. Register the project in the projects table.
@@ -109,7 +109,11 @@ func runMigrateProjects() {
 		legacyRoot = resolved
 	}
 
-	projectID := agentinit.ProjectUUIDFromPath(root)
+	projectID, err := agentinit.ProjectIDForMigration(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo migrate: project ID: %v\n", err)
+		os.Exit(1)
+	}
 	legacyKey := deriveLegacyKey(legacyRoot)
 	name := filepath.Base(root)
 
@@ -133,7 +137,6 @@ func runMigrateProjects() {
 		fmt.Fprintf(os.Stderr, "mnemo migrate: write marker: %v\n", err)
 		os.Exit(1)
 	}
-
 
 	if result.Migrated {
 		fmt.Printf("migrated: %s -> %s (%d obs, %d sessions)\n",
