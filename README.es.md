@@ -100,12 +100,14 @@ El instalador y `mnemo update` siguen la última versión estable publicada (`v1
 
 ```text
 project/
-├── .mnemo      # ID de proyecto + agentes activados (gitignored)
+├── .mnemo      # ID estable + agentes activados (versionado en Git)
 ├── AGENTS.md   # autoridad de memoria compartida
 ├── CLAUDE.md   # reglas de Claude cuando se selecciona
 ├── .cursor/    # reglas de Cursor cuando se selecciona
 └── .pi/        # extensiones de prompt de Pi cuando se selecciona
 ```
+
+**Identidad del proyecto en Git:** `mnemo init` añade `.mnemo` al índice de Git si existe un repositorio. En proyectos previamente inicializados, vuelve a ejecutar `mnemo init` para eliminar la exclusión heredada de `.gitignore` y preparar el archivo sin cambiar su ID. Revisa y confirma los cambios normalmente: mnemo no crea commits ni ejecuta push. El marcador contiene el ID y los agentes activados, no las memorias ni las credenciales. Este ID no concede permisos: un futuro servicio cloud deberá comprobar la autorización de usuario u organización en cada operación (OWASP API1:2023, Broken Object Level Authorization).
 
 Consulta [Durable Events](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events) para entrega y errores.
 
