@@ -65,8 +65,8 @@ func runInit() {
 		}
 		fmt.Printf("mnemo init: %s activated in %s\n", a, root)
 	}
-	if err := agentinit.EnsureGitignore(root); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo init: gitignore: %v\n", err)
+	if err := agentinit.EnsureMarkerTracked(root); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo init: Git marker tracking: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Printf("mnemo init: project ID %s\n", projectID)
@@ -138,8 +138,8 @@ func runMigrateProjects() {
 		os.Exit(1)
 	}
 
-	if err := agentinit.EnsureGitignore(root); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo migrate: gitignore: %v\n", err)
+	if err := agentinit.EnsureMarkerTracked(root); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo migrate: Git marker tracking: %v\n", err)
 		os.Exit(1)
 	}
 
