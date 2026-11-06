@@ -20,14 +20,11 @@ func TestTrackProjectStagesExistingMarkerWithoutChangingIdentity(t *testing.T) {
 	if out, err := runTrackGit(t, root, "init", "-q"); err != nil {
 		t.Fatalf("git init: %s: %v", out, err)
 	}
-	original := `{"version":1,"id":"stable-project-id","agents":["codex"]}` + "
-"
+	original := `{"version":1,"id":"stable-project-id","agents":["codex"]}` + "\n"
 	if err := os.WriteFile(filepath.Join(root, ".mnemo"), []byte(original), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".mnemo
-.env
-"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".mnemo\n.env\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -51,8 +48,7 @@ func TestTrackProjectStagesExistingMarkerWithoutChangingIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(ignore) != ".env
-" {
+	if string(ignore) != ".env\n" {
 		t.Fatalf("track removed unrelated ignore rule: %q", ignore)
 	}
 	if out, err := runTrackGit(t, root, "diff", "--cached", "--name-only"); err != nil || strings.TrimSpace(out) != ".mnemo" {
