@@ -31,11 +31,11 @@ func gitRepoForTest(t *testing.T) string {
 	return root
 }
 
-func TestEnsureMarkerTrackedOutsideGitDoesNotCreateGitignore(t *testing.T) {
+func TestEnsureMarkerTrackedOutsideGitFailsWithoutCreatingGitignore(t *testing.T) {
 	root := t.TempDir()
 	writeMarkerForTest(t, root)
-	if err := EnsureMarkerTracked(root); err != nil {
-		t.Fatal(err)
+	if err := EnsureMarkerTracked(root); err == nil || !strings.Contains(err.Error(), "not a Git repository") {
+		t.Fatalf("expected non-Git error, got %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".gitignore")); !os.IsNotExist(err) {
 		t.Fatalf("unexpected .gitignore: %v", err)
