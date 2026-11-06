@@ -127,7 +127,7 @@ func TestEnsureMarkerTrackedRejectsOtherIgnoreSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(ignore) != ".mnemo\\n" {
+	if string(ignore) != ".mnemo\n" {
 		t.Fatalf("ignore file changed despite error: %q", ignore)
 	}
 }
@@ -135,7 +135,7 @@ func TestEnsureMarkerTrackedRejectsOtherIgnoreSources(t *testing.T) {
 func TestEnsureMarkerTrackedRestoresGitignoreWhenStagingFails(t *testing.T) {
 	root := gitRepoForTest(t)
 	writeMarkerForTest(t, root)
-	original := "# keep\\n.mnemo\\n.env\\n"
+	original := "# keep\n.mnemo\n.env\n"
 	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(original), 0644); err != nil {
 		t.Fatal(err)
 	}
