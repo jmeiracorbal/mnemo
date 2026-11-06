@@ -9,14 +9,12 @@ import (
 	"strings"
 )
 
-// EnsureMarkerTracked makes .mnemo versionable in an existing Git worktree.
+// EnsureMarkerTracked explicitly makes .mnemo versionable in a Git worktree.
 // It removes only the legacy mnemo ignore entry and stages .mnemo if untracked.
 // It never creates a Git repository, stages unrelated files, or changes the ID.
 func EnsureMarkerTracked(root string) error {
 	if _, err := os.Lstat(filepath.Join(root, ".git")); errors.Is(err, os.ErrNotExist) {
-		// ProjectRoot passes a repository root when Git is available.
-		// For projects outside Git, no Git-specific setup is necessary.
-		return nil
+		return fmt.Errorf("%s is not a Git repository; mnemo track requires an initialized Git worktree", root)
 	} else if err != nil {
 		return fmt.Errorf("inspect Git repository: %w", err)
 	}
