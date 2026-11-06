@@ -47,11 +47,7 @@ func TestEnsureMarkerTrackedRemovesLegacyIgnoreAndStagesMarker(t *testing.T) {
 		t.Run(ignore, func(t *testing.T) {
 			root := gitRepoForTest(t)
 			writeMarkerForTest(t, root)
-			original := "# project
-*.log
-" + ignore + "
-.keep
-"
+			original := "# project\n*.log\n" + ignore + "\n.keep\n"
 			if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(original), 0644); err != nil {
 				t.Fatal(err)
 			}
@@ -64,10 +60,7 @@ func TestEnsureMarkerTrackedRemovesLegacyIgnoreAndStagesMarker(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got, want := string(data), "# project
-*.log
-.keep
-"; got != want {
+			if got, want := string(data), "# project\n*.log\n.keep\n"; got != want {
 				t.Fatalf("unexpected ignore file: %q want %q", got, want)
 			}
 			if out, err := gitRun(t, root, "ls-files", "--error-unmatch", "--", ".mnemo"); err != nil {
@@ -100,8 +93,7 @@ func TestEnsureMarkerTrackedDoesNotRestageAnExistingMarker(t *testing.T) {
 	if out, err := gitRun(t, root, "add", "--", ".mnemo"); err != nil {
 		t.Fatalf("initial add: %s %v", out, err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".mnemo
-"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".mnemo\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, ".mnemo"), []byte(`{"version":1,"id":"stable-uuid","agents":["cursor"]}`), 0644); err != nil {
@@ -118,12 +110,10 @@ func TestEnsureMarkerTrackedDoesNotRestageAnExistingMarker(t *testing.T) {
 func TestEnsureMarkerTrackedRejectsOtherIgnoreSources(t *testing.T) {
 	root := gitRepoForTest(t)
 	writeMarkerForTest(t, root)
-	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".mnemo
-"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".mnemo\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".git", "info", "exclude"), []byte(".mnemo
-"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".git", "info", "exclude"), []byte(".mnemo\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	err := EnsureMarkerTracked(root)
@@ -137,11 +127,7 @@ func TestEnsureMarkerTrackedRejectsOtherIgnoreSources(t *testing.T) {
 
 func TestRemoveMarkerIgnoreRulePreservesUnrelatedPatterns(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".gitignore")
-	original := "other/.mnemo
-!.mnemo
-# .mnemo
-/.mnemo
-*.log"
+	original := "other/.mnemo\r\n!.mnemo\r\n# .mnemo\r\n/.mnemo\r\n*.log"
 	if err := os.WriteFile(path, []byte(original), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -152,10 +138,7 @@ func TestRemoveMarkerIgnoreRulePreservesUnrelatedPatterns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := string(data), "other/.mnemo
-!.mnemo
-# .mnemo
-*.log"; got != want {
+	if got, want := string(data), "other/.mnemo\r\n!.mnemo\r\n# .mnemo\r\n*.log"; got != want {
 		t.Fatalf("unexpected content: %q want %q", got, want)
 	}
 	info, err := os.Stat(path)
@@ -170,8 +153,7 @@ func TestRemoveMarkerIgnoreRulePreservesUnrelatedPatterns(t *testing.T) {
 func TestEnsureMarkerTrackedHonorsNegatedIgnoreRule(t *testing.T) {
 	root := gitRepoForTest(t)
 	writeMarkerForTest(t, root)
-	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("!.mnemo
-"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("!.mnemo\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := EnsureMarkerTracked(root); err != nil {
