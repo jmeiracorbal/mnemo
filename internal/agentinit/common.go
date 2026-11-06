@@ -97,6 +97,23 @@ func EnsureProjectID(root string) (string, error) {
 	return m.ID, nil
 }
 
+// ProjectIDForMigration returns the existing project ID without modifying the marker.
+// Legacy projects without an ID receive a deterministic ID only when migration completes.
+func ProjectIDForMigration(root string) (string, error) {
+	m, err := readMarker(root)
+	if err != nil {
+		return "", err
+	}
+	if m.ID != "" {
+		return m.ID, nil
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve path: %w", err)
+	}
+	return ProjectUUIDFromPath(abs), nil
+}
+
 // ReadProjectID returns the project UUID from .mnemo.
 // Errors if .mnemo does not exist or has no ID set.
 func ReadProjectID(root string) (string, error) {
@@ -123,6 +140,9 @@ func EnsureMarkerWithID(root, id string) error {
 	m, err := readMarker(root)
 	if err != nil {
 		return err
+	}
+	if m.ID == id {
+		return nil
 	}
 	m.ID = id
 	return writeMarker(root, m)
