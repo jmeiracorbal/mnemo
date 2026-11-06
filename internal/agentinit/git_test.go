@@ -123,6 +123,35 @@ func TestEnsureMarkerTrackedRejectsOtherIgnoreSources(t *testing.T) {
 	if out, err := gitRun(t, root, "ls-files", "--error-unmatch", "--", ".mnemo"); err == nil {
 		t.Fatalf("marker should not have been staged: %s", out)
 	}
+	ignore, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(ignore) != ".mnemo\\n" {
+		t.Fatalf("ignore file changed despite error: %q", ignore)
+	}
+}
+
+func TestEnsureMarkerTrackedRestoresGitignoreWhenStagingFails(t *testing.T) {
+	root := gitRepoForTest(t)
+	writeMarkerForTest(t, root)
+	original := "# keep\\n.mnemo\\n.env\\n"
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(original), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".git", "index.lock"), []byte("locked"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureMarkerTracked(root); err == nil || !strings.Contains(err.Error(), "stage .mnemo") {
+		t.Fatalf("expected staging error, got %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != original {
+		t.Fatalf("ignore changed on staging failure: got %q, want %q", got, original)
+	}
 }
 
 func TestRemoveMarkerIgnoreRulePreservesUnrelatedPatterns(t *testing.T) {
