@@ -94,12 +94,14 @@ mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 
 ```text
 project/
-├── .mnemo      # 项目 ID + 已启用代理（gitignored）
+├── .mnemo      # 稳定项目 ID + 已激活的代理（由 Git 跟踪）
 ├── AGENTS.md   # 共享记忆权威
 ├── CLAUDE.md   # 选择 Claude 时的专用规则
 ├── .cursor/    # 选择 Cursor 时的规则
 └── .pi/        # 选择 Pi 时的 prompt 扩展
 ```
+
+**Git 中的项目标识：** 在 Git 仓库中，`mnemo init` 会将 `.mnemo` 加入暂存区。对于先前初始化的仓库，再次运行 `mnemo init` 会移除项目 `.gitignore` 中旧的 `.mnemo` 忽略规则，并保留现有项目 ID。请正常检查和提交这些更改；mnemo 不会自动提交或推送。该文件包含项目 ID 与已启用的代理，不包含记忆内容或凭据。项目 ID 不是访问凭证；未来的云服务必须对每次操作执行用户或组织级权限验证（OWASP API1:2023，Broken Object Level Authorization）。
 
 投递保证与故障行为见 [Durable Events](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events)。
 
