@@ -28,13 +28,17 @@ func TestTrackProjectStagesExistingMarkerWithoutChangingIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	expectedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for attempt := 0; attempt < 2; attempt++ {
 		gotRoot, id, err := trackProject(root)
 		if err != nil {
 			t.Fatalf("track attempt %d: %v", attempt, err)
 		}
-		if gotRoot != root || id != "stable-project-id" {
-			t.Fatalf("unexpected identity: root %q, id %q", gotRoot, id)
+		if gotRoot != expectedRoot || id != "stable-project-id" {
+			t.Fatalf("unexpected identity: root %q (expected %q), id %q", gotRoot, expectedRoot, id)
 		}
 	}
 	data, err := os.ReadFile(filepath.Join(root, ".mnemo"))
