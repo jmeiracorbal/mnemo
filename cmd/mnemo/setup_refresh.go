@@ -90,14 +90,7 @@ func refreshSetup(opts setupRefreshOptions) (setupRefreshResult, error) {
 	// when this run modified or removed it.
 	start := time.Now()
 	var managed []string
-	configDir := filepath.Join(opts.Home, ".mnemo")
-	configExisted := true
-	if _, err := os.Stat(filepath.Join(configDir, "config.toml")); os.IsNotExist(err) {
-		configExisted = false
-	} else if err != nil {
-		return result, fmt.Errorf("stat event config: %w", err)
-	}
-	configPath, err := events.EnsureConfig(configDir)
+	configPath, err := events.EnsureConfig(filepath.Join(opts.Home, ".mnemo"))
 	if err != nil {
 		return result, fmt.Errorf("event config: %w", err)
 	}
@@ -129,20 +122,6 @@ func refreshSetup(opts setupRefreshOptions) (setupRefreshResult, error) {
 		managed = append(managed, agentUpdated...)
 	}
 	result.Updated = changedSince(managed, start)
-	// Some filesystems record an older timestamp for a newly created file.
-	// Creation is known here, so do not rely on its mtime for reporting.
-	if !configExisted {
-		found := false
-		for _, path := range result.Updated {
-			if path == configPath {
-				found = true
-				break
-			}
-		}
-		if !found {
-			result.Updated = append(result.Updated, configPath)
-		}
-	}
 	return result, nil
 }
 
