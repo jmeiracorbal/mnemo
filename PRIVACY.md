@@ -10,6 +10,16 @@ mnemo does not include telemetry or a hosted memory service. Memory and event da
 
 Memories, sessions, and observations are stored in `~/.mnemo/memory.db`. The local controller also stores durable event data in `~/.mnemo/events/` and its configuration in `~/.mnemo/config.toml`. It binds to `127.0.0.1` and does not expose a remote memory API.
 
+## Project identity and Git
+
+A project may contain a `.mnemo` marker with its project ID and the names of
+activated agents. This marker does **not** contain stored memories or account
+credentials. In Git repositories, tracking the marker is optional: `mnemo init`
+does not stage it, while the explicitly invoked `mnemo track` command makes it
+available for a user-reviewed Git commit. Committing or publishing `.mnemo`
+discloses the project ID and agent names to anyone with access to that repository.
+It does not publish the local database or authorize access to memory data.
+
 ## No data collection
 
 mnemo does not include telemetry or analytics and does not send memory contents to a hosted mnemo service. Requests to GitHub for installation or updates may disclose ordinary connection metadata, such as your IP address, to GitHub.
