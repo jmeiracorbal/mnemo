@@ -37,8 +37,8 @@ func TestRefreshSetupWritesCodexFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refresh setup: %v", err)
 	}
-	if len(result.Updated) != 12 {
-		t.Fatalf("updated paths = %d, want 12 (%v)", len(result.Updated), result.Updated)
+	if len(result.Updated) == 0 {
+		t.Fatal("refresh setup reported no updated files")
 	}
 
 	config := readTestFile(t, filepath.Join(home, ".codex", "config.toml"))

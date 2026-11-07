@@ -94,12 +94,14 @@ mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 
 ```text
 project/
-├── .mnemo      # 项目 ID + 已启用代理（gitignored）
+├── .mnemo      # 项目 ID + 已启用的代理（可由 Git 跟踪）
 ├── AGENTS.md   # 共享记忆权威
 ├── CLAUDE.md   # 选择 Claude 时的专用规则
 ├── .cursor/    # 选择 Cursor 时的规则
 └── .pi/        # 选择 Pi 时的 prompt 扩展
 ```
+
+**Git 跟踪需要显式启用：** `mnemo init` 不再将 `.mnemo` 加入 `.gitignore`，也不会改变 Git 跟踪状态。如需在不同克隆之间共享项目 ID，请在仓库中运行 `mnemo track`。该命令移除旧的 `.mnemo` 忽略规则，只将 `.mnemo` 加入暂存区，并保持项目 ID 不变。请自行检查并提交变更；mnemo 不会提交或推送。**现有安装：** 更新 mnemo 后，必须在希望迁移的各个仓库中运行 `mnemo track`；更新本身不修改 Git 状态。该文件当前包含项目 ID 和已启用的代理，不包含记忆内容或凭据。项目 ID 不是访问凭证；未来的云服务必须对每次操作验证用户或组织权限（OWASP API1:2023，Broken Object Level Authorization）。
 
 投递保证与故障行为见 [Durable Events](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events)。
 
