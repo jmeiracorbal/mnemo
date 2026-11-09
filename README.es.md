@@ -84,7 +84,7 @@ Luego en tu agente: `mem_save` una decisión, cierra la sesión, abre otra — `
 mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
 
-El instalador y `mnemo update` siguen la última versión estable publicada (`v1.0.1`). Usa `mnemo update --prerelease` únicamente para optar por versiones preliminares. Consulta [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) para las actualizaciones y la configuración por agente.
+El instalador y `mnemo update` siguen la última versión estable publicada (`v1.0.1`). Usa `mnemo update --check` para comprobar si hay una actualización sin instalarla; añade `--json` para obtener el resultado en JSON. `mnemo update` permite revisar y confirmar la instalación. Usa `mnemo update --prerelease` únicamente para optar por versiones preliminares. Consulta [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) para más información sobre actualizaciones y configuración por agente.
 
 <a id="como-funciona"></a>
 
