@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo-events"
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
 )
 
