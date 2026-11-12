@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo-adapters/agents"
+	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 )
 

@@ -3,8 +3,8 @@ package mcp
 import (
 	"context"
 
-	"github.com/jmeiracorbal/mnemo-adapters/agents"
-	"github.com/jmeiracorbal/mnemo-events"
+	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
