@@ -1,6 +1,6 @@
 module github.com/jmeiracorbal/mnemo
 
-go 1.26.10
+go 1.26.11
 
 require (
 	github.com/coreos/go-semver v0.3.1
