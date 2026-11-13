@@ -131,12 +131,9 @@ Codex requires an interactive hook trust review after install — details in [Ag
 
 Claude Code uses `CLAUDE_CONFIG_DIR` for its config directory when set, and defaults to `~/.claude`. Its MCP configuration `.claude.json` lives in that directory when `CLAUDE_CONFIG_DIR` is set, and in `$HOME` otherwise.
 
-## Associated modules
+## Internal components
 
-| Module | Purpose |
-|---|---|
-| [`mnemo-adapters`](https://github.com/jmeiracorbal/mnemo-adapters) | Agent adapter interfaces and mappings for CLI, controller and MCP |
-| [`mnemo-events`](https://github.com/jmeiracorbal/mnemo-events) | Durable event and command contracts shared by publishers, controller and store |
+The agent adapters and durable event controller are maintained inside Mnemo (`internal/adapters` and `internal/events`). The CLI and MCP server use these packages directly.
 
 ## Installation options
 

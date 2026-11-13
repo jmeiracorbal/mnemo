@@ -39,6 +39,16 @@ jobs:
             exit 1
           fi
 
+      - name: Verify module boundaries
+        if: runner.os == 'Linux'
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          if git grep -n -E 'github.com/jmeiracorbal/mnemo-(adapters|events)' -- '*.go' go.mod go.sum README.md README.es.md README.zh-CN.md; then
+            echo "obsolete Mnemo module dependency detected"
+            exit 1
+          fi
+
       - name: Test
         run: go test ./...
 

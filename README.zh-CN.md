@@ -131,12 +131,9 @@ Codex 安装后需要交互式 hook 信任审查 — 详见 [Agent Integrations]
 
 Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否则使用 `~/.claude`。设置了 `CLAUDE_CONFIG_DIR` 时，其 MCP 配置文件 `.claude.json` 位于该目录下，否则位于 `$HOME` 下。
 
-## 关联模块
+## 内部组件
 
-| 模块 | 用途 |
-|---|---|
-| [`mnemo-adapters`](https://github.com/jmeiracorbal/mnemo-adapters) | CLI、控制器与 MCP 使用的代理 adapter 接口与映射 |
-| [`mnemo-events`](https://github.com/jmeiracorbal/mnemo-events) | 发布者、控制器与存储共享的持久事件/命令契约 |
+代理适配器和持久事件控制器已整合到 Mnemo（`internal/adapters` 和 `internal/events`），由 CLI 和 MCP 服务器直接使用。
 
 ## 安装选项
 

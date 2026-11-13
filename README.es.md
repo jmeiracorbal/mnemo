@@ -139,12 +139,9 @@ Codex exige revisión interactiva de confianza de hooks tras instalar — detall
 
 Claude Code usa `CLAUDE_CONFIG_DIR` como directorio de configuración cuando está definida y, si no, usa `~/.claude`. Su configuración MCP `.claude.json` está en ese directorio cuando `CLAUDE_CONFIG_DIR` está definida y, si no, en `$HOME`.
 
-## Módulos asociados
+## Componentes internos
 
-| Módulo | Propósito |
-|---|---|
-| [`mnemo-adapters`](https://github.com/jmeiracorbal/mnemo-adapters) | Interfaces y mappings de adapters para CLI, controller y MCP |
-| [`mnemo-events`](https://github.com/jmeiracorbal/mnemo-events) | Contratos de eventos y comandos durables compartidos |
+Los adaptadores de agentes y el controlador de eventos persistentes forman parte de Mnemo (`internal/adapters` e `internal/events`). El CLI y el servidor MCP utilizan estos paquetes directamente.
 
 ## Opciones de instalación
 

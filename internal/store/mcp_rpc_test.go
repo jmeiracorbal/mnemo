@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo-adapters/agents"
+	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 )
 
 func TestApplyMCPCommandImportIsAtomic(t *testing.T) {

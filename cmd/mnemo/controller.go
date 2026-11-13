@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo-events"
+	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/procstate"
 	"github.com/jmeiracorbal/mnemo/internal/sessionreaper"
 	"github.com/jmeiracorbal/mnemo/internal/store"

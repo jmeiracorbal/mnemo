@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/jmeiracorbal/mnemo-adapters/agents"
+	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
 
