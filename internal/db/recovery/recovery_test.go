@@ -180,7 +180,10 @@ func TestRecoveryRetentionKeepsLatestAndProtectedPoint(t *testing.T) {
 	}
 	orphan := filepath.Join(dataDir, "recovery", "v1.0.9.db.pending")
 	if err := os.WriteFile(orphan, []byte("interrupted copy"), 0600); err != nil { t.Fatal(err) }
+	unrelated := filepath.Join(dataDir, "recovery", "unrelated.pending")
+	if err := os.WriteFile(unrelated, []byte("keep"), 0600); err != nil { t.Fatal(err) }
 	if err := PruneRecoveryPoints(dataDir, "v1.0.1", 2); err != nil { t.Fatal(err) }
+	if _, err := os.Stat(unrelated); err != nil { t.Fatalf("pruning touched an unrelated file: %v", err) }
 	for n := 0; n < 5; n++ {
 		path := filepath.Join(dataDir, "recovery", fmt.Sprintf("v1.0.%d.db", n))
 		_, err := os.Stat(path)
