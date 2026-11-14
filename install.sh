@@ -29,6 +29,7 @@ export MNEMO_NO_UPDATE_CHECK=1
 INSTALL_DOWNLOAD=""
 INSTALL_CHECKSUM=""
 INSTALL_BACKUP=""
+INSTALL_MARKER=""
 INSTALL_DEST=""
 INSTALL_SWITCHED=false
 INSTALL_VERIFIED=false
@@ -92,6 +93,7 @@ finish_install() {
   [ -z "$INSTALL_DOWNLOAD" ] || rm -f -- "$INSTALL_DOWNLOAD"
   [ -z "$INSTALL_CHECKSUM" ] || rm -f -- "$INSTALL_CHECKSUM"
   [ -z "$INSTALL_BACKUP" ] || rm -f -- "$INSTALL_BACKUP"
+  [ -z "$INSTALL_MARKER" ] || rm -f -- "$INSTALL_MARKER"
   exit "$status"
 }
 
@@ -230,6 +232,13 @@ download_binary() {
   fi
 
   if [ -f "$dest" ]; then
+    # Exclusive marker prevents concurrent installers and differentiates an
+    # in-progress transaction from failures after a successful upgrade.
+    local marker="${dest}.upgrading"
+    if ! ( set -C; printf '%s\\n' "$" > "$marker" ) 2>/dev/null; then
+      err "Another Mnemo upgrade is already running or left an unresolved upgrade marker: ${marker}"
+    fi
+    INSTALL_MARKER="$marker"
     INSTALL_BACKUP=$(mktemp "${dest}.rollback.XXXXXX")
     cp -p -- "$dest" "$INSTALL_BACKUP" || err "Could not preserve existing Mnemo executable."
   fi
@@ -371,6 +380,12 @@ main() {
   # and a real SQLite read through the newly restarted controller.
   if ! "$mnemo_bin" controller verify; then
     err "The new Mnemo controller failed functional verification. Rolling back."
+  fi
+  # Keep precisely one preceding release as the runtime safety rollback
+  # target in case a delayed legacy publisher appears after installation.
+  if [ -n "$INSTALL_BACKUP" ]; then
+    mv -f -- "$INSTALL_BACKUP" "${mnemo_bin}.previous" || err "Could not commit the previous-version recovery slot."
+    INSTALL_BACKUP=""
   fi
   INSTALL_VERIFIED=true
   ok "Controller verified; upgrade committed."
