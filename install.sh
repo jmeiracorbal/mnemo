@@ -259,12 +259,7 @@ download_binary() {
   fi
 
   chmod +x "$INSTALL_DOWNLOAD"
-  # An upgrade that would change the live SQLite schema cannot be safely
-  # rolled back by restoring only the previous executable. Refuse it before
-  # touching the installation; no migration is ever applied by this check.
-  if [ -f "$HOME/.mnemo/memory.db" ] && ! "$INSTALL_DOWNLOAD" db migrate --check >/dev/null; then
-    err "Update refused: this release requires a database migration that cannot yet be rolled back safely. The installed version is unchanged."
-  fi
+  INSTALL_RELEASE="$version"
   # Every upgrade waits for a stable, acknowledged durable queue before
   # replacing the controller executable. Active agent/Mnemo sessions stay open.
   if [ -f "$HOME/.mnemo/config.toml" ]; then
@@ -285,6 +280,30 @@ download_binary() {
     INSTALL_MARKER="$marker"
     INSTALL_BACKUP=$(mktemp "${dest}.rollback.XXXXXX")
     cp -p -- "$dest" "$INSTALL_BACKUP" || err "Could not preserve existing Mnemo executable."
+  fi
+
+  # Stop all database writers before the snapshot. During the subsequent
+  # start-and-verify phase, the new controller will NAK real durable deliveries
+  # until the installer commits the release. Active agent sessions stay open.
+  if [ -f "$HOME/.mnemo/config.toml" ] && [ -f "$dest" ]; then
+    INSTALL_MAINTENANCE="$HOME/.mnemo/upgrade.maintenance"
+    if ! ( set -C; echo "$version" > "$INSTALL_MAINTENANCE" ) 2>/dev/null; then
+      err "An SQLite recovery transaction is already active."
+    fi
+    INSTALL_STOPPED=true
+    "$INSTALL_DOWNLOAD" controller stop || err "Could not stop the previous controller safely."
+  fi
+
+  if [ -f "$HOME/.mnemo/memory.db" ]; then
+    if [ "$INSTALL_STOPPED" != "true" ]; then
+      err "Existing SQLite database has no confirmed stopped managed controller. Update canceled."
+    fi
+    "$INSTALL_DOWNLOAD" db recovery snapshot --release="$version" || err "Could not preserve the pre-upgrade SQLite state."
+    INSTALL_DB_SNAPSHOT="$version"
+    if ! "$INSTALL_DOWNLOAD" db migrate --check >/dev/null 2>&1; then
+      "$INSTALL_DOWNLOAD" db migrate || err "SQLite migration failed; restoring the pre-upgrade recovery point."
+      INSTALL_SQLITE_CHANGED=true
+    fi
   fi
 
   # Both files live on the same filesystem, so the executable switch is atomic.
