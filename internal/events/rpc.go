@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	goevents "github.com/jmeiracorbal/go-events"
+	goeventsnats "github.com/jmeiracorbal/go-events/adapters/nats"
+
 	"github.com/nats-io/nats.go"
 )
 
@@ -40,7 +43,7 @@ func Call(ctx context.Context, cfg Config, action string, payload any, output an
 	}
 	defer nc.Close()
 	if isMutation(action) {
-		return callDurableCommand(ctx, nc, action, encoded, output)
+		return callDurableCommand(ctx, cfg, nc, action, encoded, output)
 	}
 	message, err := nc.RequestWithContext(ctx, rpcSubject, request)
 	if err != nil {
@@ -76,7 +79,7 @@ func isMutation(action string) bool {
 	}
 }
 
-func callDurableCommand(ctx context.Context, nc *nats.Conn, action string, payload json.RawMessage, output any) error {
+func callDurableCommand(ctx context.Context, cfg Config, nc *nats.Conn, action string, payload json.RawMessage, output any) error {
 	command, err := NewCommand(action, json.RawMessage(payload))
 	if err != nil {
 		return err
@@ -92,11 +95,16 @@ func callDurableCommand(ctx context.Context, nc *nats.Conn, action string, paylo
 	if err != nil {
 		return fmt.Errorf("encode command reply subject: %w", err)
 	}
-	js, err := nc.JetStream()
+	adapter, err := goeventsnats.New(ctx, goeventsnats.Config{
+		URL: cfg.URL(), Stream: commandStreamName,
+	}, nats.Timeout(2*time.Second))
 	if err != nil {
-		return fmt.Errorf("open durable command stream: %w", err)
+		return fmt.Errorf("open durable command transport: %w", err)
 	}
-	if _, err := js.PublishMsg(&nats.Msg{Subject: commandSubject, Data: encoded, Header: nats.Header{"Nats-Msg-Id": []string{command.ID}}}, nats.Context(ctx)); err != nil {
+	defer adapter.Close()
+	if err := adapter.Publish(ctx, goevents.Event{
+		ID: command.ID, Topic: commandSubject, Data: encoded,
+	}); err != nil {
 		return fmt.Errorf("publish durable command: %w", err)
 	}
 	message, err := subscription.NextMsgWithContext(ctx)

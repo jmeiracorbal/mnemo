@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	goevents "github.com/jmeiracorbal/go-events"
+	goeventsnats "github.com/jmeiracorbal/go-events/adapters/nats"
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
@@ -155,20 +157,20 @@ func Publish(ctx context.Context, cfg Config, event Event) error {
 	if err := event.Validate(); err != nil {
 		return err
 	}
-	nc, err := nats.Connect(cfg.URL(), nats.Timeout(2*time.Second))
-	if err != nil {
-		return fmt.Errorf("connect event controller: %w", err)
-	}
-	defer nc.Close()
-	js, err := nc.JetStream()
-	if err != nil {
-		return fmt.Errorf("open JetStream: %w", err)
-	}
 	body, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("encode event: %w", err)
 	}
-	if _, err := js.PublishMsg(&nats.Msg{Subject: cfg.publishSubject(event.Project), Data: body}, nats.Context(ctx)); err != nil {
+	adapter, err := goeventsnats.New(ctx, goeventsnats.Config{
+		URL: cfg.URL(), Stream: streamName,
+	}, nats.Timeout(2*time.Second))
+	if err != nil {
+		return fmt.Errorf("connect event controller: %w", err)
+	}
+	defer adapter.Close()
+	if err := adapter.Publish(ctx, goevents.Event{
+		ID: event.ID, Topic: cfg.publishSubject(event.Project), Data: body,
+	}); err != nil {
 		return fmt.Errorf("publish event: %w", err)
 	}
 	return nil
@@ -231,109 +233,135 @@ func (c *Controller) ensureStream() error {
 	return nil
 }
 
+// preflightDurables prevents handing an unacknowledged, headerless legacy
+// delivery to go-events. It never rewrites or acknowledges stored messages.
+func (c *Controller) preflightDurables() error {
+	for _, durable := range []struct {
+		stream string
+		consumer string
+	}{
+		{streamName, consumerName},
+		{commandStreamName, commandConsumerName},
+	} {
+		stream, err := c.js.StreamInfo(durable.stream)
+		if err != nil {
+			return fmt.Errorf("inspect stream %s: %w", durable.stream, err)
+		}
+		consumer, err := c.js.ConsumerInfo(durable.stream, durable.consumer)
+		if errors.Is(err, nats.ErrConsumerNotFound) {
+			if stream.State.Msgs != 0 {
+				return fmt.Errorf("unsafe go-events cutover: stream %s has messages but durable %s does not exist", durable.stream, durable.consumer)
+			}
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspect durable %s: %w", durable.consumer, err)
+		}
+		if consumer.NumPending == 0 && consumer.NumAckPending == 0 {
+			continue
+		}
+		for seq := consumer.AckFloor.Stream + 1; seq <= stream.State.LastSeq; seq++ {
+			message, err := c.js.GetMsg(durable.stream, seq)
+			if errors.Is(err, nats.ErrMsgNotFound) {
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("inspect pending message in %s: %w", durable.stream, err)
+			}
+			if message.Header.Get("Nats-Msg-Id") == "" {
+				return fmt.Errorf("unsafe go-events cutover: stream %s has unacknowledged events without Nats-Msg-Id; drain them using the previous controller before upgrading", durable.stream)
+			}
+		}
+	}
+	return nil
+}
+
 func (c *Controller) Run(ctx context.Context) error {
+	if err := c.preflightDurables(); err != nil {
+		return err
+	}
 	if _, err := c.nc.Subscribe(rpcSubject, c.handleRPC); err != nil {
 		return fmt.Errorf("subscribe controller RPC: %w", err)
 	}
 	if err := c.nc.Flush(); err != nil {
 		return fmt.Errorf("flush controller RPC subscription: %w", err)
 	}
-	sub, err := c.js.PullSubscribe(c.cfg.subject(), consumerName, nats.BindStream(streamName))
+	logTransportError := func(err error) {
+		fmt.Fprintf(os.Stderr, "mnemo controller transport: %v\n", err)
+	}
+	eventBus, err := goeventsnats.New(ctx, goeventsnats.Config{
+		URL: c.cfg.URL(), Stream: streamName, Consumer: consumerName,
+		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: logTransportError,
+	}, nats.Timeout(2*time.Second))
+	if err != nil {
+		return fmt.Errorf("open event transport: %w", err)
+	}
+	defer eventBus.Close()
+	commandBus, err := goeventsnats.New(ctx, goeventsnats.Config{
+		URL: c.cfg.URL(), Stream: commandStreamName, Consumer: commandConsumerName,
+		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: logTransportError,
+	}, nats.Timeout(2*time.Second))
+	if err != nil {
+		return fmt.Errorf("open command transport: %w", err)
+	}
+	defer commandBus.Close()
+	eventSub, err := eventBus.Subscribe(ctx, c.cfg.subject(), c.handleEvent)
 	if err != nil {
 		return fmt.Errorf("subscribe event stream: %w", err)
 	}
-	commandSub, err := c.js.PullSubscribe(commandSubject, commandConsumerName, nats.BindStream(commandStreamName))
+	defer eventSub.Close()
+	commandSub, err := commandBus.Subscribe(ctx, commandSubject, c.handleCommand)
 	if err != nil {
 		return fmt.Errorf("subscribe command stream: %w", err)
 	}
-	commandErr := make(chan error, 1)
-	go func() { commandErr <- c.runCommands(ctx, commandSub) }()
-	for {
-		if err := ctx.Err(); err != nil {
-			if commandRunErr := <-commandErr; commandRunErr != nil {
-				return commandRunErr
-			}
-			return nil
-		}
-		select {
-		case err := <-commandErr:
+	defer commandSub.Close()
+	<-ctx.Done()
+	return nil
+}
+
+func (c *Controller) handleEvent(_ context.Context, delivery goevents.Event) error {
+	var event Event
+	if err := json.Unmarshal(delivery.Data, &event); err != nil {
+		return fmt.Errorf("decode durable event: %w", err)
+	}
+	if err := event.Validate(); err != nil {
+		return err
+	}
+	if event.ID != delivery.ID {
+		return fmt.Errorf("event ID %q differs from transport ID %q", event.ID, delivery.ID)
+	}
+	if event.ExecutionKey == "" {
+		identity, err := agents.NewIdentity(event.Agent, event.Project, event.NativeID)
+		if err != nil {
 			return err
-		default:
 		}
-		messages, err := sub.Fetch(1, nats.MaxWait(time.Second))
-		if err == nats.ErrTimeout {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("fetch durable event: %w", err)
-		}
-		for _, msg := range messages {
-			var event Event
-			processErr := json.Unmarshal(msg.Data, &event)
-			if processErr == nil {
-				processErr = event.Validate()
-			}
-			if processErr == nil && event.ExecutionKey == "" {
-				identity, err := agents.NewIdentity(event.Agent, event.Project, event.NativeID)
-				if err != nil {
-					processErr = err
-				} else {
-					event.ExecutionKey = identity.Execution
-				}
-			}
-			if processErr == nil {
-				processErr = c.store.ApplyDurableEvent(DurableEvent{ID: event.ID, Type: event.Type, Project: event.Project, ExecutionKey: event.ExecutionKey, Payload: event.Payload})
-			}
-			if processErr != nil {
-				if nakErr := msg.NakWithDelay(time.Second); nakErr != nil {
-					return fmt.Errorf("process event: %v; delay redelivery: %w", processErr, nakErr)
-				}
-				continue
-			}
-			if err := msg.Ack(); err != nil {
-				return fmt.Errorf("ack durable event: %w", err)
-			}
-		}
+		event.ExecutionKey = identity.Execution
 	}
+	return c.store.ApplyDurableEvent(DurableEvent{
+		ID: event.ID, Type: event.Type, Project: event.Project,
+		ExecutionKey: event.ExecutionKey, Payload: event.Payload,
+	})
 }
 
-func (c *Controller) runCommands(ctx context.Context, sub *nats.Subscription) error {
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil
-		}
-		messages, err := sub.Fetch(1, nats.MaxWait(time.Second))
-		if err == nats.ErrTimeout {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("fetch durable command: %w", err)
-		}
-		for _, msg := range messages {
-			var command Command
-			if err := json.Unmarshal(msg.Data, &command); err != nil {
-				return c.rejectCommand(msg, "", err)
-			}
-			if err := command.Validate(); err != nil {
-				return c.rejectCommand(msg, command.Reply, err)
-			}
-			payload, err := c.store.ApplyMCPCommand(command.ID, command.Action, command.Payload)
-			if err != nil {
-				return c.rejectCommand(msg, command.Reply, err)
-			}
-			c.replyTo(command.Reply, RPCResponse{Payload: payload})
-			if err := msg.Ack(); err != nil {
-				return fmt.Errorf("ack durable command: %w", err)
-			}
-		}
+func (c *Controller) handleCommand(_ context.Context, delivery goevents.Event) error {
+	var command Command
+	if err := json.Unmarshal(delivery.Data, &command); err != nil {
+		return fmt.Errorf("decode durable command: %w", err)
 	}
-}
-
-func (c *Controller) rejectCommand(msg *nats.Msg, reply string, processErr error) error {
-	c.replyTo(reply, RPCResponse{Error: processErr.Error()})
-	if err := msg.Ack(); err != nil {
-		return fmt.Errorf("ack rejected durable command: %w", err)
+	if err := command.Validate(); err != nil {
+		c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
+		return nil
 	}
+	if command.ID != delivery.ID {
+		c.replyTo(command.Reply, RPCResponse{Error: "command ID differs from transport ID"})
+		return nil
+	}
+	payload, err := c.store.ApplyMCPCommand(command.ID, command.Action, command.Payload)
+	if err != nil {
+		c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
+		return nil
+	}
+	c.replyTo(command.Reply, RPCResponse{Payload: payload})
 	return nil
 }
 
