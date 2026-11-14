@@ -36,7 +36,6 @@ INSTALL_VERIFIED=false
 INSTALL_TXN=false
 INSTALL_RECOVERY_FAILED=false
 INSTALL_RESTORE_AGENT="claudecode"
-INSTALL_SQLITE_CHANGED=false
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -208,7 +207,6 @@ download_binary() {
   mkdir -p "$INSTALL_DIR"
 
   INSTALL_DEST="$dest"
-  INSTALL_SCHEMA_MARKER="${dest}.schema-changed"
   INSTALL_DOWNLOAD=$(mktemp "${dest}.download.XXXXXX")
   trap finish_install EXIT
   trap 'exit 130' INT
@@ -285,7 +283,6 @@ download_binary() {
       err "Could not record the verified SQLite recovery point."
     if ! "$INSTALL_DOWNLOAD" db migrate --check >/dev/null 2>&1; then
       "$INSTALL_DOWNLOAD" db migrate || err "SQLite migration failed; restoring the pre-upgrade recovery point."
-      INSTALL_SQLITE_CHANGED=true
       "$INSTALL_DOWNLOAD" controller transaction schema --changed ||
         err "Could not record the schema compatibility boundary."
     fi
