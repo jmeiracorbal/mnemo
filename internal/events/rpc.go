@@ -33,10 +33,6 @@ func Call(ctx context.Context, cfg Config, action string, payload any, output an
 	if err != nil {
 		return fmt.Errorf("encode controller request: %w", err)
 	}
-	request, err := json.Marshal(RPCRequest{Action: action, Payload: encoded})
-	if err != nil {
-		return fmt.Errorf("encode RPC envelope: %w", err)
-	}
 	nc, err := nats.Connect(cfg.URL(), nats.Timeout(2*time.Second))
 	if err != nil {
 		return fmt.Errorf("connect global controller: %w", err)
@@ -44,6 +40,10 @@ func Call(ctx context.Context, cfg Config, action string, payload any, output an
 	defer nc.Close()
 	if isMutation(action) {
 		return callDurableCommand(ctx, cfg, nc, action, encoded, output)
+	}
+	request, err := json.Marshal(RPCRequest{Action: action, Payload: encoded})
+	if err != nil {
+		return fmt.Errorf("encode RPC envelope: %w", err)
 	}
 	message, err := nc.RequestWithContext(ctx, rpcSubject, request)
 	if err != nil {
