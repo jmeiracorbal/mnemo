@@ -151,7 +151,7 @@ func addCommandTree(root *cobra.Command) {
 		&cobra.Command{Use: "stop", Short: "Stop the managed controller for database maintenance", RunE: func(*cobra.Command, []string) error {
 			return runControllerStop()
 		}},
-		&cobra.Command{Use:"transaction",Short:"Coordinate a persistent release transaction",RunE:func(_ *cobra.Command,args []string)error{
+		&cobra.Command{Use:"transaction",Short:"Coordinate a persistent release transaction",DisableFlagParsing:true,RunE:func(_ *cobra.Command,args []string)error{
 			return runControllerTransaction(args)
 		}},
 	)
