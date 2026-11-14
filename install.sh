@@ -207,14 +207,41 @@ download_binary() {
   mkdir -p "$INSTALL_DIR"
 
   INSTALL_DEST="$dest"
-  INSTALL_DOWNLOAD=$(mktemp "${dest}.download.XXXXXX")
+  local marker="${dest}.upgrading"
+  local prior_pid=""
+  if [ -e "$marker" ]; then
+    prior_pid=$(cat "$marker") || err "Cannot inspect an existing upgrade marker."
+    case "$prior_pid" in
+      ''|*[!0-9]*) err "Invalid upgrade marker; manual recovery required." ;;
+    esac
+    if kill -0 "$prior_pid" 2>/dev/null; then
+      err "Another Mnemo installer is still running (PID $prior_pid)."
+    fi
+    # If the journal already exists, its recovery owns this marker and backup.
+    # Otherwise the former installer died before starting the transaction.
+    if [ ! -e "$HOME/.mnemo/upgrade.transaction" ]; then
+      rm -f -- "$marker" "${dest}.rollback.${prior_pid}" ||
+        err "Cannot clean up an interrupted pre-transaction download."
+    fi
+  fi
+  # PID-addressed artifacts let an interrupted run clean only its own files.
+  # Never remove an artifact belonging to an active concurrent installer.
+  if [ -n "$prior_pid" ]; then
+    rm -f -- "${dest}.download.${prior_pid}" "${dest}.checksum.${prior_pid}" ||
+      err "Cannot clean interrupted download artifacts."
+  fi
+  local installer_pid="$BASHPID"
+  INSTALL_DOWNLOAD="${dest}.download.${installer_pid}"
+  INSTALL_CHECKSUM="${dest}.checksum.${installer_pid}"
+  ( umask 077; set -C; : > "$INSTALL_DOWNLOAD" ) ||
+    err "Download artifact already exists for this installer."
   trap finish_install EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
-
   fetch "$binary_url" "$INSTALL_DOWNLOAD" || err "Download failed: ${binary_url}"
 
-  INSTALL_CHECKSUM=$(mktemp "${dest}.checksum.XXXXXX")
+  ( umask 077; set -C; : > "$INSTALL_CHECKSUM" ) ||
+    err "Checksum artifact already exists for this installer."
   fetch_stdout "$checksum_url" > "$INSTALL_CHECKSUM" || err "Checksum download failed: ${checksum_url}"
 
   # shasum -c expects "hash  filename" — rewrite the path to match $tmp
@@ -252,7 +279,9 @@ download_binary() {
       err "Another Mnemo upgrade is already running or left an unresolved upgrade marker: ${marker}"
     fi
     INSTALL_MARKER="$marker"
-    INSTALL_BACKUP=$(mktemp "${dest}.rollback.XXXXXX")
+    INSTALL_BACKUP="${dest}.rollback.${marker_pid}"
+    ( umask 077; set -C; : > "$INSTALL_BACKUP" ) ||
+      err "Rollback backup already exists for this installer."
     cp -p -- "$dest" "$INSTALL_BACKUP" || err "Could not preserve existing Mnemo executable."
   fi
 
