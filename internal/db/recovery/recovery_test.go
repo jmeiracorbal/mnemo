@@ -157,7 +157,7 @@ func TestRecoveryPointCannotBeOverwrittenForSameRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	recovered := openRecoveryTestDB(t, dbPath)
-	defer recovered.Close()
+	defer func() { _ = recovered.Close() }()
 	if got := recoveryCount(t, recovered); got != 1 {
 		t.Fatalf("immutable restore point was overwritten: got %d rows", got)
 	}
