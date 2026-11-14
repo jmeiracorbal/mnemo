@@ -68,8 +68,11 @@ func Snapshot(ctx context.Context, dataDir, release string) (string, error) {
 	if err := syncFile(pending); err != nil {
 		return "", err
 	}
-	if err := os.Rename(pending, dest); err != nil {
-		return "", fmt.Errorf("commit recovery point: %w", err)
+	// Recovery points are immutable. Rename would silently replace an existing
+	// snapshot on Unix, so publish through an exclusive hard link instead.
+	// Both paths are in the same directory and filesystem.
+	if err := os.Link(pending, dest); err != nil {
+		return "", fmt.Errorf("commit immutable recovery point %s: %w", release, err)
 	}
 	if err := syncDir(filepath.Dir(dest)); err != nil {
 		return "", err
