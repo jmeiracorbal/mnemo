@@ -214,6 +214,12 @@ download_binary() {
   fi
 
   chmod +x "$INSTALL_DOWNLOAD"
+  # An upgrade that would change the live SQLite schema cannot be safely
+  # rolled back by restoring only the previous executable. Refuse it before
+  # touching the installation; no migration is ever applied by this check.
+  if [ -f "$HOME/.mnemo/memory.db" ] && ! "$INSTALL_DOWNLOAD" db migrate --check >/dev/null; then
+    err "Update refused: this release requires a database migration that cannot yet be rolled back safely. The installed version is unchanged."
+  fi
   # Every upgrade waits for a stable, acknowledged durable queue before
   # replacing the controller executable. Active agent/Mnemo sessions stay open.
   if [ -f "$HOME/.mnemo/config.toml" ]; then
