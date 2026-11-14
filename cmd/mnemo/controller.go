@@ -16,15 +16,13 @@ import (
 
 // runController is the installation-owned singleton service. It is never
 // started by an MCP runtime.
-func runController(s *store.Store) {
+func runController(s *store.Store) error {
 	if len(os.Args) < 3 || os.Args[2] != "serve" {
-		fmt.Fprintln(os.Stderr, "usage: mnemo controller serve")
-		return
+		return fmt.Errorf("usage: mnemo controller serve")
 	}
 	cfg, err := events.LoadConfig(s.DataDir())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo controller: %v\n", err)
-		return
+		return err
 	}
 	controller, err := events.NewController(cfg, s)
 	if err != nil {
@@ -40,9 +38,23 @@ func runController(s *store.Store) {
 		Interval: orphanedSessionSweepInterval,
 		Log:      os.Stderr,
 	}.Run(ctx)
-	if err := controller.Run(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo controller: %v\n", err)
+	return controller.Run(ctx)
+}
+
+// runControllerPreflight is a read-only verification that is safe to run
+// against the previous binary's live JetStream before the installer replaces it.
+func runControllerPreflight() error {
+	storeConfig, err := store.DefaultConfig()
+	if err != nil {
+		return err
 	}
+	cfg, err := events.LoadConfig(storeConfig.DataDir)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return events.CheckUpgradeReady(ctx, cfg)
 }
 
 const orphanedSessionSweepInterval = 5 * time.Minute
