@@ -216,3 +216,19 @@ func TestFailedRollbackKeepsWriteFenceAndTransactionJournal(t *testing.T) {
 	current,err:=os.ReadFile(binary)
 	if err!=nil || string(current)!="new binary" {t.Fatalf("failed recovery changed active binary: %q %v",current,err)}
 }
+
+func TestOrphanedMaintenanceMarkerBlocksControllerStartup(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".mnemo")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "upgrade.maintenance"), []byte("unknown"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	err := recoverControllerStartup()
+	if err == nil || !strings.Contains(err.Error(), "maintenance marker") {
+		t.Fatalf("controller accepted an unjournaled maintenance state: %v", err)
+	}
+}
