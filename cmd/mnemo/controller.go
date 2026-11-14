@@ -162,3 +162,14 @@ func restorePreviousControllerBinary(binary string) (bool, error) {
 	}
 	return true, nil
 }
+
+
+// runControllerStop is invoked by the installer before a SQLite recovery point
+// is created. The old controller exits, releasing the database and WAL.
+func runControllerStop() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	return stopControllerService(home)
+}
