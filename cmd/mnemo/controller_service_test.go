@@ -122,3 +122,24 @@ func TestRuntimeRollbackWaitsForActiveInstaller(t *testing.T) {
 		t.Fatalf("binary replaced while installer was active: %v", err)
 	}
 }
+
+func TestRuntimeRollbackRefusesIncompatibleSQLiteSchema(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mnemo")
+	for _, entry := range []struct{ name, value string }{
+		{path, "new binary"},
+		{path + ".previous", "previous binary"},
+		{path + ".schema-changed", "schema migration committed"},
+	} {
+		if err := os.WriteFile(entry.name, []byte(entry.value), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	restored, err := restorePreviousControllerBinary(path)
+	if restored || err == nil || !strings.Contains(err.Error(), "SQLite schema migration") {
+		t.Fatalf("unsafe binary-only downgrade was not blocked: restored=%v err=%v", restored, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "new binary" {
+		t.Fatalf("active binary was modified despite incompatible schema: %q %v", data, err)
+	}
+}
