@@ -308,8 +308,9 @@ download_binary() {
     # Include an attempt identifier so retries never overwrite earlier data.
     local previous_release
     previous_release=$("$dest" version | awk '{print $2}')
-    INSTALL_DB_SNAPSHOT="${previous_release}-$(date -u +%Y%m%dT%H%M%S)-$"
-    "$INSTALL_DOWNLOAD" db recovery snapshot --release="$INSTALL_DB_SNAPSHOT" || err "Could not preserve the pre-upgrade SQLite state."
+    local snapshot_id="${previous_release}-$(date -u +%Y%m%dT%H%M%S)-$$"
+    "$INSTALL_DOWNLOAD" db recovery snapshot --release="$snapshot_id" || err "Could not preserve the pre-upgrade SQLite state."
+    INSTALL_DB_SNAPSHOT="$snapshot_id"
     if ! "$INSTALL_DOWNLOAD" db migrate --check >/dev/null 2>&1; then
       "$INSTALL_DOWNLOAD" db migrate || err "SQLite migration failed; restoring the pre-upgrade recovery point."
       INSTALL_SQLITE_CHANGED=true
