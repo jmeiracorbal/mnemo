@@ -49,6 +49,9 @@ jobs:
             exit 1
           fi
 
+      - name: Validate installer syntax
+        run: bash -n install.sh
+
       - name: Test
         run: go test ./...
 
