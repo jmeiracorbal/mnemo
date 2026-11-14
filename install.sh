@@ -137,13 +137,13 @@ download_binary() {
 
   local tmp
   tmp=$(mktemp)
-  trap 'rm -f "$tmp"' EXIT
+  trap "rm -f -- $(printf '%q' "$tmp")" EXIT
 
   fetch "$binary_url" "$tmp" || err "Download failed: ${binary_url}"
 
   local checksum_file
   checksum_file=$(mktemp)
-  trap 'rm -f "$tmp" "$checksum_file"' EXIT
+  trap "rm -f -- $(printf '%q' "$tmp") $(printf '%q' "$checksum_file")" EXIT
 
   fetch_stdout "$checksum_url" > "$checksum_file" || err "Checksum download failed: ${checksum_url}"
 
