@@ -90,6 +90,7 @@ func runUpdateCommand(ctx context.Context, args []string, rt updateRuntime) (upd
 	if opts.CheckOnly {
 		return status, nil
 	}
+	writeUpdateSafetyNotice(rt.stderr)
 	if !opts.AssumeYes {
 		approved, promptErr := promptForUpdate(rt.stdin, rt.stderr)
 		if promptErr != nil {
@@ -143,6 +144,7 @@ func maybeOfferUpdate(ctx context.Context, _ []string, rt updateRuntime) {
 		return
 	}
 	updatecheck.WriteNotice(rt.stderr, version, result)
+	writeUpdateSafetyNotice(rt.stderr)
 	approved, err := promptForUpdate(rt.stdin, rt.stderr)
 	if err != nil || !approved {
 		if err == nil {
@@ -155,6 +157,13 @@ func maybeOfferUpdate(ctx context.Context, _ []string, rt updateRuntime) {
 		return
 	}
 	_, _ = fmt.Fprintf(rt.stderr, "[mnemo] update installed: v%s\n", result.LatestVersion)
+}
+
+// writeUpdateSafetyNotice extends the existing update notification. It is
+// shown before the same confirmation prompt, not as a separate error dialog.
+func writeUpdateSafetyNotice(stderr io.Writer) {
+	_, _ = fmt.Fprintln(stderr, "[mnemo] Safety notice: Updating Mnemo will close all active Mnemo memory sessions.")
+	_, _ = fmt.Fprintln(stderr, "[mnemo] Save any pending work before continuing. Agents will need a new Mnemo session after the update.")
 }
 
 func promptForUpdate(stdin io.Reader, stderr io.Writer) (bool, error) {
