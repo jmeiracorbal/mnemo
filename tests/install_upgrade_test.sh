@@ -34,6 +34,7 @@ case "$1/$2" in
       commit) printf committed > "$HOME/.mnemo/upgrade.transaction" ;;
       finalize)
         [ "$(cat "$HOME/.mnemo/upgrade.transaction")" = committed ] || exit 1
+        cp "$(cat "$HOME/.mnemo/txn-backup")" "$(cat "$HOME/.mnemo/txn-binary").previous"
         rm -f "$(cat "$HOME/.mnemo/txn-backup")"
         rm -f "$HOME/.mnemo/upgrade.maintenance" "$HOME/.mnemo/upgrade.transaction"
         rm -f "$HOME/.mnemo/txn-binary" "$HOME/.mnemo/txn-backup" "$HOME/.mnemo/txn-snapshot" "$HOME/.mnemo/txn-schema"
