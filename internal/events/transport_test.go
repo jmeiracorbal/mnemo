@@ -271,3 +271,110 @@ func TestTransportErrorReporterPropagatesFatalErrorsOnly(t *testing.T) {
 	default:
 	}
 }
+
+func TestUpgradeGraceWaitsForBothDurablesToBeAcknowledged(t *testing.T) {
+	cfg := Config{Port: transportTestFreePort(t), DataDir: t.TempDir()}
+	controller, err := NewController(cfg, &transportTestStore{applied: make(chan DurableEvent, 2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	eventsSub, err := controller.js.PullSubscribe(cfg.subject(), consumerName, nats.BindStream(streamName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandsSub, err := controller.js.PullSubscribe(commandSubject, commandConsumerName, nats.BindStream(commandStreamName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := controller.js.Publish(cfg.publishSubject("old-project"), []byte(`{"id":"pending-event"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := controller.js.Publish(commandSubject, []byte(`{"id":"pending-command"}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	acknowledged := make(chan error, 1)
+	go func() {
+		time.Sleep(250 * time.Millisecond)
+		for _, sub := range []*nats.Subscription{eventsSub, commandsSub} {
+			messages, err := sub.Fetch(1, nats.MaxWait(2*time.Second))
+			if err != nil {
+				acknowledged <- err
+				return
+			}
+			if len(messages) != 1 {
+				acknowledged <- fmt.Errorf("got %d pending deliveries, want one", len(messages))
+				return
+			}
+			if err := messages[0].AckSync(); err != nil {
+				acknowledged <- err
+				return
+			}
+		}
+		acknowledged <- nil
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	started := time.Now()
+	if err := WaitUpgradeReady(ctx, cfg, 350*time.Millisecond); err != nil {
+		t.Fatalf("upgrade should proceed after grace: %v", err)
+	}
+	if err := <-acknowledged; err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(started); elapsed < 500*time.Millisecond {
+		t.Fatalf("upgrade did not wait for acknowledged saves and quiet window: %s", elapsed)
+	}
+}
+
+func TestUpgradeGraceDoesNotReplaceControllerWhileSavesArePending(t *testing.T) {
+	cfg := Config{Port: transportTestFreePort(t), DataDir: t.TempDir()}
+	controller, err := NewController(cfg, &transportTestStore{applied: make(chan DurableEvent, 2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	if _, err := controller.js.PullSubscribe(cfg.subject(), consumerName, nats.BindStream(streamName)); err != nil {
+		t.Fatal(err)
+	}
+	body := []byte(`{"id":"still-pending"}`)
+	published, err := controller.js.Publish(cfg.publishSubject("old-project"), body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	err = WaitUpgradeReady(ctx, cfg, 350*time.Millisecond)
+	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "pending saves") {
+		t.Fatalf("pending saves must block an unsafe cutover: %v", err)
+	}
+	stored, err := controller.js.GetMsg(streamName, published.Sequence)
+	if err != nil || string(stored.Data) != string(body) {
+		t.Fatalf("pending event was lost or modified: %v", err)
+	}
+}
+
+func TestUpgradeGraceRequiresQuietPeriodWhenQueueInitiallyEmpty(t *testing.T) {
+	cfg := Config{Port: transportTestFreePort(t), DataDir: t.TempDir()}
+	controller, err := NewController(cfg, &transportTestStore{applied: make(chan DurableEvent, 2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	if _, err := controller.js.PullSubscribe(cfg.subject(), consumerName, nats.BindStream(streamName)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := controller.js.PullSubscribe(commandSubject, commandConsumerName, nats.BindStream(commandStreamName)); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	started := time.Now()
+	if err := WaitUpgradeReady(ctx, cfg, 350*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(started); elapsed < 350*time.Millisecond {
+		t.Fatalf("empty queue did not receive a grace period: %s", elapsed)
+	}
+}
