@@ -30,6 +30,7 @@ INSTALL_DOWNLOAD=""
 INSTALL_CHECKSUM=""
 INSTALL_BACKUP=""
 INSTALL_MARKER=""
+INSTALL_LOCK=""
 INSTALL_DEST=""
 INSTALL_SWITCHED=false
 INSTALL_VERIFIED=false
@@ -100,6 +101,7 @@ finish_install() {
   fi
   [ -z "$INSTALL_DOWNLOAD" ] || rm -f -- "$INSTALL_DOWNLOAD"
   [ -z "$INSTALL_CHECKSUM" ] || rm -f -- "$INSTALL_CHECKSUM"
+  [ -z "$INSTALL_LOCK" ] || rm -f -- "$INSTALL_LOCK"
   if [ "$INSTALL_RECOVERY_FAILED" != "true" ]; then
     [ -z "$INSTALL_BACKUP" ] || rm -f -- "$INSTALL_BACKUP"
     [ -z "$INSTALL_MARKER" ] || rm -f -- "$INSTALL_MARKER"
@@ -207,6 +209,30 @@ download_binary() {
   mkdir -p "$INSTALL_DIR"
 
   INSTALL_DEST="$dest"
+  # An exclusive installation lock covers downloads as well as the release
+  # transaction. Every artifact is PID-addressed, so SIGKILL before the
+  # journal exists is recoverable without touching other installers' files.
+  local lock="${dest}.installing"
+  if [ -e "$lock" ]; then
+    local abandoned_pid
+    abandoned_pid=$(cat "$lock") || err "Cannot read installation lock."
+    case "$abandoned_pid" in
+      ''|*[!0-9]*) err "Invalid installation lock; refusing unsafe cleanup." ;;
+    esac
+    if kill -0 "$abandoned_pid" 2>/dev/null; then
+      err "Another Mnemo installation is still running (PID $abandoned_pid)."
+    fi
+    rm -f -- "${dest}.download.${abandoned_pid}" "${dest}.checksum.${abandoned_pid}" "$lock" ||
+      err "Cannot clean artifacts from the interrupted installation."
+  fi
+  if ! ( set -C; echo "$$" > "$lock" ) 2>/dev/null; then
+    err "Another Mnemo installation acquired the lock."
+  fi
+  INSTALL_LOCK="$lock"
+  trap finish_install EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
   local marker="${dest}.upgrading"
   local prior_pid=""
   if [ -e "$marker" ]; then
@@ -235,9 +261,6 @@ download_binary() {
   INSTALL_CHECKSUM="${dest}.checksum.${installer_pid}"
   ( umask 077; set -C; : > "$INSTALL_DOWNLOAD" ) ||
     err "Download artifact already exists for this installer."
-  trap finish_install EXIT
-  trap 'exit 130' INT
-  trap 'exit 143' TERM
   fetch "$binary_url" "$INSTALL_DOWNLOAD" || err "Download failed: ${binary_url}"
 
   ( umask 077; set -C; : > "$INSTALL_CHECKSUM" ) ||
