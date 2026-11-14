@@ -271,6 +271,15 @@ func confirmManagedControllerStopped(home string) error {
 		if err!=nil && (state=="inactive" || state=="failed") { return nil }
 		if err!=nil {return fmt.Errorf("cannot verify systemd controller state: %w: %s",err,output)}
 		return fmt.Errorf("systemd controller is %s; database recovery requires it stopped",state)
+	case "windows":
+		path:=filepath.Join(home,".mnemo","controller-task.xml")
+		if _,err:=os.Stat(path);os.IsNotExist(err){return nil}else if err!=nil{return err}
+		output,err:=exec.Command("schtasks","/Query","/TN",controllerWindowsTask,"/FO","LIST").CombinedOutput()
+		if err!=nil{return fmt.Errorf("cannot verify Windows controller task: %w: %s",err,output)}
+		state:=strings.ToLower(string(output))
+		if strings.Contains(state,"running"){return fmt.Errorf("Windows controller is running")}
+		if strings.Contains(state,"ready") || strings.Contains(state,"disabled"){return nil}
+		return fmt.Errorf("Windows controller task state is unknown: %s",output)
 	default:
 		return fmt.Errorf("controller service state verification unsupported on %s", runtime.GOOS)
 	}
