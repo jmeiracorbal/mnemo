@@ -182,3 +182,35 @@ func freePort(t *testing.T) int {
 	}
 	return port
 }
+
+func TestUpgradeVerificationWithRealSQLiteAndDurableStreams(t *testing.T) {
+	memory, err := store.New(store.FallbackConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer memory.Close()
+	cfg := events.Config{Port: freePort(t), DataDir: t.TempDir()}
+	controller, err := events.NewController(cfg, memory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- controller.Run(ctx) }()
+	if err := events.VerifyUpgrade(ctx, cfg); err != nil {
+		t.Fatalf("upgrade verification did not prove SQLite and durable processing: %v", err)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	stats, err := memory.Stats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.TotalSessions != 0 || stats.TotalObservations != 0 {
+		t.Fatalf("health verification modified user memory state: %+v", stats)
+	}
+}
