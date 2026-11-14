@@ -22,6 +22,7 @@ cat > "$fixture/new" <<'NEW'
 #!/usr/bin/env bash
 case "$1/$2" in
   controller/preflight) printf 'preflight\n' >> "$MOCK_LOG" ;;
+  db/migrate) [ "${MOCK_MIGRATION_RESULT:-ready}" = ready ] ;;
   controller/verify)
     printf 'verify\n' >> "$MOCK_LOG"
     [ "${MOCK_VERIFY_RESULT:-ok}" = ok ] && [ "$(cat "$HOME/active-controller" 2>/dev/null)" = new ]
@@ -82,4 +83,17 @@ fi
 [ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = old ]
 [ "$(cat "$HOME/active-controller")" = old ]
 grep -q 'Previous Mnemo version restored and responding' "$fixture/failure.log"
+check_no_residue
+
+# Unsafe SQLite migrations must fail before replacing the binary.
+cp "$fixture/old" "$MNEMO_INSTALL_DIR/mnemo"
+printf old > "$HOME/active-controller"
+touch "$HOME/.mnemo/memory.db"
+if MOCK_MIGRATION_RESULT=pending bash "$repo_root/install.sh" > "$fixture/migration.log" 2>&1; then
+  echo 'installer replaced a binary despite an unsafe schema migration' >&2
+  exit 1
+fi
+[ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = old ]
+[ "$(cat "$HOME/active-controller")" = old ]
+grep -q 'requires a database migration' "$fixture/migration.log"
 check_no_residue
