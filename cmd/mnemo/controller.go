@@ -36,7 +36,9 @@ func runController(s *store.Store) error {
 	defer stop()
 	go sessionreaper.Reaper{
 		Store:    s,
-		Alive:    procstate.Alive,
+		Alive: func(pid int) bool {
+			return events.UpgradeMaintenance(cfg) || procstate.Alive(pid)
+		},
 		Interval: orphanedSessionSweepInterval,
 		Log:      os.Stderr,
 	}.Run(ctx)
