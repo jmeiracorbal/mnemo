@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
 	"github.com/jmeiracorbal/mnemo/internal/db/recovery"
 	_ "modernc.org/sqlite"
 )
@@ -155,4 +156,42 @@ func TestInterruptedUpgradeBeforeSnapshotRestoresOnlyExecutable(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dataDir, "upgrade.maintenance")); !os.IsNotExist(err) {
 		t.Fatalf("stale write fence remains: %v", err)
 	}
+}
+
+func TestInterruptedRealMigrationRestoresMigrationHistoryAndMemories(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dataDir := filepath.Join(home, ".mnemo")
+	if _, err := dbmigrate.ApplyDataDir(dataDir); err != nil { t.Fatal(err) }
+	dbPath := filepath.Join(dataDir, "memory.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil { t.Fatal(err) }
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil { t.Fatal(err) }
+	if _, err := db.Exec("PRAGMA wal_autocheckpoint=0"); err != nil { t.Fatal(err) }
+	if _, err := db.Exec("INSERT INTO projects(id,name) VALUES ('saved-project','committed before upgrade')"); err != nil { t.Fatal(err) }
+	var before int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&before); err != nil { t.Fatal(err) }
+	binary := filepath.Join(home, "mnemo")
+	backup := binary + ".rollback.stable"
+	if err := os.WriteFile(binary, []byte("new"), 0755); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(backup, []byte("old"), 0755); err != nil { t.Fatal(err) }
+	if err := beginUpgradeTransaction(binary, backup); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(filepath.Join(dataDir,"upgrade.maintenance"), []byte("release"),0600);err!=nil{t.Fatal(err)}
+	if _, err := recovery.Snapshot(context.Background(), dataDir, "v1.2.0-rollback-1"); err != nil { t.Fatal(err) }
+	if err := setUpgradeSnapshot("v1.2.0-rollback-1"); err != nil { t.Fatal(err) }
+	if _, err := db.Exec("INSERT INTO schema_migrations(version,name,checksum,dirty) VALUES ('9999','broken','sha256:wrong',0)"); err != nil { t.Fatal(err) }
+	if _, err := db.Exec("DELETE FROM projects WHERE id='saved-project'"); err != nil { t.Fatal(err) }
+	if err := db.Close(); err != nil { t.Fatal(err) }
+	if err := recoverControllerStartup(); err == nil || !strings.Contains(err.Error(),"restarting") { t.Fatalf("recovery failed: %v", err) }
+	recovered, err := sql.Open("sqlite", dbPath)
+	if err != nil { t.Fatal(err) }
+	defer func(){ _ = recovered.Close() }()
+	var after int
+	if err := recovered.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&after); err != nil { t.Fatal(err) }
+	if after != before { t.Fatalf("schema_migrations changed after rollback: before=%d after=%d",before,after) }
+	var memories int
+	if err := recovered.QueryRow("SELECT COUNT(*) FROM projects WHERE id='saved-project'").Scan(&memories);err!=nil{t.Fatal(err)}
+	if memories != 1 {t.Fatal("pre-upgrade committed project was not recovered")}
+	if err := recovered.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version='9999'").Scan(&memories); err != nil {t.Fatal(err)}
+	if memories != 0 {t.Fatal("failed upgrade migration history survived rollback")}
 }
