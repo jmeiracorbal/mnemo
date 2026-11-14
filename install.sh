@@ -128,7 +128,7 @@ finish_install() {
         fi
       fi
     fi
-    if [ "$INSTALL_SCHEMA_MARKER_ADDED" = "true" ]; then
+    if [ "$INSTALL_SCHEMA_MARKER_ADDED" = "true" ] && [ "$INSTALL_RECOVERY_FAILED" != "true" ]; then
       rm -f -- "$INSTALL_SCHEMA_MARKER" || :
     fi
     status=1
