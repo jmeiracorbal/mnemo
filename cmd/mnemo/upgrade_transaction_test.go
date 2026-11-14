@@ -232,3 +232,16 @@ func TestOrphanedMaintenanceMarkerBlocksControllerStartup(t *testing.T) {
 		t.Fatalf("controller accepted an unjournaled maintenance state: %v", err)
 	}
 }
+
+func TestForcedRollbackRequiresInstallerOwnership(t *testing.T) {
+	dataDir, binary, _, db := transactionFixture(t)
+	if err := db.Close(); err != nil { t.Fatal(err) }
+	if err := os.WriteFile(binary+".upgrading", []byte("1"), 0600); err != nil { t.Fatal(err) }
+	recovered, err := recoverUpgradeTransaction(true)
+	if recovered || err == nil || !strings.Contains(err.Error(), "owning installer") {
+		t.Fatalf("foreign process bypassed rollback protection: recovered=%v err=%v", recovered, err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "upgrade.transaction")); err != nil {
+		t.Fatalf("foreign process destroyed recovery journal: %v", err)
+	}
+}
