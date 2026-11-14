@@ -35,12 +35,20 @@ case "$1/$2" in
       commit) printf committed > "$HOME/.mnemo/upgrade.transaction" ;;
       finalize)
         [ "$(cat "$HOME/.mnemo/upgrade.transaction")" = committed ] || exit 1
+        [ "${MOCK_FINALIZE_RESULT:-ok}" = ok ] || exit 1
         cp "$(cat "$HOME/.mnemo/txn-backup")" "$(cat "$HOME/.mnemo/txn-binary").previous"
         rm -f "$(cat "$HOME/.mnemo/txn-backup")"
         rm -f "$HOME/.mnemo/upgrade.maintenance" "$HOME/.mnemo/upgrade.transaction"
         rm -f "$HOME/.mnemo/txn-binary" "$HOME/.mnemo/txn-backup" "$HOME/.mnemo/txn-snapshot"
         ;;
       recover)
+        if [ "$(cat "$HOME/.mnemo/upgrade.transaction")" = committed ]; then
+          cp "$(cat "$HOME/.mnemo/txn-backup")" "$(cat "$HOME/.mnemo/txn-binary").previous"
+          rm -f "$(cat "$HOME/.mnemo/txn-backup")"
+          rm -f "$(cat "$HOME/.mnemo/txn-binary").upgrading" "$HOME/.mnemo/upgrade.maintenance" "$HOME/.mnemo/upgrade.transaction"
+          rm -f "$HOME/.mnemo/txn-binary" "$HOME/.mnemo/txn-backup" "$HOME/.mnemo/txn-snapshot"
+          exit 0
+        fi
         if [ -f "$HOME/.mnemo/txn-snapshot" ]; then
           release=$(cat "$HOME/.mnemo/txn-snapshot")
           cp "$HOME/.mnemo/recovery/$release.db" "$HOME/.mnemo/memory.db"
@@ -225,4 +233,27 @@ if MOCK_PREFLIGHT_RESULT=fail bash "$repo_root/install.sh" > "$fixture/retry-dow
 fi
 [ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = "mnemo v1.1.0" ]
 [ "$(cat "$HOME/.mnemo/memory.db")" = original-schema ]
+check_no_residue
+
+# Once the release commit is durable, failed cleanup must preserve the
+# journal and backup. A retry finalizes the new release without discarding any
+# post-migration data or replacing the new binary with the old one.
+reset_old
+printf original-schema > "$HOME/.mnemo/memory.db"
+if MOCK_MIGRATION_RESULT=pending MOCK_FINALIZE_RESULT=fail bash "$repo_root/install.sh" > "$fixture/commit-cleanup.log" 2>&1; then
+  echo 'installer reported success even though finalization failed' >&2
+  exit 1
+fi
+[ "$(cat "$HOME/.mnemo/upgrade.transaction")" = committed ]
+[ -e "$HOME/.mnemo/upgrade.maintenance" ]
+[ "$(find "$MNEMO_INSTALL_DIR" -name 'mnemo.rollback.*' | wc -l | tr -d ' ')" -eq 1 ]
+[ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = "mnemo v99.0.0" ]
+[ "$(cat "$HOME/.mnemo/memory.db")" = migrated-schema ]
+if MOCK_PREFLIGHT_RESULT=fail bash "$repo_root/install.sh" > "$fixture/commit-retry.log" 2>&1; then
+  echo 'retry continued despite failed preflight' >&2
+  exit 1
+fi
+[ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = "mnemo v99.0.0" ]
+[ "$("$MNEMO_INSTALL_DIR/mnemo.previous" version)" = "mnemo v1.1.0" ]
+[ "$(cat "$HOME/.mnemo/memory.db")" = migrated-schema ]
 check_no_residue
