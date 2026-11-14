@@ -20,8 +20,6 @@ type upgradeTransaction struct {
 	Backup   string `json:"backup"`
 	Snapshot string `json:"snapshot,omitempty"`
 	Phase    string `json:"phase"`
-	SchemaChanged bool `json:"schema_changed,omitempty"`
-	HadSchemaMarker bool `json:"had_schema_marker,omitempty"`
 	Recovered bool `json:"recovered,omitempty"`
 	PreviousReady bool `json:"previous_ready,omitempty"`
 }
@@ -164,9 +162,7 @@ func beginUpgradeTransaction(binary, backup string) error {
 	if filepath.Dir(binary) != filepath.Dir(backup) || !strings.HasPrefix(filepath.Base(backup),filepath.Base(binary)+".rollback.") {
 		return fmt.Errorf("upgrade backup must be in the executable directory")
 	}
-	hadMarker := false
-	if _,err:=os.Stat(binary+".schema-changed");err==nil {hadMarker=true} else if !errors.Is(err,os.ErrNotExist) {return err}
-	return persistUpgradeTransaction(upgradeTransaction{Binary: binary, Backup: backup, Phase: "prepared", HadSchemaMarker: hadMarker}, true)
+	return persistUpgradeTransaction(upgradeTransaction{Binary: binary, Backup: backup, Phase: "prepared"}, true)
 }
 
 func setUpgradeSnapshot(release string) error {
@@ -188,14 +184,6 @@ func setUpgradeSnapshot(release string) error {
 	return persistUpgradeTransaction(*tx, false)
 }
 
-func recordSchemaChange() error {
-	tx,err:=readUpgradeTransaction()
-	if err!=nil{return err}
-	if tx==nil || tx.Phase!="prepared" {return fmt.Errorf("no prepared upgrade transaction")}
-	tx.SchemaChanged=true
-	return persistUpgradeTransaction(*tx,false)
-}
-
 func commitUpgradeTransaction() error {
 	tx, err := readUpgradeTransaction()
 	if err != nil {
@@ -203,17 +191,6 @@ func commitUpgradeTransaction() error {
 	}
 	if tx == nil || tx.Phase != "prepared" {
 		return fmt.Errorf("no prepared upgrade transaction")
-	}
-	if tx.SchemaChanged {
-		marker:=tx.Binary+".schema-changed"
-		if _,err:=os.Stat(marker);errors.Is(err,os.ErrNotExist) {
-			file,err:=os.OpenFile(marker,os.O_WRONLY|os.O_CREATE|os.O_EXCL,0600)
-			if err!=nil{return err}
-			if _,err=file.Write([]byte("schema migration committed\n"));err!=nil{_ = file.Close();return err}
-			if err=file.Sync();err!=nil{_ = file.Close();return err}
-			if err=file.Close();err!=nil{return err}
-			if err=syncTransactionDirectory(filepath.Dir(tx.Binary));err!=nil{return err}
-		} else if err!=nil {return err}
 	}
 	tx.Phase="committed"
 	return persistUpgradeTransaction(*tx,false)
@@ -238,10 +215,6 @@ func finalizeUpgradeTransaction(tx upgradeTransaction) error {
 		if err:=syncTransactionDirectory(filepath.Dir(tx.Binary));err!=nil{return err}
 		tx.PreviousReady=true
 		if err:=persistUpgradeTransaction(tx,false);err!=nil{return err}
-	}
-	// A schema boundary belongs to this release, not a failed update.
-	if !tx.SchemaChanged {
-		if err:=os.Remove(tx.Binary+".schema-changed");err!=nil && !errors.Is(err,os.ErrNotExist){return err}
 	}
 	// Always release the write fence after the committed phase is durable.
 	for _, file := range []string{
@@ -323,7 +296,6 @@ func recoverUpgradeTransaction(force bool) (bool, error) {
 	}
 	tx.Phase = "committed"
 	tx.Recovered = true
-	tx.SchemaChanged = tx.HadSchemaMarker
 	if err := persistUpgradeTransaction(*tx, false); err != nil {
 		return false, err
 	}
@@ -363,7 +335,7 @@ func recoverControllerStartup() error {
 
 func runControllerTransaction(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: mnemo controller transaction <begin|snapshot|schema|commit|finalize|recover>")
+		return fmt.Errorf("usage: mnemo controller transaction <begin|snapshot|commit|finalize|recover>")
 	}
 	switch args[0] {
 	case "begin":
@@ -376,9 +348,6 @@ func runControllerTransaction(args []string) error {
 			return fmt.Errorf("usage: mnemo controller transaction snapshot --release=ID")
 		}
 		return setUpgradeSnapshot(strings.TrimPrefix(args[1], "--release="))
-	case "schema":
-		if len(args)!=2 || args[1]!="--changed" {return fmt.Errorf("usage: mnemo controller transaction schema --changed")}
-		return recordSchemaChange()
 	case "commit":
 		if len(args) != 1 {return fmt.Errorf("usage: mnemo controller transaction commit")}
 		return commitUpgradeTransaction()
