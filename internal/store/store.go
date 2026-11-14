@@ -228,7 +228,7 @@ func (s *Store) migrate() error {
 // from committing between the SQLite snapshot and release decision.
 func (s *Store) checkUpgradeWrites() error {
 	if _,err:=os.Stat(filepath.Join(s.cfg.DataDir,"upgrade.maintenance"));err==nil {
-		return fmt.Errorf("Mnemo release transaction in progress; write rejected")
+		return fmt.Errorf("mnemo release transaction in progress; write rejected")
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("cannot verify upgrade write fence: %w",err)
 	}
