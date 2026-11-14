@@ -43,6 +43,20 @@ lossless. Do not add down scripts for table or column removal that discards user
 data. For those changes the release installer restores a verified pre-upgrade
 SQLite recovery point instead.
 
+## Release-to-schema compatibility contract
+
+The executable's embedded, immutable numbered migrations define its maximum
+supported schema version and checksums. Opening a database with an unknown
+future migration, mismatched checksum, or dirty history fails closed; the
+controller never silently downgrades the database. The installer uses a
+verified SQLite snapshot to restore the exact prior schema and data before
+reactivating the previous executable. A legacy JetStream delivery failure
+cannot trigger a binary-only downgrade after commit.
+
+The release journal is authoritative for rollback and commit. There is no
+secondary automatic executable-only recovery path or persistent
+`schema-changed` marker.
+
 The release transaction holds a durable `~/.mnemo/upgrade.transaction` journal,
 blocks writes via `~/.mnemo/upgrade.maintenance`, and keeps the previous
 executable until schema, data, and controller verification have succeeded.
