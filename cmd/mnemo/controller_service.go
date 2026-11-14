@@ -277,9 +277,9 @@ func confirmManagedControllerStopped(home string) error {
 		output,err:=exec.Command("schtasks","/Query","/TN",controllerWindowsTask,"/FO","LIST").CombinedOutput()
 		if err!=nil{return fmt.Errorf("cannot verify Windows controller task: %w: %s",err,output)}
 		state:=strings.ToLower(string(output))
-		if strings.Contains(state,"running"){return fmt.Errorf("Windows controller is running")}
+		if strings.Contains(state,"running"){return fmt.Errorf("windows controller is running")}
 		if strings.Contains(state,"ready") || strings.Contains(state,"disabled"){return nil}
-		return fmt.Errorf("Windows controller task state is unknown: %s",output)
+		return fmt.Errorf("windows controller task state is unknown: %s",output)
 	default:
 		return fmt.Errorf("controller service state verification unsupported on %s", runtime.GOOS)
 	}
