@@ -118,7 +118,7 @@ func migrateDB(opts dbMigrateOptions) (dbmigrate.Status, error) {
 // The guard distinguishes three states:
 //   - config.toml absent → no controller has ever been started → safe
 //   - config.toml present but unreadable or invalid → uncertain → fail conservatively
-//   - config valid but controller unreachable → not holding the WAL → safe
+//   - config valid but controller unreachable → consult native service status; fail closed if uncertain
 func guardControllerNotRunning(dataDir string) error {
 	evtCfg, err := events.LoadConfig(dataDir)
 	if err != nil {
@@ -129,10 +129,14 @@ func guardControllerNotRunning(dataDir string) error {
 		// controller is not running.
 		return fmt.Errorf("cannot verify controller state before migrating; inspect config.toml in %s or run 'mnemo db migrate --check': %w", dataDir, err)
 	}
-	if err := events.CheckHealth(context.Background(), evtCfg); err != nil {
-		return nil // controller not reachable; safe to migrate
+	if err := events.CheckHealth(context.Background(), evtCfg); err == nil {
+		return fmt.Errorf("the mnemo controller is currently running and owns the database; stop it before migrating")
 	}
-	return fmt.Errorf("the mnemo controller is currently running and owns the database; stop it before migrating or run 'mnemo db migrate --check'")
+	// Failed RPC does not establish that the service has stopped. Verify the
+	// native user manager before opening or replacing the database.
+	home,err:=os.UserHomeDir()
+	if err!=nil{return err}
+	return confirmManagedControllerStopped(home)
 }
 
 func printDBMigrationStatus(status dbmigrate.Status, check bool) {
