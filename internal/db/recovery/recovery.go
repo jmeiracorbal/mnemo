@@ -4,9 +4,7 @@ package recovery
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -202,16 +200,3 @@ func syncDir(path string) error {
 	return f.Sync()
 }
 
-// Digest is used by tests and diagnostics to compare recovery-point bytes.
-func Digest(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
