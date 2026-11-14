@@ -167,7 +167,7 @@ func Publish(ctx context.Context, cfg Config, event Event) error {
 	if err != nil {
 		return fmt.Errorf("connect event controller: %w", err)
 	}
-	defer adapter.Close()
+	defer func() { _ = adapter.Close() }()
 	if err := adapter.Publish(ctx, goevents.Event{
 		ID: event.ID, Topic: cfg.publishSubject(event.Project), Data: body,
 	}); err != nil {
@@ -299,7 +299,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("open event transport: %w", err)
 	}
-	defer eventBus.Close()
+	defer func() { _ = eventBus.Close() }()
 	commandBus, err := goeventsnats.New(ctx, goeventsnats.Config{
 		URL: c.cfg.URL(), Stream: commandStreamName, Consumer: commandConsumerName,
 		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: logTransportError,
@@ -307,17 +307,17 @@ func (c *Controller) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("open command transport: %w", err)
 	}
-	defer commandBus.Close()
+	defer func() { _ = commandBus.Close() }()
 	eventSub, err := eventBus.Subscribe(ctx, c.cfg.subject(), c.handleEvent)
 	if err != nil {
 		return fmt.Errorf("subscribe event stream: %w", err)
 	}
-	defer eventSub.Close()
+	defer func() { _ = eventSub.Close() }()
 	commandSub, err := commandBus.Subscribe(ctx, commandSubject, c.handleCommand)
 	if err != nil {
 		return fmt.Errorf("subscribe command stream: %w", err)
 	}
-	defer commandSub.Close()
+	defer func() { _ = commandSub.Close() }()
 	<-ctx.Done()
 	return nil
 }
