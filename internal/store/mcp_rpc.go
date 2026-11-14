@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
@@ -26,6 +27,10 @@ func (s *Store) ApplyMCPCommand(id, action string, payload json.RawMessage) (jso
 			return protocolFailure(protocol.CodeInvalidRequest, "invalid protocol request"), nil
 		}
 		if err := request.Validate(); err != nil {
+			var coded *protocol.Error
+			if errors.As(err, &coded) {
+				return protocolFailure(coded.Code, coded.Message), nil
+			}
 			return protocolFailure(protocol.CodeInvalidRequest, err.Error()), nil
 		}
 		if request.Operation != protocol.OperationObservationCreate {
