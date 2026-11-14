@@ -68,11 +68,11 @@ func TestRunUpdateCommandPromptsAndInstalls(t *testing.T) {
 	if !strings.Contains(stderr.String(), "Update now? [y/N]") {
 		t.Fatalf("missing confirmation prompt: %q", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "close all active Mnemo memory sessions") {
-		t.Fatalf("existing update notice must warn about session closure: %q", stderr.String())
+	if !strings.Contains(stderr.String(), "active agent and Mnemo sessions remain open") {
+		t.Fatalf("existing update notice must explain the controller restart: %q", stderr.String())
 	}
-	if strings.Index(stderr.String(), "close all active Mnemo memory sessions") > strings.Index(stderr.String(), "Update now? [y/N]") {
-		t.Fatalf("session closure warning must precede confirmation: %q", stderr.String())
+	if strings.Index(stderr.String(), "active agent and Mnemo sessions remain open") > strings.Index(stderr.String(), "Update now? [y/N]") {
+		t.Fatalf("controller restart warning must precede confirmation: %q", stderr.String())
 	}
 }
 
@@ -97,8 +97,8 @@ func TestRunUpdateCommandDeclineSkipsInstall(t *testing.T) {
 	if installed || status.Installed || status.Message != "update declined" {
 		t.Fatalf("declined update should not install: status=%+v installed=%v", status, installed)
 	}
-	if !strings.Contains(stderr.String(), "close all active Mnemo memory sessions") {
-		t.Fatalf("declined update did not display safety notice: %q", stderr.String())
+	if !strings.Contains(stderr.String(), "active agent and Mnemo sessions remain open") {
+		t.Fatalf("declined update did not display restart notice: %q", stderr.String())
 	}
 }
 
@@ -123,9 +123,9 @@ func TestRunUpdateCommandYesInstallsSelectedAgent(t *testing.T) {
 	if !status.Installed || gotAgent != "codex" {
 		t.Fatalf("--yes did not install selected agent: status=%+v agent=%q", status, gotAgent)
 	}
-	if !strings.Contains(stderr.String(), "close all active Mnemo memory sessions") ||
+	if !strings.Contains(stderr.String(), "active agent and Mnemo sessions remain open") ||
 		strings.Contains(stderr.String(), "Update now? [y/N]") {
-		t.Fatalf("--yes should show safety notice without interactive confirmation: %q", stderr.String())
+		t.Fatalf("--yes should show restart notice without interactive confirmation: %q", stderr.String())
 	}
 }
 
@@ -166,8 +166,8 @@ func TestMaybeOfferUpdatePromptsAndInstalls(t *testing.T) {
 		t.Fatal("accepted update notice did not run installer")
 	}
 	if !strings.Contains(stderr.String(), "run 'mnemo update'") || !strings.Contains(stderr.String(), "Update now?") ||
-		!strings.Contains(stderr.String(), "close all active Mnemo memory sessions") {
-		t.Fatalf("notice/prompt/safety warning missing: %q", stderr.String())
+		!strings.Contains(stderr.String(), "active agent and Mnemo sessions remain open") {
+		t.Fatalf("notice/prompt/restart information missing: %q", stderr.String())
 	}
 }
 
