@@ -211,3 +211,36 @@ func xmlEscape(value string) string {
 	_ = xml.EscapeText(&escaped, []byte(value))
 	return escaped.String()
 }
+
+
+// stopControllerService quiesces the installation-owned controller before
+// taking a SQLite recovery point. A stopped controller must not be restarted
+// until after the recovery point and migration transaction are settled.
+func stopControllerService(home string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		path := filepath.Join(home, "Library", "LaunchAgents", controllerLaunchLabel+".plist")
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("controller service definition: %w", err)
+		}
+		domain := "gui/" + strconv.Itoa(os.Getuid())
+		if output, err := exec.Command("launchctl", "bootout", domain, path).CombinedOutput(); err != nil {
+			return fmt.Errorf("stop launchd controller: %w: %s", err, output)
+		}
+		return nil
+	case "linux":
+		path := filepath.Join(home, ".config", "systemd", "user", controllerSystemdName)
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("controller service definition: %w", err)
+		}
+		if output, err := exec.Command("systemctl", "--user", "stop", controllerSystemdName).CombinedOutput(); err != nil {
+			return fmt.Errorf("stop systemd controller: %w: %s", err, output)
+		}
+		if err := exec.Command("systemctl", "--user", "is-active", "--quiet", controllerSystemdName).Run(); err == nil {
+			return fmt.Errorf("systemd controller remains active after stop")
+		}
+		return nil
+	default:
+		return fmt.Errorf("controller stop is unsupported on %s", runtime.GOOS)
+	}
+}
