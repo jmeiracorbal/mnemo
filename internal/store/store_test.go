@@ -4419,3 +4419,18 @@ func TestMigrationIdentifiersAreClosed(t *testing.T) {
 		t.Fatalf("expected unknown migration to be rejected, got %v", err)
 	}
 }
+
+
+func TestExistingStoreRefusesWritesAfterUpgradeFence(t *testing.T) {
+	s := newTestStore(t)
+	marker := filepath.Join(s.DataDir(), "upgrade.maintenance")
+	if err := os.WriteFile(marker, []byte("upgrade"), 0600); err != nil { t.Fatal(err) }
+	if err := s.EnsureProject("project-fenced", "fenced"); err == nil || !strings.Contains(err.Error(), "transaction") {
+		t.Fatalf("already-open store acknowledged write during rollback: %v", err)
+	}
+	if _, err := New(Config{DataDir: s.DataDir()}); err == nil || !strings.Contains(err.Error(), "upgrade transaction") {
+		t.Fatalf("new store opened during upgrade: %v", err)
+	}
+	if err := os.Remove(marker); err != nil { t.Fatal(err) }
+	if err := s.EnsureProject("project-fenced", "fenced"); err != nil { t.Fatalf("write not resumed after commit: %v", err) }
+}
