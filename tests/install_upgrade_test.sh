@@ -111,7 +111,7 @@ if MOCK_VERIFY_RESULT=fail bash "$repo_root/install.sh" > "$fixture/failure.log"
 fi
 [ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = "mnemo v1.1.0" ]
 [ "$(cat "$HOME/active-controller")" = old ]
-grep -q 'previous Mnemo' "$fixture/failure.log"
+grep -q 'Previous Mnemo' "$fixture/failure.log"
 check_no_residue
 
 # Pending SQLite migrations are now allowed: snapshot first, migrate, verify,
