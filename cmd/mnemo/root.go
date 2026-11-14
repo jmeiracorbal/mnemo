@@ -83,6 +83,10 @@ func storeCommand(use, short string, run func(*store.Store) error) *cobra.Comman
 		if err != nil {
 			return fmt.Errorf("mnemo: config error: %w", err)
 		}
+		if cmd.Name()=="serve" && cmd.Parent()!=nil && cmd.Parent().Name()=="controller" {
+			if err:=recoverControllerStartup();err!=nil{return err}
+			cfg.AllowUpgradeMaintenance=true
+		}
 		s, err := store.New(cfg)
 		if err != nil {
 			return fmt.Errorf("mnemo: failed to open store: %w", err)
@@ -146,6 +150,9 @@ func addCommandTree(root *cobra.Command) {
 		}},
 		&cobra.Command{Use: "stop", Short: "Stop the managed controller for database maintenance", RunE: func(*cobra.Command, []string) error {
 			return runControllerStop()
+		}},
+		&cobra.Command{Use:"transaction",Short:"Coordinate a persistent release transaction",RunE:func(_ *cobra.Command,args []string)error{
+			return runControllerTransaction(args)
 		}},
 	)
 	addChildren(root, "events",
