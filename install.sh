@@ -335,8 +335,6 @@ download_binary() {
       err "Could not record the verified SQLite recovery point."
     if ! "$INSTALL_DOWNLOAD" db migrate --check >/dev/null 2>&1; then
       "$INSTALL_DOWNLOAD" db migrate || err "SQLite migration failed; restoring the pre-upgrade recovery point."
-      "$INSTALL_DOWNLOAD" controller transaction schema --changed ||
-        err "Could not record the schema compatibility boundary."
     fi
   fi
 
