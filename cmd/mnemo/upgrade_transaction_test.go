@@ -112,12 +112,14 @@ func TestCommittedUpgradeNeverReplaysOldSnapshot(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
+	if err := recordSchemaChange(); err != nil {t.Fatal(err)}
 	if err := commitUpgradeTransaction(); err != nil {
 		t.Fatal(err)
 	}
 	if err := recoverControllerStartup(); err != nil {
 		t.Fatal(err)
 	}
+	if _,err:=os.Stat(binary+".schema-changed");err!=nil{t.Fatalf("schema boundary was not recorded: %v",err)}
 	got, err := os.ReadFile(binary)
 	if err != nil || string(got) != "new binary" {
 		t.Fatalf("committed binary unexpectedly reverted: %q %v", got, err)
