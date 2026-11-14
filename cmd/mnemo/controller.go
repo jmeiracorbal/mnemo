@@ -92,9 +92,21 @@ func runControllerVerify() error {
 	var lastErr error
 	for {
 		if err := events.VerifyUpgrade(ctx, cfg); err == nil {
-			// Observe the restarted controller before committing the binary.
-			// An immediate late legacy delivery must trigger rollback, not success.
-			if err := events.WaitUpgradeReady(ctx, cfg, 2*time.Second); err == nil {
+			// When SQLite can be restored, legitimate user events remain queued
+			// until commit. Re-test durable processing after a short stability
+			// observation; do not require the deliberately deferred queue to drain.
+			if events.UpgradeMaintenance(cfg) {
+				select {
+				case <-time.After(2 * time.Second):
+					if err := events.VerifyUpgrade(ctx, cfg); err == nil {
+						return nil
+					} else {
+						lastErr = err
+					}
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			} else if err := events.WaitUpgradeReady(ctx, cfg, 2*time.Second); err == nil {
 				return nil
 			} else {
 				lastErr = err
