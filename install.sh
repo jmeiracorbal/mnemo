@@ -157,8 +157,17 @@ download_binary() {
     err "Checksum mismatch — aborting. Expected: ${expected_hash}, got: ${actual_hash}"
   fi
 
+  chmod +x "$tmp"
+  # The existing controller must drain both durable streams before replacing
+  # its executable. On failure, leave the installed binary and service intact.
+  if [ -f "$HOME/.mnemo/config.toml" ]; then
+    info "Checking pending durable events and commands before upgrading..."
+    if ! "$tmp" controller preflight; then
+      err "Upgrade blocked: the existing controller is unavailable or has unprocessed durable messages. The installed binary was not changed."
+    fi
+  fi
+
   mv "$tmp" "$dest"
-  chmod +x "$dest"
   ok "Binary installed: ${dest}"
 }
 
