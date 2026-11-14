@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"os/signal"
 	"runtime"
 	"strconv"
@@ -160,6 +161,19 @@ func restorePreviousControllerBinary(binary string) (bool, error) {
 		return false, fmt.Errorf("inspect upgrade marker: %w", err)
 	}
 
+	// Binary-only downgrade is unsafe if the installed release changed SQLite's
+	// schema. Recovery then requires the matching offline SQLite restore point.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false, err
+	}
+	release := "v" + strings.TrimPrefix(version, "v")
+	guard := filepath.Join(home, ".mnemo", "recovery", "schema-migrated-"+release)
+	if _, err := os.Stat(guard); err == nil {
+		return false, fmt.Errorf("binary-only recovery is forbidden after schema migration for %s", release)
+	} else if !os.IsNotExist(err) {
+		return false, fmt.Errorf("inspect schema recovery guard: %w", err)
+	}
 	previous := binary + ".previous"
 	info, err := os.Stat(previous)
 	if os.IsNotExist(err) {
