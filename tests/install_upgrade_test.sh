@@ -22,6 +22,33 @@ cat > "$fixture/new" <<'NEW'
 case "$1/$2" in
   controller/preflight) printf 'preflight\n' >> "$MOCK_LOG" ;;
   controller/stop) printf stopped > "$HOME/active-controller" ;;
+  controller/transaction)
+    case "$3" in
+      begin)
+        printf '%s' "$4" | sed 's/^--binary=//' > "$HOME/.mnemo/txn-binary"
+        printf '%s' "$5" | sed 's/^--backup=//' > "$HOME/.mnemo/txn-backup"
+        printf prepared > "$HOME/.mnemo/upgrade.transaction"
+        ;;
+      snapshot) printf '%s' "$4" | sed 's/^--release=//' > "$HOME/.mnemo/txn-snapshot" ;;
+      schema) printf changed > "$HOME/.mnemo/txn-schema" ;;
+      commit) printf committed > "$HOME/.mnemo/upgrade.transaction" ;;
+      finalize)
+        [ "$(cat "$HOME/.mnemo/upgrade.transaction")" = committed ] || exit 1
+        rm -f "$HOME/.mnemo/upgrade.maintenance" "$HOME/.mnemo/upgrade.transaction"
+        rm -f "$HOME/.mnemo/txn-binary" "$HOME/.mnemo/txn-backup" "$HOME/.mnemo/txn-snapshot" "$HOME/.mnemo/txn-schema"
+        ;;
+      recover)
+        if [ -f "$HOME/.mnemo/txn-snapshot" ]; then
+          release=$(cat "$HOME/.mnemo/txn-snapshot")
+          cp "$HOME/.mnemo/recovery/$release.db" "$HOME/.mnemo/memory.db"
+        fi
+        cp "$(cat "$HOME/.mnemo/txn-backup")" "$(cat "$HOME/.mnemo/txn-binary")"
+        rm -f "$HOME/.mnemo/upgrade.maintenance" "$HOME/.mnemo/upgrade.transaction"
+        rm -f "$HOME/.mnemo/txn-binary" "$HOME/.mnemo/txn-backup" "$HOME/.mnemo/txn-snapshot" "$HOME/.mnemo/txn-schema"
+        ;;
+      *) exit 1 ;;
+    esac
+    ;;
   controller/verify)
     printf 'verify\n' >> "$MOCK_LOG"
     [ "${MOCK_VERIFY_RESULT:-ok}" = ok ] && [ "$(cat "$HOME/active-controller" 2>/dev/null)" = new ]
@@ -81,12 +108,14 @@ export PATH="$fixture/mock-bin:$PATH"
 reset_old() {
   cp "$fixture/old" "$MNEMO_INSTALL_DIR/mnemo"
   printf old > "$HOME/active-controller"
-  rm -f "$HOME/.mnemo/memory.db"
+  rm -f "$HOME/.mnemo/memory.db" "$MNEMO_INSTALL_DIR/mnemo.schema-changed"
 }
 
 check_no_residue() {
   [ ! -e "$MNEMO_INSTALL_DIR/mnemo.upgrading" ]
   [ ! -e "$HOME/.mnemo/upgrade.maintenance" ]
+  [ ! -e "$HOME/.mnemo/upgrade.transaction" ]
+  [ ! -e "$HOME/.mnemo/upgrade.transaction.writing" ]
   if find "$MNEMO_INSTALL_DIR" -type f \( -name 'mnemo.rollback.*' -o -name 'mnemo.download.*' -o -name 'mnemo.checksum.*' \) | grep -q .; then
     echo 'installer left temporary files behind' >&2
     exit 1
