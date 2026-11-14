@@ -51,9 +51,9 @@ func runControllerPreflight() error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	return events.CheckUpgradeReady(ctx, cfg)
+	return events.WaitUpgradeReady(ctx, cfg, 3*time.Second)
 }
 
 const orphanedSessionSweepInterval = 5 * time.Minute
