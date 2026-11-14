@@ -73,22 +73,21 @@ func persistUpgradeTransaction(tx upgradeTransaction, initial bool) error {
 	}
 	dest := path + ".writing"
 	if initial {
-		dest = path
-	} else {
-		// A failed or interrupted write never destroys the previous journal.
-		if err := os.Remove(dest); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if _,err:=os.Lstat(path);err==nil {
+			return fmt.Errorf("upgrade transaction already exists")
+		} else if !errors.Is(err,os.ErrNotExist) {
 			return err
 		}
+	}
+	// An orphaned incomplete write has no authority to replace the journal.
+	if err := os.Remove(dest); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
 	f, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if !initial {
-			_ = os.Remove(dest)
-		}
-	}()
+	defer func() { _ = os.Remove(dest) }()
 	if _, err := f.Write(data); err != nil {
 		_ = f.Close()
 		return err
@@ -100,10 +99,10 @@ func persistUpgradeTransaction(tx upgradeTransaction, initial bool) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	if !initial {
-		if err := os.Rename(dest, path); err != nil {
-			return err
-		}
+	if initial {
+		if err:=os.Link(dest,path);err!=nil{return err}
+	} else {
+		if err := os.Rename(dest, path); err != nil {return err}
 	}
 	return syncTransactionDirectory(filepath.Dir(path))
 }
@@ -149,9 +148,17 @@ func beginUpgradeTransaction(binary, backup string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(backup); err != nil {
-		return fmt.Errorf("preserved binary: %w", err)
+	backupFile,err:=os.Open(backup)
+	if err!=nil{return fmt.Errorf("preserved binary: %w",err)}
+	info,err:=backupFile.Stat()
+	if err!=nil{_ = backupFile.Close();return err}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0111==0 {
+		_ = backupFile.Close()
+		return fmt.Errorf("preserved executable is not a regular executable")
 	}
+	if err:=backupFile.Sync();err!=nil{_ = backupFile.Close();return err}
+	if err:=backupFile.Close();err!=nil{return err}
+	if err:=syncTransactionDirectory(filepath.Dir(backup));err!=nil{return err}
 	if filepath.Dir(binary) != filepath.Dir(backup) || !strings.HasPrefix(filepath.Base(backup),filepath.Base(binary)+".rollback.") {
 		return fmt.Errorf("upgrade backup must be in the executable directory")
 	}
@@ -235,10 +242,8 @@ func finalizeUpgradeTransaction(tx upgradeTransaction) error {
 			return fmt.Errorf("finish upgrade %s: %w", file, err)
 		}
 	}
-	if tx.Snapshot != "" {
-		if err:=recovery.PruneRecoveryPoints(cfg.DataDir,tx.Snapshot,3);err!=nil {
-			return fmt.Errorf("prune completed release recovery points: %w",err)
-		}
+	if err:=recovery.PruneRecoveryPoints(cfg.DataDir,tx.Snapshot,3);err!=nil {
+		return fmt.Errorf("prune completed release recovery points: %w",err)
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
