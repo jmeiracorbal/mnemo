@@ -70,10 +70,6 @@ func TestSnapshotIncludesCommittedWALAndRestoreRemovesNewerWrites(t *testing.T) 
 	if count := recoveryCount(t, recovered); count != 1 {
 		t.Fatalf("recovered %d rows, expected one committed pre-upgrade row", count)
 	}
-	if err := Restore(ctx, dataDir, "v1.2.0"); err != nil {
-		// The restore operation is repeatable only when no active DB handle exists.
-		t.Logf("live handle correctly rejects a second restore: %v", err)
-	}
 }
 
 func TestInvalidRestoreDoesNotReplaceCurrentDatabase(t *testing.T) {
