@@ -224,17 +224,26 @@ func (s *Store) migrate() error {
 	return err
 }
 
+// checkUpgradeWrites prevents already-open MCP and CLI store connections
+// from committing between the SQLite snapshot and release decision.
+func (s *Store) checkUpgradeWrites() error {
+	if _,err:=os.Stat(filepath.Join(s.cfg.DataDir,"upgrade.maintenance"));err==nil {
+		return fmt.Errorf("Mnemo release transaction in progress; write rejected")
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("cannot verify upgrade write fence: %w",err)
+	}
+	return nil
+}
+
 func (s *Store) withTx(fn func(tx *sql.Tx) error) error {
+	if err:=s.checkUpgradeWrites();err!=nil{return err}
 	if s.activeTx != nil {
 		return fn(s.activeTx)
 	}
 	tx, err := s.beginTxHook()
-	if err != nil {
-		return err
-	}
+	if err != nil {return err}
 	defer tx.Rollback()
-	if err := fn(tx); err != nil {
-		return err
-	}
+	if err := fn(tx); err != nil {return err}
+	if err:=s.checkUpgradeWrites();err!=nil{return err}
 	return s.commitHook(tx)
 }
