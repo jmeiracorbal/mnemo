@@ -144,6 +144,9 @@ func addCommandTree(root *cobra.Command) {
 		&cobra.Command{Use: "verify", Short: "Verify controller, SQLite and durable processing after upgrade", RunE: func(*cobra.Command, []string) error {
 			return runControllerVerify()
 		}},
+		&cobra.Command{Use: "stop", Short: "Stop the managed controller for database maintenance", RunE: func(*cobra.Command, []string) error {
+			return runControllerStop()
+		}},
 	)
 	addChildren(root, "events",
 		command("publish --project PROJECT --directory DIR --execution-key KEY --type TYPE --payload VALUE", "Publish a durable typed event", runEvents),
