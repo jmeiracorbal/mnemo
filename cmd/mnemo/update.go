@@ -162,8 +162,8 @@ func maybeOfferUpdate(ctx context.Context, _ []string, rt updateRuntime) {
 // writeUpdateSafetyNotice extends the existing update notification. It is
 // shown before the same confirmation prompt, not as a separate error dialog.
 func writeUpdateSafetyNotice(stderr io.Writer) {
-	_, _ = fmt.Fprintln(stderr, "[mnemo] Safety notice: Updating Mnemo will close all active Mnemo memory sessions.")
-	_, _ = fmt.Fprintln(stderr, "[mnemo] Save any pending work before continuing. Agents will need a new Mnemo session after the update.")
+	_, _ = fmt.Fprintln(stderr, "[mnemo] Updating Mnemo briefly restarts its controller; active agent and Mnemo sessions remain open.")
+	_, _ = fmt.Fprintln(stderr, "[mnemo] Pending memory saves receive a short grace period before the restart.")
 }
 
 func promptForUpdate(stdin io.Reader, stderr io.Writer) (bool, error) {
