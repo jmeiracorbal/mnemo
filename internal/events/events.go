@@ -289,12 +289,21 @@ func (c *Controller) Run(ctx context.Context) error {
 	if err := c.nc.Flush(); err != nil {
 		return fmt.Errorf("flush controller RPC subscription: %w", err)
 	}
-	logTransportError := func(err error) {
-		fmt.Fprintf(os.Stderr, "mnemo controller transport: %v\n", err)
+	transportErrors := make(chan error, 1)
+	// Handler failures are retryable. Transport failures (including failed ACKs
+	// and NAKs) must end Run so that the service manager sees a failed process.
+	reportTransportError := func(err error) {
+		if ctx.Err() != nil || errors.Is(err, errRetryableDelivery) {
+			return
+		}
+		select {
+		case transportErrors <- err:
+		default:
+		}
 	}
 	eventBus, err := goeventsnats.New(ctx, goeventsnats.Config{
 		URL: c.cfg.URL(), Stream: streamName, Consumer: consumerName,
-		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: logTransportError,
+		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: reportTransportError,
 	}, nats.Timeout(2*time.Second))
 	if err != nil {
 		return fmt.Errorf("open event transport: %w", err)
@@ -302,25 +311,41 @@ func (c *Controller) Run(ctx context.Context) error {
 	defer func() { _ = eventBus.Close() }()
 	commandBus, err := goeventsnats.New(ctx, goeventsnats.Config{
 		URL: c.cfg.URL(), Stream: commandStreamName, Consumer: commandConsumerName,
-		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: logTransportError,
+		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: reportTransportError,
 	}, nats.Timeout(2*time.Second))
 	if err != nil {
 		return fmt.Errorf("open command transport: %w", err)
 	}
 	defer func() { _ = commandBus.Close() }()
-	eventSub, err := eventBus.Subscribe(ctx, c.cfg.subject(), c.handleEvent)
+	eventSub, err := eventBus.Subscribe(ctx, c.cfg.subject(), func(ctx context.Context, event goevents.Event) error {
+		if err := c.handleEvent(ctx, event); err != nil {
+			return fmt.Errorf("%w: %v", errRetryableDelivery, err)
+		}
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("subscribe event stream: %w", err)
 	}
 	defer func() { _ = eventSub.Close() }()
-	commandSub, err := commandBus.Subscribe(ctx, commandSubject, c.handleCommand)
+	commandSub, err := commandBus.Subscribe(ctx, commandSubject, func(ctx context.Context, event goevents.Event) error {
+		if err := c.handleCommand(ctx, event); err != nil {
+			return fmt.Errorf("%w: %v", errRetryableDelivery, err)
+		}
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("subscribe command stream: %w", err)
 	}
 	defer func() { _ = commandSub.Close() }()
-	<-ctx.Done()
-	return nil
+	select {
+	case err := <-transportErrors:
+		return fmt.Errorf("durable transport failure: %w", err)
+	case <-ctx.Done():
+		return nil
+	}
 }
+
+var errRetryableDelivery = errors.New("retryable delivery failure")
 
 func (c *Controller) handleEvent(_ context.Context, delivery goevents.Event) error {
 	var event Event
