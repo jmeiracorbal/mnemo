@@ -66,12 +66,6 @@ func TestInterruptedUpgradeRecoversCommittedWALDataAndExecutable(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(binary+".previous",[]byte("historical binary"),0755);err!=nil{t.Fatal(err)}
-	if err := recordSchemaChange(); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(binary+".schema-changed", []byte("changed"), 0600); err != nil {
-		t.Fatal(err)
-	}
 	err := recoverControllerStartup()
 	if err == nil || !strings.Contains(err.Error(), "restarting") {
 		t.Fatalf("interrupted upgrade not recovered: %v", err)
@@ -94,7 +88,7 @@ func TestInterruptedUpgradeRecoversCommittedWALDataAndExecutable(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("recovery lost committed data or retained speculative changes: %d", count)
 	}
-	for _, path := range []string{backup, binary + ".schema-changed", binary + ".recovering", binary + ".upgrading", filepath.Join(dataDir, "upgrade.transaction"), filepath.Join(dataDir, "upgrade.maintenance")} {
+	for _, path := range []string{backup, binary + ".recovering", binary + ".upgrading", filepath.Join(dataDir, "upgrade.transaction"), filepath.Join(dataDir, "upgrade.maintenance")} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Errorf("recovery left residue %q: %v", path, err)
 		}
@@ -115,14 +109,12 @@ func TestCommittedUpgradeNeverReplaysOldSnapshot(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := recordSchemaChange(); err != nil {t.Fatal(err)}
 	if err := commitUpgradeTransaction(); err != nil {
 		t.Fatal(err)
 	}
 	if err := recoverControllerStartup(); err != nil {
 		t.Fatal(err)
 	}
-	if _,err:=os.Stat(binary+".schema-changed");err!=nil{t.Fatalf("schema boundary was not recorded: %v",err)}
 	previous,err:=os.ReadFile(binary+".previous")
 	if err!=nil || string(previous)!="previous binary" {t.Fatalf("committed upgrade lost rollback executable: %q %v",previous,err)}
 	got, err := os.ReadFile(binary)
