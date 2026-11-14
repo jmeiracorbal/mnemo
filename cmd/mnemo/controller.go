@@ -174,6 +174,13 @@ func restorePreviousControllerBinary(binary string) (bool, error) {
 	} else if !os.IsNotExist(err) {
 		return false, fmt.Errorf("inspect schema recovery guard: %w", err)
 	}
+	// A binary-only downgrade after a schema-changing release could start an
+	// older controller against an incompatible database. Never do that.
+	if _, err := os.Stat(binary + ".schema-changed"); err == nil {
+		return false, fmt.Errorf("cannot restore previous executable after SQLite schema migration without a database recovery transaction")
+	} else if !os.IsNotExist(err) {
+		return false, fmt.Errorf("inspect schema compatibility marker: %w", err)
+	}
 	previous := binary + ".previous"
 	info, err := os.Stat(previous)
 	if os.IsNotExist(err) {
