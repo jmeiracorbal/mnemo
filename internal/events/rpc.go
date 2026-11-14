@@ -10,6 +10,7 @@ import (
 	goeventsnats "github.com/jmeiracorbal/go-events/adapters/nats"
 
 	"github.com/nats-io/nats.go"
+	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
 const rpcSubject = "mnemo.controller.rpc"
@@ -38,7 +39,7 @@ func Call(ctx context.Context, cfg Config, action string, payload any, output an
 		return fmt.Errorf("connect global controller: %w", err)
 	}
 	defer nc.Close()
-	if isMutation(action) {
+	if isMutation(action, encoded) {
 		return callDurableCommand(ctx, cfg, nc, action, encoded, output)
 	}
 	request, err := json.Marshal(RPCRequest{Action: action, Payload: encoded})
@@ -65,7 +66,11 @@ func Call(ctx context.Context, cfg Config, action string, payload any, output an
 	return nil
 }
 
-func isMutation(action string) bool {
+func isMutation(action string, payload json.RawMessage) bool {
+	if action == protocol.Version {
+		var request protocol.Request
+		return json.Unmarshal(payload, &request) == nil && request.Operation == protocol.OperationObservationCreate
+	}
 	switch action {
 	case "health_probe", "resolve_session", "close_sessions", "bind_execution_session",
 		"add_observation", "update_observation", "delete_observation",
