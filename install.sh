@@ -29,7 +29,6 @@ export MNEMO_NO_UPDATE_CHECK=1
 INSTALL_DOWNLOAD=""
 INSTALL_CHECKSUM=""
 INSTALL_BACKUP=""
-INSTALL_PREVIOUS_TMP=""
 INSTALL_MARKER=""
 INSTALL_DEST=""
 INSTALL_SWITCHED=false
@@ -102,7 +101,6 @@ finish_install() {
   fi
   [ -z "$INSTALL_DOWNLOAD" ] || rm -f -- "$INSTALL_DOWNLOAD"
   [ -z "$INSTALL_CHECKSUM" ] || rm -f -- "$INSTALL_CHECKSUM"
-  [ -z "$INSTALL_PREVIOUS_TMP" ] || rm -f -- "$INSTALL_PREVIOUS_TMP"
   if [ "$INSTALL_RECOVERY_FAILED" != "true" ]; then
     [ -z "$INSTALL_BACKUP" ] || rm -f -- "$INSTALL_BACKUP"
     [ -z "$INSTALL_MARKER" ] || rm -f -- "$INSTALL_MARKER"
@@ -430,14 +428,6 @@ main() {
   # and a real SQLite read through the newly restarted controller.
   if ! "$mnemo_bin" controller verify; then
     err "The new Mnemo controller failed functional verification. Rolling back."
-  fi
-  # Keep precisely one preceding release as the runtime safety rollback
-  # target in case a delayed legacy publisher appears after installation.
-  if [ -n "$INSTALL_BACKUP" ]; then
-    INSTALL_PREVIOUS_TMP=$(mktemp "${mnemo_bin}.previous.XXXXXX")
-    cp -p -- "$INSTALL_BACKUP" "$INSTALL_PREVIOUS_TMP" || err "Could not copy the previous-version recovery slot."
-    mv -f -- "$INSTALL_PREVIOUS_TMP" "${mnemo_bin}.previous" || err "Could not commit the previous-version recovery slot."
-    INSTALL_PREVIOUS_TMP=""
   fi
   if [ "$INSTALL_TXN" = "true" ]; then
     # Commit is durable before releasing the write fence. If the process dies
