@@ -329,6 +329,23 @@ func recoverControllerStartup() error {
 	if recovered {
 		return fmt.Errorf("interrupted Mnemo update recovered; restarting previous controller")
 	}
+	// A fence without a durable journal cannot be identified as committed
+	// or recoverable. Refuse service startup instead of processing writes.
+	tx, err := readUpgradeTransaction()
+	if err != nil {
+		return err
+	}
+	if tx == nil {
+		cfg, err := store.DefaultConfig()
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(filepath.Join(cfg.DataDir, "upgrade.maintenance")); err == nil {
+			return fmt.Errorf("unresolved SQLite maintenance marker without an upgrade transaction")
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
 	return nil
 }
 
