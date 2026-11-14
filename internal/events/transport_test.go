@@ -166,3 +166,75 @@ func transportTestFreePort(t *testing.T) int {
 	defer func() { _ = listener.Close() }()
 	return listener.Addr().(*net.TCPAddr).Port
 }
+
+func TestUpgradeReadinessRejectsPendingMessagesAndAcceptsDrainedDurables(t *testing.T) {
+	cfg := Config{Port: transportTestFreePort(t), DataDir: t.TempDir()}
+	controller, err := NewController(cfg, &transportTestStore{applied: make(chan DurableEvent, 2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	eventSub, err := controller.js.PullSubscribe(cfg.subject(), consumerName, nats.BindStream(streamName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandSub, err := controller.js.PullSubscribe(commandSubject, commandConsumerName, nats.BindStream(commandStreamName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := CheckUpgradeReady(ctx, cfg); err != nil {
+		t.Fatalf("empty consumers should be safe: %v", err)
+	}
+	for _, item := range []struct{
+		stream string
+		subject string
+		sub *nats.Subscription
+	}{
+		{streamName, cfg.publishSubject("old-project"), eventSub},
+		{commandStreamName, commandSubject, commandSub},
+	} {
+		body := []byte(`{"id":"persisted-before-upgrade"}`)
+		if _, err := controller.js.Publish(item.subject, body); err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckUpgradeReady(ctx, cfg); err == nil || !strings.Contains(err.Error(), "upgrade blocked") {
+			t.Fatalf("expected %s pending to block upgrade: %v", item.stream, err)
+		}
+		messages, err := item.sub.Fetch(1, nats.MaxWait(2*time.Second))
+		if err != nil || len(messages) != 1 {
+			t.Fatalf("fetch %s: %v", item.stream, err)
+		}
+		if err := CheckUpgradeReady(ctx, cfg); err == nil || !strings.Contains(err.Error(), "awaiting acknowledgment") {
+			t.Fatalf("expected %s unacked delivery to block upgrade: %v", item.stream, err)
+		}
+		if err := messages[0].AckSync(); err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckUpgradeReady(ctx, cfg); err != nil {
+			t.Fatalf("drained %s should be safe: %v", item.stream, err)
+		}
+		stored, err := controller.js.GetLastMsg(item.stream, item.subject)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(stored.Data) != string(body) || stored.Header.Get("Nats-Msg-Id") != "" {
+			t.Fatalf("preflight rewrote legacy %s message", item.stream)
+		}
+	}
+}
+
+func TestUpgradeReadinessRejectsHistoryWithoutConsumer(t *testing.T) {
+	cfg := Config{Port: transportTestFreePort(t), DataDir: t.TempDir()}
+	controller, err := NewController(cfg, &transportTestStore{applied: make(chan DurableEvent, 2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	if _, err := controller.js.Publish(cfg.publishSubject("old-project"), []byte(`{"id":"orphan"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckUpgradeReady(context.Background(), cfg); err == nil || !strings.Contains(err.Error(), "durable consumer is absent") {
+		t.Fatalf("expected missing durable with historical messages to block upgrade: %v", err)
+	}
+}
