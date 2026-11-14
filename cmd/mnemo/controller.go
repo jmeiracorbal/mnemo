@@ -26,8 +26,7 @@ func runController(s *store.Store) error {
 	}
 	controller, err := events.NewController(cfg, s)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo controller: %v\n", err)
-		return
+		return err
 	}
 	defer controller.Close()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
