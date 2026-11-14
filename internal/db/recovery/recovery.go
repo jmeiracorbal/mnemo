@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 
 	_ "modernc.org/sqlite"
 )
@@ -122,6 +123,11 @@ func Restore(ctx context.Context, dataDir, release string) error {
 	}
 
 	pending := dest + ".restore-pending"
+	// A crash can leave a partial restore copy. Its contents are never
+	// trusted: the verified immutable recovery point is copied afresh.
+	if err := os.Remove(pending); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove interrupted restore copy: %w", err)
+	}
 	input, err := os.Open(point)
 	if err != nil {
 		return err
@@ -203,3 +209,65 @@ func syncDir(path string) error {
 	return f.Sync()
 }
 
+
+// PruneRecoveryPoints retains the newest recovery points after a committed
+// update. The active release's point is protected, and incomplete .pending
+// files are discarded only after the release transaction has ended.
+func PruneRecoveryPoints(dataDir, protected string, retain int) error {
+	if retain < 1 {
+		return fmt.Errorf("at least one recovery point must be retained")
+	}
+	dir := filepath.Join(dataDir, "recovery")
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	type candidate struct {
+		name string
+		mod  int64
+	}
+	var points []candidate
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() {
+			continue
+		}
+		name := entry.Name()
+		if filepath.Ext(name) == ".pending" {
+			if err := os.Remove(filepath.Join(dir, name)); err != nil {
+				return err
+			}
+			continue
+		}
+		if filepath.Ext(name) != ".db" {
+			continue
+		}
+		if _, err := pointPath(dataDir, name[:len(name)-3]); err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		points = append(points, candidate{name: name, mod: info.ModTime().UnixNano()})
+	}
+	sort.Slice(points, func(i, j int) bool {
+		if points[i].mod == points[j].mod {
+			return points[i].name > points[j].name
+		}
+		return points[i].mod > points[j].mod
+	})
+	kept := 0
+	for _, entry := range points {
+		if entry.name == protected+".db" || kept < retain {
+			kept++
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, entry.name)); err != nil {
+			return err
+		}
+	}
+	return syncDir(dir)
+}
