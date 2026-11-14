@@ -298,8 +298,12 @@ download_binary() {
     if [ "$INSTALL_STOPPED" != "true" ]; then
       err "Existing SQLite database has no confirmed stopped managed controller. Update canceled."
     fi
-    "$INSTALL_DOWNLOAD" db recovery snapshot --release="$version" || err "Could not preserve the pre-upgrade SQLite state."
-    INSTALL_DB_SNAPSHOT="$version"
+    # The restore point belongs to the *installed* release, not the target.
+    # Include an attempt identifier so retries never overwrite earlier data.
+    local previous_release
+    previous_release=$("$dest" version | awk '{print $2}')
+    INSTALL_DB_SNAPSHOT="${previous_release}-$(date -u +%Y%m%dT%H%M%S)-$"
+    "$INSTALL_DOWNLOAD" db recovery snapshot --release="$INSTALL_DB_SNAPSHOT" || err "Could not preserve the pre-upgrade SQLite state."
     if ! "$INSTALL_DOWNLOAD" db migrate --check >/dev/null 2>&1; then
       "$INSTALL_DOWNLOAD" db migrate || err "SQLite migration failed; restoring the pre-upgrade recovery point."
       INSTALL_SQLITE_CHANGED=true
@@ -452,8 +456,12 @@ main() {
     mv -f -- "$INSTALL_PREVIOUS_TMP" "${mnemo_bin}.previous" || err "Could not commit the previous-version recovery slot."
     INSTALL_PREVIOUS_TMP=""
   fi
-  # Preserve the transaction backup until the commit flag is set, so a
-  # failure at any point above still has a complete rollback source.
+  # Keep the controller's durable write fence active until every potentially
+  # failing commit operation is complete. Only then release queued writes.
+  if [ -n "$INSTALL_MAINTENANCE" ]; then
+    rm -f -- "$INSTALL_MAINTENANCE" || err "Could not release the controller write fence."
+    INSTALL_MAINTENANCE=""
+  fi
   INSTALL_VERIFIED=true
   ok "Controller verified; upgrade committed."
 }
