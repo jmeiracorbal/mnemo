@@ -65,6 +65,7 @@ func TestInterruptedUpgradeRecoversCommittedWALDataAndExecutable(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(binary+".previous",[]byte("historical binary"),0755);err!=nil{t.Fatal(err)}
 	if err := recordSchemaChange(); err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +80,8 @@ func TestInterruptedUpgradeRecoversCommittedWALDataAndExecutable(t *testing.T) {
 	if err != nil || string(got) != "previous binary" {
 		t.Fatalf("binary was not restored: %q %v", got, err)
 	}
+	previous,err:=os.ReadFile(binary+".previous")
+	if err!=nil || string(previous)!="historical binary"{t.Fatalf("rollback destroyed existing previous slot: %q %v",previous,err)}
 	recovered, err := sql.Open("sqlite", filepath.Join(dataDir, "memory.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -120,6 +123,8 @@ func TestCommittedUpgradeNeverReplaysOldSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _,err:=os.Stat(binary+".schema-changed");err!=nil{t.Fatalf("schema boundary was not recorded: %v",err)}
+	previous,err:=os.ReadFile(binary+".previous")
+	if err!=nil || string(previous)!="previous binary" {t.Fatalf("committed upgrade lost rollback executable: %q %v",previous,err)}
 	got, err := os.ReadFile(binary)
 	if err != nil || string(got) != "new binary" {
 		t.Fatalf("committed binary unexpectedly reverted: %q %v", got, err)
