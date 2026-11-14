@@ -20,7 +20,7 @@ OLD
 cat > "$fixture/new" <<'NEW'
 #!/usr/bin/env bash
 case "$1/$2" in
-  controller/preflight) printf 'preflight\n' >> "$MOCK_LOG" ;;
+  controller/preflight) printf 'preflight\n' >> "$MOCK_LOG"; [ "${MOCK_PREFLIGHT_RESULT:-ok}" = ok ] ;;
   controller/stop) printf stopped > "$HOME/active-controller" ;;
   controller/transaction)
     case "$3" in
@@ -73,7 +73,10 @@ case "$1/$2" in
       [ "${MOCK_MIGRATION_RESULT:-ready}" = ready ] || exit 2
     else
       printf migrated-schema > "$HOME/.mnemo/memory.db"
-      [ "${MOCK_APPLY_RESULT:-ok}" = ok ]
+      [ "${MOCK_APPLY_RESULT:-ok}" = ok ] || exit 1
+      if [ "${MOCK_KILL_INSTALLER:-no}" = yes ]; then
+        kill -KILL "$PPID"
+      fi
     fi
     ;;
   setup/refresh) printf new > "$HOME/active-controller" ;;
@@ -177,6 +180,25 @@ if MOCK_MIGRATION_RESULT=pending MOCK_APPLY_RESULT=fail bash "$repo_root/install
   echo 'installer succeeded despite failed SQLite migration' >&2
   exit 1
 fi
+[ "$(cat "$HOME/.mnemo/memory.db")" = original-schema ]
+[ "$(cat "$HOME/active-controller")" = old ]
+check_no_residue
+
+# A hard crash after migration leaves a durable transaction. The next
+# invocation recovers the prior binary and database before preflight.
+reset_old
+printf original-schema > "$HOME/.mnemo/memory.db"
+if MOCK_MIGRATION_RESULT=pending MOCK_KILL_INSTALLER=yes bash "$repo_root/install.sh" > "$fixture/crashed.log" 2>&1; then
+  echo 'installer survived the injected hard crash' >&2
+  exit 1
+fi
+[ -e "$HOME/.mnemo/upgrade.transaction" ]
+[ -e "$HOME/.mnemo/upgrade.maintenance" ]
+if MOCK_PREFLIGHT_RESULT=fail bash "$repo_root/install.sh" > "$fixture/recovered.log" 2>&1; then
+  echo 'installer continued despite deliberately failed preflight' >&2
+  exit 1
+fi
+[ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = "mnemo v1.1.0" ]
 [ "$(cat "$HOME/.mnemo/memory.db")" = original-schema ]
 [ "$(cat "$HOME/active-controller")" = old ]
 check_no_residue
