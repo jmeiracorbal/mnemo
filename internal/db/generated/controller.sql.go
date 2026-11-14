@@ -134,6 +134,11 @@ type InsertProcessedMCPCommandParams struct {
 }
 
 func (q *Queries) InsertProcessedMCPCommand(ctx context.Context, arg InsertProcessedMCPCommandParams) error {
-	_, err := q.db.ExecContext(ctx, insertProcessedMCPCommand, arg.ID, arg.Action, arg.ResultJson, arg.RequestHash)
+	_, err := q.db.ExecContext(ctx, insertProcessedMCPCommand,
+		arg.ID,
+		arg.Action,
+		arg.ResultJson,
+		arg.RequestHash,
+	)
 	return err
 }
