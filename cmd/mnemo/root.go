@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
 	"github.com/jmeiracorbal/mnemo/internal/store"
@@ -73,25 +72,23 @@ func command(use, short string, run func()) *cobra.Command {
 	}
 }
 
-func storeCommand(use, short string, run func(*store.Store)) *cobra.Command {
+func storeCommand(use, short string, run func(*store.Store) error) *cobra.Command {
 	cmd := command(use, short, func() {})
-	cmd.Run = func(cmd *cobra.Command, args []string) {
+	cmd.Run = nil
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if hasHelpArg(args) {
-			_ = cmd.Help()
-			return
+			return cmd.Help()
 		}
 		cfg, err := store.DefaultConfig()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "mnemo: config error: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("mnemo: config error: %w", err)
 		}
 		s, err := store.New(cfg)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "mnemo: failed to open store: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("mnemo: failed to open store: %w", err)
 		}
-		defer s.Close()
-		run(s)
+		defer func() { _ = s.Close() }()
+		return run(s)
 	}
 	return cmd
 }
@@ -136,7 +133,15 @@ func addCommandTree(root *cobra.Command) {
 		command("obs-count ID", "Count session observations", runSession),
 		command("project-obs-count ID", "Count project observations", runSession),
 	)
-	addChildren(root, "controller", storeCommand("serve", "Run the installation-wide controller", runController))
+	addChildren(root, "controller",
+		storeCommand("serve", "Run the installation-wide controller", runController),
+		&cobra.Command{Use: "preflight", Short: "Verify no durable messages remain pending before upgrade", RunE: func(*cobra.Command, []string) error {
+			return runControllerPreflight()
+		}},
+		&cobra.Command{Use: "verify", Short: "Verify controller, SQLite and durable processing after upgrade", RunE: func(*cobra.Command, []string) error {
+			return runControllerVerify()
+		}},
+	)
 	addChildren(root, "events",
 		command("publish --project PROJECT --directory DIR --execution-key KEY --type TYPE --payload VALUE", "Publish a durable typed event", runEvents),
 		command("invoke --project PROJECT --directory DIR --agent AGENT --native-id ID --tool TOOL --payload JSON", "Invoke a native agent tool through the controller", runEvents),

@@ -22,6 +22,19 @@ INSTALL_DIR="${MNEMO_INSTALL_DIR:-$HOME/.local/bin}"
 DRY_RUN="${MNEMO_DRY_RUN:-false}"
 MNEMO_VERSION="${MNEMO_VERSION:-}"
 AGENT="${MNEMO_AGENT:-auto}"
+# Installer-internal Mnemo commands must not recursively offer another update.
+export MNEMO_NO_UPDATE_CHECK=1
+
+# Transaction state belongs to the installer, not the running controller.
+INSTALL_DOWNLOAD=""
+INSTALL_CHECKSUM=""
+INSTALL_BACKUP=""
+INSTALL_PREVIOUS_TMP=""
+INSTALL_MARKER=""
+INSTALL_DEST=""
+INSTALL_SWITCHED=false
+INSTALL_VERIFIED=false
+INSTALL_RESTORE_AGENT="claudecode"
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +49,54 @@ dry() {
   else
     eval "$@"
   fi
+}
+
+# The EXIT handler owns recovery for every failure after the binary switch.
+# The previous binary remains available until the new service is verified.
+finish_install() {
+  local status=$?
+  trap - EXIT
+
+  if [ "$INSTALL_SWITCHED" = "true" ] && [ "$INSTALL_VERIFIED" != "true" ]; then
+    warn "The new controller was not verified; restoring the previous version."
+    if [ -n "$INSTALL_BACKUP" ] && [ -f "$INSTALL_BACKUP" ]; then
+      if mv -f -- "$INSTALL_BACKUP" "$INSTALL_DEST"; then
+        INSTALL_BACKUP=""
+        if ! "$INSTALL_DEST" setup refresh --agent="$INSTALL_RESTORE_AGENT" --mnemo-bin="$INSTALL_DEST"; then
+          printf '[mnemo] CRITICAL: previous binary restored, but the old controller could not be restarted.\n' >&2
+          status=1
+        else
+          local restored=false
+          local attempt
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if "$INSTALL_DEST" stats >/dev/null 2>&1; then
+              restored=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$restored" != "true" ]; then
+            printf '[mnemo] CRITICAL: previous binary restored, but controller health is unconfirmed.\n' >&2
+            status=1
+          else
+            info "Previous Mnemo version restored and responding."
+          fi
+        fi
+      else
+        printf '[mnemo] CRITICAL: could not restore the previous Mnemo binary.\n' >&2
+        status=1
+      fi
+    else
+      # First-time installation has no previous version to recover.
+      rm -f -- "$INSTALL_DEST"
+    fi
+  fi
+  [ -z "$INSTALL_DOWNLOAD" ] || rm -f -- "$INSTALL_DOWNLOAD"
+  [ -z "$INSTALL_CHECKSUM" ] || rm -f -- "$INSTALL_CHECKSUM"
+  [ -z "$INSTALL_BACKUP" ] || rm -f -- "$INSTALL_BACKUP"
+  [ -z "$INSTALL_PREVIOUS_TMP" ] || rm -f -- "$INSTALL_PREVIOUS_TMP"
+  [ -z "$INSTALL_MARKER" ] || rm -f -- "$INSTALL_MARKER"
+  exit "$status"
 }
 
 # ── detect platform ────────────────────────────────────────────────────────────
@@ -135,31 +196,61 @@ download_binary() {
 
   mkdir -p "$INSTALL_DIR"
 
-  local tmp
-  tmp=$(mktemp)
-  trap 'rm -f "$tmp"' EXIT
+  INSTALL_DEST="$dest"
+  INSTALL_DOWNLOAD=$(mktemp "${dest}.download.XXXXXX")
+  trap finish_install EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
 
-  fetch "$binary_url" "$tmp" || err "Download failed: ${binary_url}"
+  fetch "$binary_url" "$INSTALL_DOWNLOAD" || err "Download failed: ${binary_url}"
 
-  local checksum_file
-  checksum_file=$(mktemp)
-  trap 'rm -f "$tmp" "$checksum_file"' EXIT
-
-  fetch_stdout "$checksum_url" > "$checksum_file" || err "Checksum download failed: ${checksum_url}"
+  INSTALL_CHECKSUM=$(mktemp "${dest}.checksum.XXXXXX")
+  fetch_stdout "$checksum_url" > "$INSTALL_CHECKSUM" || err "Checksum download failed: ${checksum_url}"
 
   # shasum -c expects "hash  filename" — rewrite the path to match $tmp
   local expected_hash
-  expected_hash=$(awk '{print $1}' "$checksum_file")
+  expected_hash=$(awk '{print $1}' "$INSTALL_CHECKSUM")
   local actual_hash
-  actual_hash=$(shasum -a 256 "$tmp" | awk '{print $1}')
+  actual_hash=$(shasum -a 256 "$INSTALL_DOWNLOAD" | awk '{print $1}')
 
   if [ "$expected_hash" != "$actual_hash" ]; then
     err "Checksum mismatch — aborting. Expected: ${expected_hash}, got: ${actual_hash}"
   fi
 
-  mv "$tmp" "$dest"
-  chmod +x "$dest"
-  ok "Binary installed: ${dest}"
+  chmod +x "$INSTALL_DOWNLOAD"
+  # An upgrade that would change the live SQLite schema cannot be safely
+  # rolled back by restoring only the previous executable. Refuse it before
+  # touching the installation; no migration is ever applied by this check.
+  if [ -f "$HOME/.mnemo/memory.db" ] && ! "$INSTALL_DOWNLOAD" db migrate --check >/dev/null; then
+    err "Update refused: this release requires a database migration that cannot yet be rolled back safely. The installed version is unchanged."
+  fi
+  # Every upgrade waits for a stable, acknowledged durable queue before
+  # replacing the controller executable. Active agent/Mnemo sessions stay open.
+  if [ -f "$HOME/.mnemo/config.toml" ]; then
+    info "Waiting for pending memory saves to complete before restarting the controller..."
+    if ! "$INSTALL_DOWNLOAD" controller preflight; then
+      err "Update canceled: pending saves did not finish or the controller is unavailable. The running controller and installed binary are unchanged."
+    fi
+  fi
+
+  if [ -f "$dest" ]; then
+    # Exclusive marker prevents concurrent installers and differentiates an
+    # in-progress transaction from failures after a successful upgrade.
+    local marker="${dest}.upgrading"
+    local marker_pid="$BASHPID"
+    if ! ( set -C; echo "$marker_pid" > "$marker" ) 2>/dev/null; then
+      err "Another Mnemo upgrade is already running or left an unresolved upgrade marker: ${marker}"
+    fi
+    INSTALL_MARKER="$marker"
+    INSTALL_BACKUP=$(mktemp "${dest}.rollback.XXXXXX")
+    cp -p -- "$dest" "$INSTALL_BACKUP" || err "Could not preserve existing Mnemo executable."
+  fi
+
+  # Both files live on the same filesystem, so the executable switch is atomic.
+  mv -f -- "$INSTALL_DOWNLOAD" "$dest" || err "Could not activate downloaded Mnemo binary."
+  INSTALL_DOWNLOAD=""
+  INSTALL_SWITCHED=true
+  info "New binary activated; verifying the managed service before committing..."
 }
 
 # ── check PATH ─────────────────────────────────────────────────────────────────
@@ -178,6 +269,7 @@ setup_agent() {
   local agent="$1" mnemo_bin="$2"
 
   info "Configuring ${agent}..."
+  INSTALL_RESTORE_AGENT="$agent"
   "$mnemo_bin" setup refresh --agent="$agent" --mnemo-bin="$mnemo_bin"
   ok "Global ${agent} setup refreshed. Run 'mnemo init --agent=${agent}' in projects that should use mnemo."
 }
@@ -286,6 +378,24 @@ main() {
       err "Unknown agent: ${AGENT}. Valid options: auto | claudecode | cursor | codex | opencode | pi | all"
       ;;
   esac
+  # This functional probe is fully automatic and must pass before cleanup
+  # removes the previous executable. It exercises durable events, commands,
+  # and a real SQLite read through the newly restarted controller.
+  if ! "$mnemo_bin" controller verify; then
+    err "The new Mnemo controller failed functional verification. Rolling back."
+  fi
+  # Keep precisely one preceding release as the runtime safety rollback
+  # target in case a delayed legacy publisher appears after installation.
+  if [ -n "$INSTALL_BACKUP" ]; then
+    INSTALL_PREVIOUS_TMP=$(mktemp "${mnemo_bin}.previous.XXXXXX")
+    cp -p -- "$INSTALL_BACKUP" "$INSTALL_PREVIOUS_TMP" || err "Could not copy the previous-version recovery slot."
+    mv -f -- "$INSTALL_PREVIOUS_TMP" "${mnemo_bin}.previous" || err "Could not commit the previous-version recovery slot."
+    INSTALL_PREVIOUS_TMP=""
+  fi
+  # Preserve the transaction backup until the commit flag is set, so a
+  # failure at any point above still has a complete rollback source.
+  INSTALL_VERIFIED=true
+  ok "Controller verified; upgrade committed."
 }
 
 main "$@"

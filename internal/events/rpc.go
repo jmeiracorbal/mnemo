@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	goevents "github.com/jmeiracorbal/go-events"
+	goeventsnats "github.com/jmeiracorbal/go-events/adapters/nats"
+
 	"github.com/nats-io/nats.go"
 )
 
@@ -30,17 +33,17 @@ func Call(ctx context.Context, cfg Config, action string, payload any, output an
 	if err != nil {
 		return fmt.Errorf("encode controller request: %w", err)
 	}
-	request, err := json.Marshal(RPCRequest{Action: action, Payload: encoded})
-	if err != nil {
-		return fmt.Errorf("encode RPC envelope: %w", err)
-	}
 	nc, err := nats.Connect(cfg.URL(), nats.Timeout(2*time.Second))
 	if err != nil {
 		return fmt.Errorf("connect global controller: %w", err)
 	}
 	defer nc.Close()
 	if isMutation(action) {
-		return callDurableCommand(ctx, nc, action, encoded, output)
+		return callDurableCommand(ctx, cfg, nc, action, encoded, output)
+	}
+	request, err := json.Marshal(RPCRequest{Action: action, Payload: encoded})
+	if err != nil {
+		return fmt.Errorf("encode RPC envelope: %w", err)
 	}
 	message, err := nc.RequestWithContext(ctx, rpcSubject, request)
 	if err != nil {
@@ -64,7 +67,7 @@ func Call(ctx context.Context, cfg Config, action string, payload any, output an
 
 func isMutation(action string) bool {
 	switch action {
-	case "resolve_session", "close_sessions", "bind_execution_session",
+	case "health_probe", "resolve_session", "close_sessions", "bind_execution_session",
 		"add_observation", "update_observation", "delete_observation",
 		"add_prompt", "passive_capture", "merge_tags", "agent_tool",
 		"import", "merge_projects", "rename_project",
@@ -76,7 +79,7 @@ func isMutation(action string) bool {
 	}
 }
 
-func callDurableCommand(ctx context.Context, nc *nats.Conn, action string, payload json.RawMessage, output any) error {
+func callDurableCommand(ctx context.Context, cfg Config, nc *nats.Conn, action string, payload json.RawMessage, output any) error {
 	command, err := NewCommand(action, json.RawMessage(payload))
 	if err != nil {
 		return err
@@ -92,11 +95,16 @@ func callDurableCommand(ctx context.Context, nc *nats.Conn, action string, paylo
 	if err != nil {
 		return fmt.Errorf("encode command reply subject: %w", err)
 	}
-	js, err := nc.JetStream()
+	adapter, err := goeventsnats.New(ctx, goeventsnats.Config{
+		URL: cfg.URL(), Stream: commandStreamName,
+	}, nats.Timeout(2*time.Second))
 	if err != nil {
-		return fmt.Errorf("open durable command stream: %w", err)
+		return fmt.Errorf("open durable command transport: %w", err)
 	}
-	if _, err := js.PublishMsg(&nats.Msg{Subject: commandSubject, Data: encoded, Header: nats.Header{"Nats-Msg-Id": []string{command.ID}}}, nats.Context(ctx)); err != nil {
+	defer func() { _ = adapter.Close() }()
+	if err := adapter.Publish(ctx, goevents.Event{
+		ID: command.ID, Topic: commandSubject, Data: encoded,
+	}); err != nil {
 		return fmt.Errorf("publish durable command: %w", err)
 	}
 	message, err := subscription.NextMsgWithContext(ctx)

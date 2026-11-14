@@ -50,6 +50,16 @@ func (s *Store) ExecuteMCPAction(ctx context.Context, action string, payload jso
 	_ = ctx // Store's public operations use their own transaction contexts.
 	var result any
 	switch action {
+	case "health_probe":
+		// Probe the real SQLite connection and an existing table without
+		// changing the user's database or creating durable command markers.
+		if err := s.db.PingContext(ctx); err != nil {
+			return nil, err
+		}
+		if _, err := s.q.CountSessions(ctx); err != nil {
+			return nil, fmt.Errorf("health probe SQLite read: %w", err)
+		}
+		result = true
 	case "search":
 		var input struct {
 			Query   string        `json:"query"`

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	goevents "github.com/jmeiracorbal/go-events"
+	goeventsnats "github.com/jmeiracorbal/go-events/adapters/nats"
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
@@ -32,6 +34,7 @@ const (
 	EventAgentToolResult      = "agent.tool_result"
 	EventWorkspaceFileChanged = "workspace.file_changed"
 	EventGitCommitCreated     = "git.commit_created"
+	EventHealthProbe          = "controller.health_probe"
 )
 
 // DurableEvent is the controller input persisted by the event broker. EventID
@@ -155,20 +158,20 @@ func Publish(ctx context.Context, cfg Config, event Event) error {
 	if err := event.Validate(); err != nil {
 		return err
 	}
-	nc, err := nats.Connect(cfg.URL(), nats.Timeout(2*time.Second))
-	if err != nil {
-		return fmt.Errorf("connect event controller: %w", err)
-	}
-	defer nc.Close()
-	js, err := nc.JetStream()
-	if err != nil {
-		return fmt.Errorf("open JetStream: %w", err)
-	}
 	body, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("encode event: %w", err)
 	}
-	if _, err := js.PublishMsg(&nats.Msg{Subject: cfg.publishSubject(event.Project), Data: body}, nats.Context(ctx)); err != nil {
+	adapter, err := goeventsnats.New(ctx, goeventsnats.Config{
+		URL: cfg.URL(), Stream: streamName,
+	}, nats.Timeout(2*time.Second))
+	if err != nil {
+		return fmt.Errorf("connect event controller: %w", err)
+	}
+	defer func() { _ = adapter.Close() }()
+	if err := adapter.Publish(ctx, goevents.Event{
+		ID: event.ID, Topic: cfg.publishSubject(event.Project), Data: body,
+	}); err != nil {
 		return fmt.Errorf("publish event: %w", err)
 	}
 	return nil
@@ -231,109 +234,188 @@ func (c *Controller) ensureStream() error {
 	return nil
 }
 
+// preflightDurables prevents handing an unacknowledged, headerless legacy
+// delivery to go-events. It never rewrites or acknowledges stored messages.
+func (c *Controller) preflightDurables() error {
+	for _, durable := range []struct {
+		stream string
+		consumer string
+	}{
+		{streamName, consumerName},
+		{commandStreamName, commandConsumerName},
+	} {
+		stream, err := c.js.StreamInfo(durable.stream)
+		if err != nil {
+			return fmt.Errorf("inspect stream %s: %w", durable.stream, err)
+		}
+		if stream.State.Msgs == 0 {
+			continue
+		}
+		consumer, err := c.js.ConsumerInfo(durable.stream, durable.consumer)
+		from := stream.State.FirstSeq
+		if errors.Is(err, nats.ErrConsumerNotFound) {
+			// A first-time installation may have published valid, header-identified
+			// events before the consumer was created. Inspect rather than reject them.
+		} else if err != nil {
+			return fmt.Errorf("inspect durable %s: %w", durable.consumer, err)
+		} else {
+			if consumer.NumPending == 0 && consumer.NumAckPending == 0 {
+				continue
+			}
+			from = consumer.AckFloor.Stream + 1
+		}
+		for seq := from; seq <= stream.State.LastSeq; seq++ {
+			message, err := c.js.GetMsg(durable.stream, seq)
+			if errors.Is(err, nats.ErrMsgNotFound) {
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("inspect pending message in %s: %w", durable.stream, err)
+			}
+			if message.Header.Get("Nats-Msg-Id") == "" {
+				return fmt.Errorf("unsafe go-events cutover: stream %s has unacknowledged events without Nats-Msg-Id; drain them using the previous controller before upgrading", durable.stream)
+			}
+		}
+	}
+	return nil
+}
+
 func (c *Controller) Run(ctx context.Context) error {
+	if err := c.preflightDurables(); err != nil {
+		return err
+	}
 	if _, err := c.nc.Subscribe(rpcSubject, c.handleRPC); err != nil {
 		return fmt.Errorf("subscribe controller RPC: %w", err)
 	}
 	if err := c.nc.Flush(); err != nil {
 		return fmt.Errorf("flush controller RPC subscription: %w", err)
 	}
-	sub, err := c.js.PullSubscribe(c.cfg.subject(), consumerName, nats.BindStream(streamName))
+	transportErrors := make(chan error, 1)
+	onTransportError := transportErrorReporter(ctx, transportErrors)
+	eventBus, err := goeventsnats.New(ctx, goeventsnats.Config{
+		URL: c.cfg.URL(), Stream: streamName, Consumer: consumerName,
+		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: onTransportError,
+	}, nats.Timeout(2*time.Second))
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return fmt.Errorf("open event transport: %w", err)
+	}
+	defer func() { _ = eventBus.Close() }()
+	commandBus, err := goeventsnats.New(ctx, goeventsnats.Config{
+		URL: c.cfg.URL(), Stream: commandStreamName, Consumer: commandConsumerName,
+		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: onTransportError,
+	}, nats.Timeout(2*time.Second))
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return fmt.Errorf("open command transport: %w", err)
+	}
+	defer func() { _ = commandBus.Close() }()
+	eventSub, err := eventBus.Subscribe(ctx, c.cfg.subject(), func(ctx context.Context, event goevents.Event) error {
+		if err := c.handleEvent(ctx, event); err != nil {
+			return fmt.Errorf("%w: %v", errRetryableDelivery, err)
+		}
+		return nil
+	})
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
 		return fmt.Errorf("subscribe event stream: %w", err)
 	}
-	commandSub, err := c.js.PullSubscribe(commandSubject, commandConsumerName, nats.BindStream(commandStreamName))
+	defer func() { _ = eventSub.Close() }()
+	commandSub, err := commandBus.Subscribe(ctx, commandSubject, c.handleCommand)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
 		return fmt.Errorf("subscribe command stream: %w", err)
 	}
-	commandErr := make(chan error, 1)
-	go func() { commandErr <- c.runCommands(ctx, commandSub) }()
-	for {
-		if err := ctx.Err(); err != nil {
-			if commandRunErr := <-commandErr; commandRunErr != nil {
-				return commandRunErr
-			}
-			return nil
+	defer func() { _ = commandSub.Close() }()
+	select {
+	case err := <-transportErrors:
+		return fmt.Errorf("durable transport failure: %w", err)
+	case <-ctx.Done():
+		return nil
+	}
+}
+
+var errRetryableDelivery = errors.New("retryable delivery failure")
+
+// transportErrorReporter preserves handler redelivery but makes failures in
+// JetStream itself observable to the controller's lifecycle.
+func transportErrorReporter(ctx context.Context, failures chan<- error) func(error) {
+	return func(err error) {
+		if ctx.Err() != nil || errors.Is(err, errRetryableDelivery) {
+			return
 		}
 		select {
-		case err := <-commandErr:
-			return err
+		case failures <- err:
 		default:
 		}
-		messages, err := sub.Fetch(1, nats.MaxWait(time.Second))
-		if err == nats.ErrTimeout {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("fetch durable event: %w", err)
-		}
-		for _, msg := range messages {
-			var event Event
-			processErr := json.Unmarshal(msg.Data, &event)
-			if processErr == nil {
-				processErr = event.Validate()
-			}
-			if processErr == nil && event.ExecutionKey == "" {
-				identity, err := agents.NewIdentity(event.Agent, event.Project, event.NativeID)
-				if err != nil {
-					processErr = err
-				} else {
-					event.ExecutionKey = identity.Execution
-				}
-			}
-			if processErr == nil {
-				processErr = c.store.ApplyDurableEvent(DurableEvent{ID: event.ID, Type: event.Type, Project: event.Project, ExecutionKey: event.ExecutionKey, Payload: event.Payload})
-			}
-			if processErr != nil {
-				if nakErr := msg.NakWithDelay(time.Second); nakErr != nil {
-					return fmt.Errorf("process event: %v; delay redelivery: %w", processErr, nakErr)
-				}
-				continue
-			}
-			if err := msg.Ack(); err != nil {
-				return fmt.Errorf("ack durable event: %w", err)
-			}
-		}
 	}
 }
 
-func (c *Controller) runCommands(ctx context.Context, sub *nats.Subscription) error {
-	for {
-		if err := ctx.Err(); err != nil {
+func (c *Controller) handleEvent(_ context.Context, delivery goevents.Event) error {
+	var event Event
+	if err := json.Unmarshal(delivery.Data, &event); err != nil {
+		return fmt.Errorf("decode durable event: %w", err)
+	}
+	if err := event.Validate(); err != nil {
+		return err
+	}
+	if event.ID != delivery.ID {
+		return fmt.Errorf("event ID %q differs from transport ID %q", event.ID, delivery.ID)
+	}
+	if event.ExecutionKey == "" {
+		identity, err := agents.NewIdentity(event.Agent, event.Project, event.NativeID)
+		if err != nil {
+			return err
+		}
+		event.ExecutionKey = identity.Execution
+	}
+	if event.Type == EventHealthProbe {
+		return nil // The event consumer and broker ACK are verified without a user memory write.
+	}
+	return c.store.ApplyDurableEvent(DurableEvent{
+		ID: event.ID, Type: event.Type, Project: event.Project,
+		ExecutionKey: event.ExecutionKey, Payload: event.Payload,
+	})
+}
+
+func (c *Controller) handleCommand(_ context.Context, delivery goevents.Event) error {
+	var command Command
+	if err := json.Unmarshal(delivery.Data, &command); err != nil {
+		// The previous controller acknowledged malformed durable commands
+		// without replaying them. Keep the same poison-message behavior.
+		return nil
+	}
+	if err := command.Validate(); err != nil {
+		c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
+		return nil
+	}
+	if command.ID != delivery.ID {
+		c.replyTo(command.Reply, RPCResponse{Error: "command ID differs from transport ID"})
+		return nil
+	}
+	if command.Action == "health_probe" {
+		payload, err := c.store.ExecuteMCPAction(context.Background(), "health_probe", nil)
+		if err != nil {
+			c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
 			return nil
 		}
-		messages, err := sub.Fetch(1, nats.MaxWait(time.Second))
-		if err == nats.ErrTimeout {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("fetch durable command: %w", err)
-		}
-		for _, msg := range messages {
-			var command Command
-			if err := json.Unmarshal(msg.Data, &command); err != nil {
-				return c.rejectCommand(msg, "", err)
-			}
-			if err := command.Validate(); err != nil {
-				return c.rejectCommand(msg, command.Reply, err)
-			}
-			payload, err := c.store.ApplyMCPCommand(command.ID, command.Action, command.Payload)
-			if err != nil {
-				return c.rejectCommand(msg, command.Reply, err)
-			}
-			c.replyTo(command.Reply, RPCResponse{Payload: payload})
-			if err := msg.Ack(); err != nil {
-				return fmt.Errorf("ack durable command: %w", err)
-			}
-		}
+		c.replyTo(command.Reply, RPCResponse{Payload: payload})
+		return nil
 	}
-}
-
-func (c *Controller) rejectCommand(msg *nats.Msg, reply string, processErr error) error {
-	c.replyTo(reply, RPCResponse{Error: processErr.Error()})
-	if err := msg.Ack(); err != nil {
-		return fmt.Errorf("ack rejected durable command: %w", err)
+	payload, err := c.store.ApplyMCPCommand(command.ID, command.Action, command.Payload)
+	if err != nil {
+		c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
+		return nil
 	}
+	c.replyTo(command.Reply, RPCResponse{Payload: payload})
 	return nil
 }
 
@@ -382,6 +464,103 @@ func (c *Controller) Close() {
 // LocalAddress is exposed for diagnostics and tests only.
 func (c *Controller) LocalAddress() net.Addr { return c.server.Addr() }
 
+
+// WaitUpgradeReady gives in-flight saves time to finish before an upgrade.
+// Both durable consumers must remain drained for the full quiet period.
+// A timeout leaves the old controller running; no messages are discarded.
+func WaitUpgradeReady(ctx context.Context, cfg Config, quietPeriod time.Duration) error {
+	if quietPeriod <= 0 {
+		return fmt.Errorf("upgrade quiet period must be positive")
+	}
+	const pollInterval = 200 * time.Millisecond
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	var quietSince time.Time
+	var lastPending error
+	for {
+		if err := ctx.Err(); err != nil {
+			if lastPending != nil {
+				return fmt.Errorf("upgrade blocked: pending saves did not finish within the grace period: %v: %w", lastPending, err)
+			}
+			return fmt.Errorf("upgrade grace period ended: %w", err)
+		}
+		err := CheckUpgradeReady(ctx, cfg)
+		switch {
+		case err == nil:
+			lastPending = nil
+			if quietSince.IsZero() {
+				quietSince = time.Now()
+			}
+			if time.Since(quietSince) >= quietPeriod {
+				return nil
+			}
+		case errors.Is(err, errUpgradePending):
+			quietSince = time.Time{}
+			lastPending = err
+		default:
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			if lastPending != nil {
+				return fmt.Errorf("upgrade blocked: pending saves did not finish within the grace period: %v: %w", lastPending, ctx.Err())
+			}
+			return fmt.Errorf("upgrade grace period ended: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+var errUpgradePending = errors.New("pending durable deliveries")
+
+// CheckUpgradeReady inspects the running, pre-upgrade controller without
+// altering stream, consumer, or message state. The installer calls it before
+// replacing the binary. Both event and command streams must be fully drained.
+func CheckUpgradeReady(ctx context.Context, cfg Config) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	nc, err := nats.Connect(cfg.URL(), nats.Timeout(2*time.Second))
+	if err != nil {
+		return fmt.Errorf("connect existing controller before upgrade: %w", err)
+	}
+	defer nc.Close()
+	js, err := nc.JetStream(nats.Context(ctx))
+	if err != nil {
+		return fmt.Errorf("open existing JetStream before upgrade: %w", err)
+	}
+	for _, durable := range []struct {
+		stream string
+		consumer string
+		subject string
+	}{
+		{streamName, consumerName, cfg.subject()},
+		{commandStreamName, commandConsumerName, commandSubject},
+	} {
+		stream, err := js.StreamInfo(durable.stream, nats.Context(ctx))
+		if err != nil {
+			return fmt.Errorf("inspect existing stream %s: %w", durable.stream, err)
+		}
+		consumer, err := js.ConsumerInfo(durable.stream, durable.consumer, nats.Context(ctx))
+		if errors.Is(err, nats.ErrConsumerNotFound) {
+			if stream.State.Msgs != 0 {
+				return fmt.Errorf("upgrade blocked: %s contains %d messages but its durable consumer is absent", durable.stream, stream.State.Msgs)
+			}
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspect existing durable %s: %w", durable.consumer, err)
+		}
+		if consumer.Config.FilterSubject != durable.subject || consumer.Config.AckPolicy != nats.AckExplicitPolicy || consumer.Config.DeliverSubject != "" {
+			return fmt.Errorf("upgrade blocked: durable %s has an incompatible configuration", durable.consumer)
+		}
+		if consumer.NumPending != 0 || consumer.NumAckPending != 0 {
+			return fmt.Errorf("upgrade blocked: %w: durable %s has %d pending and %d awaiting acknowledgment", errUpgradePending, durable.consumer, consumer.NumPending, consumer.NumAckPending)
+		}
+	}
+	return nil
+}
+
 // CheckHealth verifies that the singleton controller configured for this
 // installation is reachable. MCP processes must call this; they never create it.
 func CheckHealth(ctx context.Context, cfg Config) error {
@@ -394,4 +573,58 @@ func CheckHealth(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("open global event controller: %w", err)
 	}
 	return nil
+}
+
+
+// VerifyUpgrade proves that the installed controller can execute a durable MCP
+// command, read SQLite and acknowledge a real JetStream event. This is run by
+// the installer automatically after the service restart, not by the user.
+func VerifyUpgrade(ctx context.Context, cfg Config) error {
+	var sqliteReady bool
+	if err := Call(ctx, cfg, "health_probe", struct{}{}, &sqliteReady); err != nil {
+		return fmt.Errorf("durable command and SQLite probe: %w", err)
+	}
+	if !sqliteReady {
+		return fmt.Errorf("controller did not confirm SQLite readiness")
+	}
+
+	probe, err := NewEvent(EventHealthProbe, "_mnemo_upgrade_probe", "upgrade", struct{}{})
+	if err != nil {
+		return err
+	}
+	if err := Publish(ctx, cfg, probe); err != nil {
+		return fmt.Errorf("publish event probe: %w", err)
+	}
+	nc, err := nats.Connect(cfg.URL(), nats.Timeout(2*time.Second))
+	if err != nil {
+		return fmt.Errorf("connect for event acknowledgment: %w", err)
+	}
+	defer nc.Close()
+	js, err := nc.JetStream(nats.Context(ctx))
+	if err != nil {
+		return fmt.Errorf("inspect event acknowledgment: %w", err)
+	}
+	message, err := js.GetLastMsg(streamName, cfg.publishSubject(probe.Project), nats.Context(ctx))
+	if err != nil {
+		return fmt.Errorf("read published probe: %w", err)
+	}
+	if message.Header.Get("Nats-Msg-Id") != probe.ID {
+		return fmt.Errorf("event probe identity changed before acknowledgment")
+	}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		consumer, err := js.ConsumerInfo(streamName, consumerName, nats.Context(ctx))
+		if err != nil {
+			return fmt.Errorf("inspect event consumer: %w", err)
+		}
+		if consumer.AckFloor.Stream >= message.Sequence {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("event probe was not acknowledged: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
 }

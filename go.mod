@@ -5,6 +5,7 @@ go 1.26.11
 require (
 	github.com/coreos/go-semver v0.3.1
 	github.com/google/uuid v1.6.0
+	github.com/jmeiracorbal/go-events v0.1.1
 	github.com/mark3labs/mcp-go v0.45.0
 	github.com/nats-io/nats-server/v2 v2.12.6
 	github.com/nats-io/nats.go v1.49.0
