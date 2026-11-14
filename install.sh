@@ -40,6 +40,8 @@ INSTALL_STOPPED=false
 INSTALL_DB_SNAPSHOT=""
 INSTALL_MAINTENANCE=""
 INSTALL_SQLITE_CHANGED=false
+INSTALL_SCHEMA_MARKER=""
+INSTALL_SCHEMA_MARKER_ADDED=false
 INSTALL_RECOVERY_FAILED=false
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -125,6 +127,9 @@ finish_install() {
           fi
         fi
       fi
+    fi
+    if [ "$INSTALL_SCHEMA_MARKER_ADDED" = "true" ]; then
+      rm -f -- "$INSTALL_SCHEMA_MARKER" || :
     fi
     status=1
   fi
@@ -238,6 +243,7 @@ download_binary() {
   mkdir -p "$INSTALL_DIR"
 
   INSTALL_DEST="$dest"
+  INSTALL_SCHEMA_MARKER="${dest}.schema-changed"
   INSTALL_DOWNLOAD=$(mktemp "${dest}.download.XXXXXX")
   trap finish_install EXIT
   trap 'exit 130' INT
@@ -456,11 +462,17 @@ main() {
     mv -f -- "$INSTALL_PREVIOUS_TMP" "${mnemo_bin}.previous" || err "Could not commit the previous-version recovery slot."
     INSTALL_PREVIOUS_TMP=""
   fi
-  # Record schema transitions before committing. A late old-process event
-  # must never trigger a binary-only downgrade against an incompatible DB.
+  # Prevent the runtime from restoring an old executable without also
+  # restoring its schema. The marker is tied to the installed binary path.
   if [ "$INSTALL_SQLITE_CHANGED" = "true" ]; then
-    local guard="$HOME/.mnemo/recovery/schema-migrated-$INSTALL_RELEASE"
-    printf '%s\n' "$INSTALL_RELEASE" > "$guard" || err "Could not record the schema recovery boundary."
+    if [ ! -e "$INSTALL_SCHEMA_MARKER" ]; then
+      if ! ( set -C; printf '%s\n' "$INSTALL_RELEASE" > "$INSTALL_SCHEMA_MARKER" ); then
+        err "Could not record the schema recovery boundary."
+      fi
+      INSTALL_SCHEMA_MARKER_ADDED=true
+    fi
+  elif [ -e "$INSTALL_SCHEMA_MARKER" ]; then
+    rm -f -- "$INSTALL_SCHEMA_MARKER" || err "Could not clear obsolete schema compatibility marker."
   fi
   # The release is committed before the write fence is lifted. Otherwise a
   # signal between fence removal and commit could roll back acknowledged saves.
