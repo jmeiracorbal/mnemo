@@ -102,10 +102,13 @@ finish_install() {
   [ -z "$INSTALL_DOWNLOAD" ] || rm -f -- "$INSTALL_DOWNLOAD"
   [ -z "$INSTALL_CHECKSUM" ] || rm -f -- "$INSTALL_CHECKSUM"
   [ -z "$INSTALL_LOCK" ] || rm -f -- "$INSTALL_LOCK"
-  if [ "$INSTALL_RECOVERY_FAILED" != "true" ]; then
+  if [ "$INSTALL_RECOVERY_FAILED" != "true" ] && [ "$INSTALL_TXN" != "true" ]; then
     [ -z "$INSTALL_BACKUP" ] || rm -f -- "$INSTALL_BACKUP"
     [ -z "$INSTALL_MARKER" ] || rm -f -- "$INSTALL_MARKER"
   else
+    # A committed transaction that failed finalization still owns its
+    # verified backup and journal. The next invocation must finish cleanup,
+    # never replay an older snapshot or discard the previous executable.
     status=1
   fi
   exit "$status"
