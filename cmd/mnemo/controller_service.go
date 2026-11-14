@@ -250,3 +250,28 @@ func stopControllerService(home string) error {
 		return fmt.Errorf("controller stop is unsupported on %s", runtime.GOOS)
 	}
 }
+
+// confirmManagedControllerStopped checks the native manager rather than
+// equating an unresponsive health probe with a stopped database writer.
+func confirmManagedControllerStopped(home string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		path := filepath.Join(home, "Library", "LaunchAgents", controllerLaunchLabel+".plist")
+		if _, err := os.Stat(path); os.IsNotExist(err) { return nil } else if err != nil { return err }
+		domain := "gui/" + strconv.Itoa(os.Getuid())
+		output, err := exec.Command("launchctl", "print", domain+"/"+controllerLaunchLabel).CombinedOutput()
+		if err != nil && strings.Contains(strings.ToLower(string(output)), "could not find service") { return nil }
+		if err != nil { return fmt.Errorf("cannot verify launchd controller state: %w: %s",err,output) }
+		return fmt.Errorf("launchd controller is still registered; database recovery requires it stopped")
+	case "linux":
+		path := filepath.Join(home,".config","systemd","user",controllerSystemdName)
+		if _,err:=os.Stat(path);os.IsNotExist(err){return nil}else if err!=nil{return err}
+		output,err:=exec.Command("systemctl","--user","is-active",controllerSystemdName).CombinedOutput()
+		state:=strings.TrimSpace(string(output))
+		if err!=nil && (state=="inactive" || state=="failed") { return nil }
+		if err!=nil {return fmt.Errorf("cannot verify systemd controller state: %w: %s",err,output)}
+		return fmt.Errorf("systemd controller is %s; database recovery requires it stopped",state)
+	default:
+		return fmt.Errorf("controller service state verification unsupported on %s", runtime.GOOS)
+	}
+}
