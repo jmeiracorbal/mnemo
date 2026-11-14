@@ -66,3 +66,19 @@ recovery never replays an old snapshot over newly acknowledged memories.
 The three newest recovery points are retained; a point referenced by the current
 transaction is protected. Incomplete pending recovery copies are removed only
 when the transaction is settled.
+
+## Native service integration
+
+The CI test `TestNativeServiceUpgradeRollback` runs on both Ubuntu and macOS
+with the respective native user service manager, `systemd --user` or `launchd`.
+It compiles the previous executable from `main` and the candidate executable
+from the pull request, starts the previous version, commits a SQLite row, and
+exercises the durable recovery journal through a failed and a successful
+cutover. It verifies the previous executable and SQLite row after recovery,
+then verifies the new executable, its previous-version slot, and clean
+transaction markers after a successful update.
+
+This integration test uses real controllers and SQLite storage; it does not
+substitute the operating system's service manager. The separate installer
+fault-injection test covers interrupted downloads, SIGKILL during migration,
+verification failure and interrupted finalization.
