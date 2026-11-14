@@ -34,6 +34,7 @@ const (
 	EventAgentToolResult      = "agent.tool_result"
 	EventWorkspaceFileChanged = "workspace.file_changed"
 	EventGitCommitCreated     = "git.commit_created"
+	EventHealthProbe          = "controller.health_probe"
 )
 
 // DurableEvent is the controller input persisted by the event broker. EventID
@@ -376,6 +377,9 @@ func (c *Controller) handleEvent(_ context.Context, delivery goevents.Event) err
 		}
 		event.ExecutionKey = identity.Execution
 	}
+	if event.Type == EventHealthProbe {
+		return nil // The event consumer and broker ACK are verified without a user memory write.
+	}
 	return c.store.ApplyDurableEvent(DurableEvent{
 		ID: event.ID, Type: event.Type, Project: event.Project,
 		ExecutionKey: event.ExecutionKey, Payload: event.Payload,
@@ -395,6 +399,15 @@ func (c *Controller) handleCommand(_ context.Context, delivery goevents.Event) e
 	}
 	if command.ID != delivery.ID {
 		c.replyTo(command.Reply, RPCResponse{Error: "command ID differs from transport ID"})
+		return nil
+	}
+	if command.Action == "health_probe" {
+		payload, err := c.store.ExecuteMCPAction(context.Background(), "health_probe", nil)
+		if err != nil {
+			c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
+			return nil
+		}
+		c.replyTo(command.Reply, RPCResponse{Payload: payload})
 		return nil
 	}
 	payload, err := c.store.ApplyMCPCommand(command.ID, command.Action, command.Payload)
