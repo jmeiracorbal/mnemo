@@ -273,7 +273,19 @@ func recoverUpgradeTransaction(force bool) (bool, error) {
 	if err != nil || tx == nil {
 		return false, err
 	}
-	if !force {
+	if force {
+		// Force is reserved for the installer that owns the marker, after it
+		// has stopped the managed controller. Never let another process
+		// override a live installer and restore SQLite underneath it.
+		data, err := os.ReadFile(tx.Binary + ".upgrading")
+		if err != nil {
+			return false, fmt.Errorf("recovery owner marker: %w", err)
+		}
+		owner, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err != nil || owner != os.Getppid() {
+			return false, fmt.Errorf("forced recovery is restricted to the owning installer")
+		}
+	} else {
 		active, err := activeTransactionInstaller(tx.Binary)
 		if err != nil {
 			return false, err
