@@ -197,7 +197,6 @@ if MOCK_MIGRATION_RESULT=pending MOCK_KILL_INSTALLER=yes bash "$repo_root/instal
 fi
 [ -e "$HOME/.mnemo/upgrade.transaction" ]
 [ -e "$HOME/.mnemo/upgrade.maintenance" ]
-printf "marker after hard crash: %q\\n" "$(cat "$MNEMO_INSTALL_DIR/mnemo.upgrading")" >&2
 if MOCK_PREFLIGHT_RESULT=fail bash "$repo_root/install.sh" > "$fixture/recovered.log" 2>&1; then
   echo 'installer continued despite deliberately failed preflight' >&2
   exit 1
