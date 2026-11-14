@@ -290,20 +290,10 @@ func (c *Controller) Run(ctx context.Context) error {
 		return fmt.Errorf("flush controller RPC subscription: %w", err)
 	}
 	transportErrors := make(chan error, 1)
-	// Handler failures are retryable. Transport failures (including failed ACKs
-	// and NAKs) must end Run so that the service manager sees a failed process.
-	reportTransportError := func(err error) {
-		if ctx.Err() != nil || errors.Is(err, errRetryableDelivery) {
-			return
-		}
-		select {
-		case transportErrors <- err:
-		default:
-		}
-	}
+	onTransportError := transportErrorReporter(ctx, transportErrors)
 	eventBus, err := goeventsnats.New(ctx, goeventsnats.Config{
 		URL: c.cfg.URL(), Stream: streamName, Consumer: consumerName,
-		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: reportTransportError,
+		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: onTransportError,
 	}, nats.Timeout(2*time.Second))
 	if err != nil {
 		return fmt.Errorf("open event transport: %w", err)
@@ -311,7 +301,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	defer func() { _ = eventBus.Close() }()
 	commandBus, err := goeventsnats.New(ctx, goeventsnats.Config{
 		URL: c.cfg.URL(), Stream: commandStreamName, Consumer: commandConsumerName,
-		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: reportTransportError,
+		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: onTransportError,
 	}, nats.Timeout(2*time.Second))
 	if err != nil {
 		return fmt.Errorf("open command transport: %w", err)
@@ -341,6 +331,20 @@ func (c *Controller) Run(ctx context.Context) error {
 }
 
 var errRetryableDelivery = errors.New("retryable delivery failure")
+
+// transportErrorReporter preserves handler redelivery but makes failures in
+// JetStream itself observable to the controller's lifecycle.
+func transportErrorReporter(ctx context.Context, failures chan<- error) func(error) {
+	return func(err error) {
+		if ctx.Err() != nil || errors.Is(err, errRetryableDelivery) {
+			return
+		}
+		select {
+		case failures <- err:
+		default:
+		}
+	}
+}
 
 func (c *Controller) handleEvent(_ context.Context, delivery goevents.Event) error {
 	var event Event
