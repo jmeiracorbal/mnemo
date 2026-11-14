@@ -97,6 +97,9 @@ case "$1" in
   -sSfL)
     if [ "${3:-}" = "-o" ]; then
       cp "$MOCK_RELEASE_BIN" "$4"
+      if [ "${MOCK_KILL_DOWNLOAD:-no}" = yes ]; then
+        kill -KILL "$PPID"
+      fi
     else
       shasum -a 256 "$MOCK_RELEASE_BIN"
     fi
@@ -122,6 +125,7 @@ reset_old() {
 
 check_no_residue() {
   [ ! -e "$MNEMO_INSTALL_DIR/mnemo.upgrading" ]
+  [ ! -e "$MNEMO_INSTALL_DIR/mnemo.installing" ]
   [ ! -e "$HOME/.mnemo/upgrade.maintenance" ]
   [ ! -e "$HOME/.mnemo/upgrade.transaction" ]
   [ ! -e "$HOME/.mnemo/upgrade.transaction.writing" ]
@@ -204,4 +208,22 @@ fi
 [ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = "mnemo v1.1.0" ]
 [ "$(cat "$HOME/.mnemo/memory.db")" = original-schema ]
 [ "$(cat "$HOME/active-controller")" = old ]
+check_no_residue
+
+# SIGKILL before the journal exists must also leave no download residue after
+# the next attempt. The previous executable and SQLite are never changed.
+reset_old
+printf original-schema > "$HOME/.mnemo/memory.db"
+if MOCK_KILL_DOWNLOAD=yes bash "$repo_root/install.sh" > "$fixture/download-crash.log" 2>&1; then
+  echo 'installer survived the injected download crash' >&2
+  exit 1
+fi
+[ -e "$MNEMO_INSTALL_DIR/mnemo.installing" ]
+[ ! -e "$HOME/.mnemo/upgrade.transaction" ]
+if MOCK_PREFLIGHT_RESULT=fail bash "$repo_root/install.sh" > "$fixture/retry-download.log" 2>&1; then
+  echo 'retry continued despite failed preflight' >&2
+  exit 1
+fi
+[ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = "mnemo v1.1.0" ]
+[ "$(cat "$HOME/.mnemo/memory.db")" = original-schema ]
 check_no_residue
