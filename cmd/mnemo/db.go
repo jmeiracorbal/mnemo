@@ -16,6 +16,7 @@ import (
 
 type dbMigrateOptions struct {
 	DataDir string
+	Target  string
 	Check   bool
 	JSON    bool
 }
@@ -38,7 +39,7 @@ func runDB() {
 }
 
 func printDBUsage() {
-	fmt.Fprintln(os.Stderr, "usage: mnemo db migrate [--data-dir=DIR] [--check] [--json]")
+	fmt.Fprintln(os.Stderr, "usage: mnemo db migrate [--data-dir=DIR] [--check] [--target=VERSION] [--json]")
 }
 
 func runDBMigrate() {
@@ -75,11 +76,16 @@ func parseDBMigrateArgs(args []string) (dbMigrateOptions, error) {
 			opts.Check = true
 		case arg == "--json":
 			opts.JSON = true
+		case strings.HasPrefix(arg, "--target="):
+			opts.Target = strings.TrimPrefix(arg, "--target=")
 		case strings.HasPrefix(arg, "--data-dir="):
 			opts.DataDir = arg[len("--data-dir="):]
 		default:
 			return opts, fmt.Errorf("unknown argument %q", arg)
 		}
+	}
+	if opts.Check && opts.Target != "" {
+		return opts, fmt.Errorf("--check cannot be combined with --target")
 	}
 	if opts.DataDir == "" {
 		cfg, err := store.DefaultConfig()
@@ -97,6 +103,9 @@ func migrateDB(opts dbMigrateOptions) (dbmigrate.Status, error) {
 	}
 	if err := guardControllerNotRunning(opts.DataDir); err != nil {
 		return dbmigrate.Status{}, err
+	}
+	if opts.Target != "" {
+		return dbmigrate.TargetDataDir(opts.DataDir, opts.Target)
 	}
 	return dbmigrate.ApplyDataDir(opts.DataDir)
 }
