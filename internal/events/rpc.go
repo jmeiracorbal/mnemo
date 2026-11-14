@@ -101,7 +101,7 @@ func callDurableCommand(ctx context.Context, cfg Config, nc *nats.Conn, action s
 	if err != nil {
 		return fmt.Errorf("open durable command transport: %w", err)
 	}
-	defer adapter.Close()
+	defer func() { _ = adapter.Close() }()
 	if err := adapter.Publish(ctx, goevents.Event{
 		ID: command.ID, Topic: commandSubject, Data: encoded,
 	}); err != nil {
