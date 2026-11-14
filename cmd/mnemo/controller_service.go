@@ -225,7 +225,13 @@ func stopControllerService(home string) error {
 		}
 		domain := "gui/" + strconv.Itoa(os.Getuid())
 		if output, err := exec.Command("launchctl", "bootout", domain, path).CombinedOutput(); err != nil {
-			return fmt.Errorf("stop launchd controller: %w: %s", err, output)
+			// A migration can fail after the first stop. Stopping an already
+			// unloaded launchd job must be an idempotent operation.
+			check, printErr := exec.Command("launchctl", "print", domain+"/"+controllerLaunchLabel).CombinedOutput()
+			if printErr != nil && strings.Contains(strings.ToLower(string(check)), "could not find service") {
+				return nil
+			}
+			return fmt.Errorf("stop launchd controller: %w: %s (state: %s)", err, output, check)
 		}
 		return nil
 	case "linux":
