@@ -508,3 +508,40 @@ func openTestDB(t *testing.T, path string) *sql.DB {
 	}
 	return db
 }
+
+
+func TestFailedMigrationRollsBackSchemaAndVersionTogether(t *testing.T) {
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "memory.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	// Force failure when the first migration attempts to register its version,
+	// after it has created tables. Nothing must remain after the failed commit.
+	if _, err := db.Exec("CREATE TABLE schema_migrations (version TEXT PRIMARY KEY CHECK(version != '0001'), name TEXT NOT NULL, checksum TEXT NOT NULL, dirty INTEGER NOT NULL DEFAULT 0, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"); err != nil {
+		t.Fatal(err)
+	}
+	migrations, err := LoadMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if migrations[0].Version != "0001" {
+		t.Fatalf("first migration unexpectedly changed: %+v", migrations[0])
+	}
+	if err := applyMigration(db, migrations[0]); err == nil {
+		t.Fatal("migration unexpectedly succeeded despite metadata constraint")
+	}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE name='sessions'").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal("DDL was committed even though migration history could not commit")
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatal("a failed migration left history or a dirty marker behind")
+	}
+}

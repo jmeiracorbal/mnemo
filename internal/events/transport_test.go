@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -408,5 +410,55 @@ func TestVerifyUpgradeRejectsStoppedController(t *testing.T) {
 	defer cancel()
 	if err := VerifyUpgrade(ctx, cfg); err == nil {
 		t.Fatal("verification succeeded without a controller")
+	}
+}
+
+
+func TestUpgradeMaintenanceDefersUserEventsUntilReleaseCommit(t *testing.T) {
+	dataDir := t.TempDir()
+	cfg := Config{Port: transportTestFreePort(t), DataDir: filepath.Join(dataDir, "events")}
+	marker := filepath.Join(dataDir, "upgrade.maintenance")
+	if err := os.WriteFile(marker, []byte("release transaction"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store := &transportTestStore{applied: make(chan DurableEvent, 1)}
+	controller, err := NewController(cfg, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- controller.Run(ctx) }()
+	if err := VerifyUpgrade(ctx, cfg); err != nil {
+		t.Fatalf("health probes should work under maintenance: %v", err)
+	}
+	event, err := NewEvent(EventExecutionStarted, "project-maintenance", "execution", struct{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Publish(ctx, cfg, event); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-store.applied:
+		t.Fatal("Mnemo committed a user event during SQLite recovery")
+	case <-time.After(400*time.Millisecond):
+	}
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case applied := <-store.applied:
+		if applied.ID != event.ID {
+			t.Fatalf("unexpected event %s", applied.ID)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("durable event was not replayed after recovery window")
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }

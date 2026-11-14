@@ -211,3 +211,76 @@ func xmlEscape(value string) string {
 	_ = xml.EscapeText(&escaped, []byte(value))
 	return escaped.String()
 }
+
+
+// stopControllerService quiesces the installation-owned controller before
+// taking a SQLite recovery point. A stopped controller must not be restarted
+// until after the recovery point and migration transaction are settled.
+func stopControllerService(home string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		path := filepath.Join(home, "Library", "LaunchAgents", controllerLaunchLabel+".plist")
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("controller service definition: %w", err)
+		}
+		domain := "gui/" + strconv.Itoa(os.Getuid())
+		if output, err := exec.Command("launchctl", "bootout", domain, path).CombinedOutput(); err != nil {
+			// A migration can fail after the first stop. Stopping an already
+			// unloaded launchd job must be an idempotent operation.
+			check, printErr := exec.Command("launchctl", "print", domain+"/"+controllerLaunchLabel).CombinedOutput()
+			if printErr != nil && strings.Contains(strings.ToLower(string(check)), "could not find service") {
+				return nil
+			}
+			return fmt.Errorf("stop launchd controller: %w: %s (state: %s)", err, output, check)
+		}
+		return nil
+	case "linux":
+		path := filepath.Join(home, ".config", "systemd", "user", controllerSystemdName)
+		if _, err := os.Stat(path); err != nil {
+			return fmt.Errorf("controller service definition: %w", err)
+		}
+		if output, err := exec.Command("systemctl", "--user", "stop", controllerSystemdName).CombinedOutput(); err != nil {
+			return fmt.Errorf("stop systemd controller: %w: %s", err, output)
+		}
+		if err := exec.Command("systemctl", "--user", "is-active", "--quiet", controllerSystemdName).Run(); err == nil {
+			return fmt.Errorf("systemd controller remains active after stop")
+		}
+		return nil
+	default:
+		return fmt.Errorf("controller stop is unsupported on %s", runtime.GOOS)
+	}
+}
+
+// confirmManagedControllerStopped checks the native manager rather than
+// equating an unresponsive health probe with a stopped database writer.
+func confirmManagedControllerStopped(home string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		path := filepath.Join(home, "Library", "LaunchAgents", controllerLaunchLabel+".plist")
+		if _, err := os.Stat(path); os.IsNotExist(err) { return nil } else if err != nil { return err }
+		domain := "gui/" + strconv.Itoa(os.Getuid())
+		output, err := exec.Command("launchctl", "print", domain+"/"+controllerLaunchLabel).CombinedOutput()
+		if err != nil && strings.Contains(strings.ToLower(string(output)), "could not find service") { return nil }
+		if err != nil { return fmt.Errorf("cannot verify launchd controller state: %w: %s",err,output) }
+		return fmt.Errorf("launchd controller is still registered; database recovery requires it stopped")
+	case "linux":
+		path := filepath.Join(home,".config","systemd","user",controllerSystemdName)
+		if _,err:=os.Stat(path);os.IsNotExist(err){return nil}else if err!=nil{return err}
+		output,err:=exec.Command("systemctl","--user","is-active",controllerSystemdName).CombinedOutput()
+		state:=strings.TrimSpace(string(output))
+		if err!=nil && (state=="inactive" || state=="failed") { return nil }
+		if err!=nil {return fmt.Errorf("cannot verify systemd controller state: %w: %s",err,output)}
+		return fmt.Errorf("systemd controller is %s; database recovery requires it stopped",state)
+	case "windows":
+		path:=filepath.Join(home,".mnemo","controller-task.xml")
+		if _,err:=os.Stat(path);os.IsNotExist(err){return nil}else if err!=nil{return err}
+		output,err:=exec.Command("schtasks","/Query","/TN",controllerWindowsTask,"/FO","LIST").CombinedOutput()
+		if err!=nil{return fmt.Errorf("cannot verify Windows controller task: %w: %s",err,output)}
+		state:=strings.ToLower(string(output))
+		if strings.Contains(state,"running"){return fmt.Errorf("windows controller is running")}
+		if strings.Contains(state,"ready") || strings.Contains(state,"disabled"){return nil}
+		return fmt.Errorf("windows controller task state is unknown: %s",output)
+	default:
+		return fmt.Errorf("controller service state verification unsupported on %s", runtime.GOOS)
+	}
+}

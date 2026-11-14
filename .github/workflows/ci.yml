@@ -65,6 +65,46 @@ jobs:
       - name: Build
         run: go build ./...
 
+  native-service:
+    name: Native service (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Prepare systemd user manager
+        if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$USER"
+          sudo systemctl start "user@$(id -u).service"
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          echo "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus" >> "$GITHUB_ENV"
+
+      - name: Check out previous release
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: previous
+
+      - name: Build actual previous and new executables
+        run: |
+          go build -o "$RUNNER_TEMP/mnemo-new" ./cmd/mnemo
+          (cd previous && go build -o "$RUNNER_TEMP/mnemo-old" ./cmd/mnemo)
+
+      - name: Verify real launchd/systemd upgrade and rollback
+        env:
+          MNEMO_NATIVE_SERVICE_E2E: "1"
+          MNEMO_NATIVE_OLD_BIN: ${{ runner.temp }}/mnemo-old
+          MNEMO_NATIVE_NEW_BIN: ${{ runner.temp }}/mnemo-new
+        run: go test -v -timeout 5m ./cmd/mnemo -run '^TestNativeServiceUpgradeRollback$' -count=1
+
   lint:
     runs-on: ubuntu-latest
     steps:

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/jmeiracorbal/mnemo/internal/store"
@@ -72,53 +70,4 @@ func TestStoreCommandPropagatesControllerError(t *testing.T) {
 	}
 }
 
-func TestPreviousControllerBinaryIsRestoredAfterLateLegacyEvent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "mnemo")
-	if err := os.WriteFile(path, []byte("new release"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path+".previous", []byte("previous release"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if !isLegacyCutoverFailure(errors.New("durable transport failure: invalid event delivery: event ID is required")) {
-		t.Fatal("late headerless event must trigger automatic recovery")
-	}
-	if !isLegacyCutoverFailure(errors.New("unsafe go-events cutover: old message")) {
-		t.Fatal("legacy event found on service restart must trigger recovery")
-	}
-	if isLegacyCutoverFailure(errors.New("ordinary transient network failure")) {
-		t.Fatal("unrelated transport failures must not downgrade Mnemo")
-	}
-	restored, err := restorePreviousControllerBinary(path)
-	if err != nil || !restored {
-		t.Fatalf("restore previous controller: restored=%v err=%v", restored, err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil || string(data) != "previous release" {
-		t.Fatalf("previous binary was not restored: data=%q err=%v", data, err)
-	}
-	if _, err := os.Stat(path+".previous"); !os.IsNotExist(err) {
-		t.Fatalf("recovery slot should be consumed: %v", err)
-	}
-}
 
-func TestRuntimeRollbackWaitsForActiveInstaller(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "mnemo")
-	for _, entry := range []struct{ path, contents string }{
-		{path, "new release"},
-		{path + ".previous", "previous release"},
-		{path + ".upgrading", strconv.Itoa(os.Getpid())},
-	} {
-		if err := os.WriteFile(entry.path, []byte(entry.contents), 0755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	restored, err := restorePreviousControllerBinary(path)
-	if err != nil || restored {
-		t.Fatalf("active installer must own rollback: restored=%v err=%v", restored, err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil || !strings.Contains(string(data), "new release") {
-		t.Fatalf("binary replaced while installer was active: %v", err)
-	}
-}

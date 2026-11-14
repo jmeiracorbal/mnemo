@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -157,6 +158,145 @@ func Apply(db *sql.DB) (Status, error) {
 	return status, nil
 }
 
+
+// ApplyTarget moves a database to an exact, known schema version. Down
+// migrations are opt-in: destructive historical migrations are never
+// reconstructed or reversed automatically.
+func ApplyTarget(db *sql.DB, target string) (Status, error) {
+	migrations, err := LoadMigrations()
+	if err != nil {
+		return Status{}, err
+	}
+	known := false
+	for _, migration := range migrations {
+		if migration.Version == target {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return Status{}, fmt.Errorf("unknown target schema version %q", target)
+	}
+	if _, err := db.Exec(metadataDDL); err != nil {
+		return Status{}, err
+	}
+	current, err := checkAgainstMigrations(db, migrations)
+	if err != nil {
+		return current, err
+	}
+	applied := make(map[string]bool, len(current.Applied))
+	for _, row := range current.Applied {
+		applied[row.Version] = true
+	}
+
+	// Validate the complete reverse path before modifying either data or
+	// migration history. A missing or destructive down migration is rejected.
+	for i := len(migrations) - 1; i >= 0; i-- {
+		m := migrations[i]
+		if CompareMigrationVersions(m.Version, target) <= 0 || !applied[m.Version] {
+			continue
+		}
+		if _, err := reverseSQL(m); err != nil {
+			return current, err
+		}
+	}
+	for i := len(migrations) - 1; i >= 0; i-- {
+		m := migrations[i]
+		if CompareMigrationVersions(m.Version, target) > 0 && applied[m.Version] {
+			if err := reverseMigration(db, m); err != nil {
+				return current, err
+			}
+		}
+	}
+	for _, m := range migrations {
+		if CompareMigrationVersions(m.Version, target) > 0 {
+			break
+		}
+		if !applied[m.Version] {
+			if err := applyMigration(db, m); err != nil {
+				return current, err
+			}
+		}
+	}
+	result, err := checkAgainstMigrations(db, migrations)
+	if err != nil {
+		return result, err
+	}
+	if result.CurrentVersion != target {
+		return result, fmt.Errorf("schema target %s not reached (current %s)", target, result.CurrentVersion)
+	}
+	if target == latestVersion(migrations) {
+		if err := ValidateCurrent(db); err != nil {
+			return result, err
+		}
+	}
+	result.Message = "database schema is at target version " + target
+	return result, nil
+}
+
+// TargetDataDir only changes a database after offline controller checks.
+func TargetDataDir(dataDir, target string) (Status, error) {
+	if !filepath.IsAbs(dataDir) {
+		return Status{}, fmt.Errorf("data directory must be absolute")
+	}
+	if _, err := os.Stat(DBPath(dataDir)); err != nil {
+		return Status{}, fmt.Errorf("target schema requires an existing database: %w", err)
+	}
+	db, err := sql.Open("sqlite", DBPath(dataDir))
+	if err != nil {
+		return Status{}, err
+	}
+	defer func() { _ = db.Close() }()
+	if err := applyPragmas(db); err != nil {
+		return Status{}, err
+	}
+	status, err := ApplyTarget(db, target)
+	status.DBPath = DBPath(dataDir)
+	status.Exists = true
+	return status, err
+}
+
+// reverseSQL only loads an explicitly audited inverse. An existing forward
+// migration never implies a safe inverse, especially after deleting data.
+func reverseSQL(m Migration) (string, error) {
+	path := filepath.ToSlash(filepath.Join("migrations", m.Version+"-"+m.Name+".down.sql"))
+	content, err := fs.ReadFile(dbfiles.Migrations, path)
+	if err != nil {
+		return "", fmt.Errorf("migration %s is not reversible: %w", m.Version, err)
+	}
+	if strings.TrimSpace(string(content)) == "" {
+		return "", fmt.Errorf("migration %s has an empty reverse script", m.Version)
+	}
+	return string(content), nil
+}
+
+func reverseMigration(db *sql.DB, migration Migration) error {
+	sqlText, err := reverseSQL(migration)
+	if err != nil {
+		return err
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(sqlText); err != nil {
+		return fmt.Errorf("reverse migration %s: %w", migration.Version, err)
+	}
+	result, err := tx.Exec("DELETE FROM schema_migrations WHERE version = ? AND checksum = ?", migration.Version, migration.Checksum)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return fmt.Errorf("migration %s history did not match the reverse operation", migration.Version)
+	}
+	return tx.Commit()
+}
+
 func Check(db *sql.DB) (Status, error) {
 	migrations, err := LoadMigrations()
 	if err != nil {
@@ -189,7 +329,7 @@ func LoadMigrations() ([]Migration, error) {
 	var migrations []Migration
 	seen := map[string]bool{}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") || strings.HasSuffix(entry.Name(), ".down.sql") {
 			continue
 		}
 		version, name, ok := parseMigrationName(entry.Name())
@@ -224,43 +364,52 @@ func applyMigration(db *sql.DB, migration Migration) error {
 	if err != nil {
 		return fmt.Errorf("migration %s guard: %w", migration.Version, err)
 	}
-	if _, err := db.Exec(`INSERT OR REPLACE INTO schema_migrations (version, name, checksum, dirty, applied_at) VALUES (?, ?, ?, 1, datetime('now'))`, migration.Version, migration.Name, migration.Checksum); err != nil {
-		return fmt.Errorf("mark migration %s dirty: %w", migration.Version, err)
+	// The migration's DDL/data and schema_migrations row must be one SQLite
+	// transaction. Marking dirty outside that transaction left irrecoverable
+	// half-commits after failures. A failed transaction now changes neither.
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("migration %s connection: %w", migration.Version, err)
 	}
+	defer func() { _ = conn.Close() }()
+	foreignKeysOff := shouldRun && migrationNeedsForeignKeysOff(content)
+	if foreignKeysOff {
+		if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+			return fmt.Errorf("disable foreign keys for migration %s: %w", migration.Version, err)
+		}
+		defer func() { _, _ = conn.ExecContext(ctx, "PRAGMA foreign_keys = ON") }()
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin migration %s: %w", migration.Version, err)
+	}
+	defer func() { _ = tx.Rollback() }()
 	if shouldRun && strings.TrimSpace(content) != "" {
-		if migrationNeedsForeignKeysOff(content) {
-			if _, err := db.Exec("PRAGMA foreign_keys = OFF"); err != nil {
-				return fmt.Errorf("disable foreign keys for migration %s: %w", migration.Version, err)
-			}
-			defer func() { _, _ = db.Exec("PRAGMA foreign_keys = ON") }()
-		}
-		tx, err := db.Begin()
-		if err != nil {
-			return fmt.Errorf("begin migration %s: %w", migration.Version, err)
-		}
-		if _, err := tx.Exec(content); err != nil {
-			_ = tx.Rollback()
+		if _, err := tx.ExecContext(ctx, content); err != nil {
 			return fmt.Errorf("apply migration %s %s: %w", migration.Version, migration.Name, err)
 		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("commit migration %s: %w", migration.Version, err)
-		}
-		if migrationNeedsForeignKeysOff(content) {
-			if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-				return fmt.Errorf("restore foreign keys for migration %s: %w", migration.Version, err)
-			}
-			if err := checkForeignKeys(db); err != nil {
-				return fmt.Errorf("foreign key check after migration %s: %w", migration.Version, err)
-			}
+	}
+	if foreignKeysOff {
+		if err := checkForeignKeys(tx); err != nil {
+			return fmt.Errorf("foreign key check after migration %s: %w", migration.Version, err)
 		}
 	}
-	if _, err := db.Exec(`UPDATE schema_migrations SET dirty = 0, applied_at = datetime('now') WHERE version = ?`, migration.Version); err != nil {
-		return fmt.Errorf("mark migration %s applied: %w", migration.Version, err)
+	if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations (version, name, checksum, dirty, applied_at) VALUES (?, ?, ?, 0, datetime('now'))", migration.Version, migration.Name, migration.Checksum); err != nil {
+		return fmt.Errorf("record applied migration %s: %w", migration.Version, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit migration %s: %w", migration.Version, err)
+	}
+	if foreignKeysOff {
+		if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+			return fmt.Errorf("restore foreign keys for migration %s: %w", migration.Version, err)
+		}
 	}
 	return nil
 }
 
-func checkForeignKeys(db *sql.DB) error {
+func checkForeignKeys(db interface{ Query(string, ...any) (*sql.Rows, error) }) error {
 	rows, err := db.Query("PRAGMA foreign_key_check")
 	if err != nil {
 		return err
