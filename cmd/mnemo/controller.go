@@ -67,9 +67,21 @@ func runControllerVerify() error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	return events.VerifyUpgrade(ctx, cfg)
+	var lastErr error
+	for {
+		if err := events.VerifyUpgrade(ctx, cfg); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("controller verification failed: %v: %w", lastErr, ctx.Err())
+		case <-time.After(300 * time.Millisecond):
+		}
+	}
 }
 
 const orphanedSessionSweepInterval = 5 * time.Minute
