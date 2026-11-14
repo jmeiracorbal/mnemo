@@ -4,6 +4,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
+trap 'status=$?; printf "installer test failed at line %s (exit=%s): %s\\n" "$LINENO" "$status" "$BASH_COMMAND" >&2; if [ -f "$fixture/recovered.log" ]; then printf "%s\\n" "-- recovery log --" >&2; cat "$fixture/recovered.log" >&2; fi; exit "$status"' ERR
+set -E
 mkdir -p "$fixture/home/.mnemo" "$fixture/bin" "$fixture/mock-bin"
 printf '[events]\nport = 4222\n' > "$fixture/home/.mnemo/config.toml"
 
