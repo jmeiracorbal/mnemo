@@ -65,7 +65,6 @@ jobs:
       - name: Build
         run: go build ./...
 
-
   native-service:
     name: Native service (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -104,38 +103,7 @@ jobs:
           MNEMO_NATIVE_SERVICE_E2E: "1"
           MNEMO_NATIVE_OLD_BIN: ${{ runner.temp }}/mnemo-old
           MNEMO_NATIVE_NEW_BIN: ${{ runner.temp }}/mnemo-new
-        run: go test -v -timeout 5m ./cmd/mnemo -run '^TestNativeServiceUpgradeRollback
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
-
-      - name: Lint
-        run: golangci-lint run ./...
-
-  vuln:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
-
-      - name: Run govulncheck
-        run: govulncheck -scan symbol ./...
-        working-directory: cmd/mnemo
- -count=1
-
+        run: go test -v -timeout 5m ./cmd/mnemo -run '^TestNativeServiceUpgradeRollback$' -count=1
 
   lint:
     runs-on: ubuntu-latest
