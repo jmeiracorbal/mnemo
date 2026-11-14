@@ -4434,3 +4434,21 @@ func TestExistingStoreRefusesWritesAfterUpgradeFence(t *testing.T) {
 	if err := os.Remove(marker); err != nil { t.Fatal(err) }
 	if err := s.EnsureProject("project-fenced", "fenced"); err != nil { t.Fatalf("write not resumed after commit: %v", err) }
 }
+
+func TestCommitRacingWithRecoveryFenceDoesNotAcknowledgeWrite(t *testing.T) {
+	s := newTestStore(t)
+	marker := filepath.Join(s.DataDir(), "upgrade.maintenance")
+	commit := s.hooks.commit
+	s.hooks.commit = func(tx *sql.Tx) error {
+		if err := commit(tx); err != nil { return err }
+		return os.WriteFile(marker, []byte("release"), 0600)
+	}
+	err := s.EnsureProject("commit-race", "unacknowledged")
+	if err == nil || !strings.Contains(err.Error(), "transaction") {
+		t.Fatalf("committed write was acknowledged after the recovery fence: %v", err)
+	}
+	if err := os.Remove(marker); err != nil { t.Fatal(err) }
+	if _, err := s.GetProjectByID("commit-race"); err != nil {
+		t.Fatalf("store must remain valid after rejected acknowledgment: %v", err)
+	}
+}
