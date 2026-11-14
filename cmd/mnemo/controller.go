@@ -72,7 +72,13 @@ func runControllerVerify() error {
 	var lastErr error
 	for {
 		if err := events.VerifyUpgrade(ctx, cfg); err == nil {
-			return nil
+			// Observe the restarted controller before committing the binary.
+			// An immediate late legacy delivery must trigger rollback, not success.
+			if err := events.WaitUpgradeReady(ctx, cfg, 2*time.Second); err == nil {
+				return nil
+			} else {
+				lastErr = err
+			}
 		} else {
 			lastErr = err
 		}
