@@ -26,7 +26,10 @@ func (*transportTestStore) ApplyMCPCommand(string, string, json.RawMessage) (jso
 	return json.RawMessage(`null`), nil
 }
 
-func (*transportTestStore) ExecuteMCPAction(context.Context, string, json.RawMessage) (json.RawMessage, error) {
+func (*transportTestStore) ExecuteMCPAction(_ context.Context, action string, _ json.RawMessage) (json.RawMessage, error) {
+	if action == "health_probe" {
+		return json.RawMessage(`true`), nil
+	}
 	return json.RawMessage(`null`), nil
 }
 
@@ -376,5 +379,34 @@ func TestUpgradeGraceRequiresQuietPeriodWhenQueueInitiallyEmpty(t *testing.T) {
 	}
 	if elapsed := time.Since(started); elapsed < 350*time.Millisecond {
 		t.Fatalf("empty queue did not receive a grace period: %s", elapsed)
+	}
+}
+
+func TestVerifyUpgradeProvesDurableCommandAndEventAcknowledgment(t *testing.T) {
+	cfg := Config{Port: transportTestFreePort(t), DataDir: t.TempDir()}
+	controller, err := NewController(cfg, &transportTestStore{applied: make(chan DurableEvent, 2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer controller.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- controller.Run(ctx) }()
+	if err := VerifyUpgrade(ctx, cfg); err != nil {
+		t.Fatalf("automated upgrade validation failed: %v", err)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("controller stopped with error: %v", err)
+	}
+}
+
+func TestVerifyUpgradeRejectsStoppedController(t *testing.T) {
+	cfg := Config{Port: transportTestFreePort(t), DataDir: t.TempDir()}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if err := VerifyUpgrade(ctx, cfg); err == nil {
+		t.Fatal("verification succeeded without a controller")
 	}
 }
