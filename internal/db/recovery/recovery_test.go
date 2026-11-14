@@ -3,6 +3,8 @@ package recovery
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"time"
 	"os"
 	"path/filepath"
 	"strings"
@@ -161,4 +163,30 @@ func TestRecoveryPointCannotBeOverwrittenForSameRelease(t *testing.T) {
 	if got := recoveryCount(t, recovered); got != 1 {
 		t.Fatalf("immutable restore point was overwritten: got %d rows", got)
 	}
+}
+
+
+func TestRecoveryRetentionKeepsLatestAndProtectedPoint(t *testing.T) {
+	dataDir := t.TempDir()
+	db := openRecoveryTestDB(t, filepath.Join(dataDir, "memory.db"))
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec("CREATE TABLE saved (value TEXT)"); err != nil { t.Fatal(err) }
+	for n := 0; n < 5; n++ {
+		release := fmt.Sprintf("v1.0.%d", n)
+		path, err := Snapshot(context.Background(), dataDir, release)
+		if err != nil { t.Fatal(err) }
+		at := time.Unix(int64(n+1), 0)
+		if err := os.Chtimes(path, at, at); err != nil { t.Fatal(err) }
+	}
+	orphan := filepath.Join(dataDir, "recovery", "v1.0.9.db.pending")
+	if err := os.WriteFile(orphan, []byte("interrupted copy"), 0600); err != nil { t.Fatal(err) }
+	if err := PruneRecoveryPoints(dataDir, "v1.0.1", 2); err != nil { t.Fatal(err) }
+	for n := 0; n < 5; n++ {
+		path := filepath.Join(dataDir, "recovery", fmt.Sprintf("v1.0.%d.db", n))
+		_, err := os.Stat(path)
+		shouldRemain := n == 1 || n >= 3
+		if shouldRemain && err != nil { t.Errorf("protected or recent snapshot removed: %s: %v", path, err) }
+		if !shouldRemain && !os.IsNotExist(err) { t.Errorf("obsolete snapshot retained: %s: %v", path, err) }
+	}
+	if _, err := os.Stat(orphan); !os.IsNotExist(err) { t.Fatalf("orphan snapshot pending file remains: %v", err) }
 }
