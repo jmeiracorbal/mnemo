@@ -3,6 +3,8 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -236,5 +238,36 @@ func TestUpgradeReadinessRejectsHistoryWithoutConsumer(t *testing.T) {
 	}
 	if err := CheckUpgradeReady(context.Background(), cfg); err == nil || !strings.Contains(err.Error(), "durable consumer is absent") {
 		t.Fatalf("expected missing durable with historical messages to block upgrade: %v", err)
+	}
+}
+
+func TestTransportErrorReporterPropagatesFatalErrorsOnly(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	failures := make(chan error, 1)
+	report := transportErrorReporter(ctx, failures)
+	retryable := fmt.Errorf("handle event: %w", errRetryableDelivery)
+	report(retryable)
+	select {
+	case err := <-failures:
+		t.Fatalf("retryable handler failure was fatal: %v", err)
+	default:
+	}
+	fatal := errors.New("durable acknowledgment failed")
+	report(fatal)
+	select {
+	case err := <-failures:
+		if !errors.Is(err, fatal) {
+			t.Fatalf("reported error = %v, want %v", err, fatal)
+		}
+	default:
+		t.Fatal("fatal transport failure was suppressed")
+	}
+	cancel()
+	report(errors.New("shutdown canceled acknowledgment"))
+	select {
+	case err := <-failures:
+		t.Fatalf("graceful shutdown caused fatal error: %v", err)
+	default:
 	}
 }
