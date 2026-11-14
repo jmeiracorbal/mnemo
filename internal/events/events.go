@@ -327,12 +327,7 @@ func (c *Controller) Run(ctx context.Context) error {
 		return fmt.Errorf("subscribe event stream: %w", err)
 	}
 	defer func() { _ = eventSub.Close() }()
-	commandSub, err := commandBus.Subscribe(ctx, commandSubject, func(ctx context.Context, event goevents.Event) error {
-		if err := c.handleCommand(ctx, event); err != nil {
-			return fmt.Errorf("%w: %v", errRetryableDelivery, err)
-		}
-		return nil
-	})
+	commandSub, err := commandBus.Subscribe(ctx, commandSubject, c.handleCommand)
 	if err != nil {
 		return fmt.Errorf("subscribe command stream: %w", err)
 	}
