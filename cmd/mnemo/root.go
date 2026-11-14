@@ -83,6 +83,10 @@ func storeCommand(use, short string, run func(*store.Store) error) *cobra.Comman
 		if err != nil {
 			return fmt.Errorf("mnemo: config error: %w", err)
 		}
+		if cmd.Name()=="serve" && cmd.Parent()!=nil && cmd.Parent().Name()=="controller" {
+			if err:=recoverControllerStartup();err!=nil{return err}
+			cfg.AllowUpgradeMaintenance=true
+		}
 		s, err := store.New(cfg)
 		if err != nil {
 			return fmt.Errorf("mnemo: failed to open store: %w", err)
@@ -103,7 +107,10 @@ func hasHelpArg(args []string) bool {
 }
 
 func addCommandTree(root *cobra.Command) {
-	addChildren(root, "db", command("migrate [--data-dir=DIR] [--check] [--json]", "Validate or apply database migrations", runDBMigrate))
+	addChildren(root, "db",
+		command("migrate [--data-dir=DIR] [--check] [--json]", "Validate or apply database migrations", runDBMigrate),
+		command("recovery <snapshot|restore|verify> --release=VERSION", "Manage SQLite release recovery points", runDBRecovery),
+	)
 	addChildren(root, "setup",
 		command("status [--json] [--agent=AGENT] [--home=DIR]", "Show global agent setup status", runSetupStatus),
 		command("print-config AGENT [--home=DIR] [--mnemo-bin=PATH]", "Print manual setup config snippets", runSetupPrintConfig),
@@ -140,6 +147,13 @@ func addCommandTree(root *cobra.Command) {
 		}},
 		&cobra.Command{Use: "verify", Short: "Verify controller, SQLite and durable processing after upgrade", RunE: func(*cobra.Command, []string) error {
 			return runControllerVerify()
+		}},
+		&cobra.Command{Use: "stop", Short: "Stop the managed controller for database maintenance", RunE: func(*cobra.Command, []string) error {
+			return runControllerStop()
+		}},
+		&cobra.Command{Use:"transaction",Short:"Coordinate a persistent release transaction",DisableFlagParsing:true,RunE:func(cmd *cobra.Command,args []string)error{
+			if hasHelpArg(args) {return cmd.Help()}
+			return runControllerTransaction(args)
 		}},
 	)
 	addChildren(root, "events",

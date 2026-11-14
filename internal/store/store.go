@@ -24,6 +24,7 @@ var openDB = sql.Open
 
 type Config struct {
 	DataDir              string
+	AllowUpgradeMaintenance bool
 	MaxObservationLength int
 	MaxContextResults    int
 	MaxSearchResults     int
@@ -163,6 +164,15 @@ func New(cfg Config) (*Store, error) {
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		return nil, fmt.Errorf("mnemo: create data dir: %w", err)
 	}
+	// Ordinary CLI and MCP processes must not open or migrate SQLite during a
+	// release rollback. Only the managed controller's verification run is allowed.
+	if !cfg.AllowUpgradeMaintenance {
+		if _,err:=os.Stat(filepath.Join(cfg.DataDir,"upgrade.maintenance"));err==nil {
+			return nil,fmt.Errorf("mnemo: SQLite upgrade transaction is active")
+		} else if !os.IsNotExist(err) {
+			return nil,fmt.Errorf("mnemo: inspect upgrade transaction: %w",err)
+		}
+	}
 
 	dbPath := filepath.Join(cfg.DataDir, "memory.db")
 	// modernc.org/sqlite applies _pragma parameters to every physical
@@ -214,17 +224,29 @@ func (s *Store) migrate() error {
 	return err
 }
 
+// checkUpgradeWrites prevents already-open MCP and CLI store connections
+// from committing between the SQLite snapshot and release decision.
+func (s *Store) checkUpgradeWrites() error {
+	if _,err:=os.Stat(filepath.Join(s.cfg.DataDir,"upgrade.maintenance"));err==nil {
+		return fmt.Errorf("mnemo release transaction in progress; write rejected")
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("cannot verify upgrade write fence: %w",err)
+	}
+	return nil
+}
+
 func (s *Store) withTx(fn func(tx *sql.Tx) error) error {
+	if err:=s.checkUpgradeWrites();err!=nil{return err}
 	if s.activeTx != nil {
 		return fn(s.activeTx)
 	}
 	tx, err := s.beginTxHook()
-	if err != nil {
-		return err
-	}
+	if err != nil {return err}
 	defer tx.Rollback()
-	if err := fn(tx); err != nil {
-		return err
-	}
-	return s.commitHook(tx)
+	if err := fn(tx); err != nil {return err}
+	if err:=s.checkUpgradeWrites();err!=nil{return err}
+	if err:=s.commitHook(tx);err!=nil{return err}
+	// The fence can appear while SQLite commits. Never acknowledge a write
+	// that raced with a recovery snapshot, even after a successful COMMIT.
+	return s.checkUpgradeWrites()
 }
