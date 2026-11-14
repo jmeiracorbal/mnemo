@@ -474,6 +474,7 @@ func WaitUpgradeReady(ctx context.Context, cfg Config, quietPeriod time.Duration
 		err := CheckUpgradeReady(ctx, cfg)
 		switch {
 		case err == nil:
+			lastPending = nil
 			if quietSince.IsZero() {
 				quietSince = time.Now()
 			}
