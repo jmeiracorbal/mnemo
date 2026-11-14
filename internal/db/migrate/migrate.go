@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -224,43 +225,52 @@ func applyMigration(db *sql.DB, migration Migration) error {
 	if err != nil {
 		return fmt.Errorf("migration %s guard: %w", migration.Version, err)
 	}
-	if _, err := db.Exec(`INSERT OR REPLACE INTO schema_migrations (version, name, checksum, dirty, applied_at) VALUES (?, ?, ?, 1, datetime('now'))`, migration.Version, migration.Name, migration.Checksum); err != nil {
-		return fmt.Errorf("mark migration %s dirty: %w", migration.Version, err)
+	// The migration's DDL/data and schema_migrations row must be one SQLite
+	// transaction. Marking dirty outside that transaction left irrecoverable
+	// half-commits after failures. A failed transaction now changes neither.
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("migration %s connection: %w", migration.Version, err)
 	}
+	defer func() { _ = conn.Close() }()
+	foreignKeysOff := shouldRun && migrationNeedsForeignKeysOff(content)
+	if foreignKeysOff {
+		if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+			return fmt.Errorf("disable foreign keys for migration %s: %w", migration.Version, err)
+		}
+		defer func() { _, _ = conn.ExecContext(ctx, "PRAGMA foreign_keys = ON") }()
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin migration %s: %w", migration.Version, err)
+	}
+	defer func() { _ = tx.Rollback() }()
 	if shouldRun && strings.TrimSpace(content) != "" {
-		if migrationNeedsForeignKeysOff(content) {
-			if _, err := db.Exec("PRAGMA foreign_keys = OFF"); err != nil {
-				return fmt.Errorf("disable foreign keys for migration %s: %w", migration.Version, err)
-			}
-			defer func() { _, _ = db.Exec("PRAGMA foreign_keys = ON") }()
-		}
-		tx, err := db.Begin()
-		if err != nil {
-			return fmt.Errorf("begin migration %s: %w", migration.Version, err)
-		}
-		if _, err := tx.Exec(content); err != nil {
-			_ = tx.Rollback()
+		if _, err := tx.ExecContext(ctx, content); err != nil {
 			return fmt.Errorf("apply migration %s %s: %w", migration.Version, migration.Name, err)
 		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("commit migration %s: %w", migration.Version, err)
-		}
-		if migrationNeedsForeignKeysOff(content) {
-			if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-				return fmt.Errorf("restore foreign keys for migration %s: %w", migration.Version, err)
-			}
-			if err := checkForeignKeys(db); err != nil {
-				return fmt.Errorf("foreign key check after migration %s: %w", migration.Version, err)
-			}
+	}
+	if foreignKeysOff {
+		if err := checkForeignKeys(tx); err != nil {
+			return fmt.Errorf("foreign key check after migration %s: %w", migration.Version, err)
 		}
 	}
-	if _, err := db.Exec(`UPDATE schema_migrations SET dirty = 0, applied_at = datetime('now') WHERE version = ?`, migration.Version); err != nil {
-		return fmt.Errorf("mark migration %s applied: %w", migration.Version, err)
+	if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations (version, name, checksum, dirty, applied_at) VALUES (?, ?, ?, 0, datetime('now'))", migration.Version, migration.Name, migration.Checksum); err != nil {
+		return fmt.Errorf("record applied migration %s: %w", migration.Version, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit migration %s: %w", migration.Version, err)
+	}
+	if foreignKeysOff {
+		if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = ON"); err != nil {
+			return fmt.Errorf("restore foreign keys for migration %s: %w", migration.Version, err)
+		}
 	}
 	return nil
 }
 
-func checkForeignKeys(db *sql.DB) error {
+func checkForeignKeys(db interface{ Query(string, ...any) (*sql.Rows, error) }) error {
 	rows, err := db.Query("PRAGMA foreign_key_check")
 	if err != nil {
 		return err
