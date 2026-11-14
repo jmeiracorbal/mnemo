@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -235,7 +236,13 @@ func PruneRecoveryPoints(dataDir, protected string, retain int) error {
 			continue
 		}
 		name := entry.Name()
-		if filepath.Ext(name) == ".pending" {
+		if strings.HasSuffix(name, ".db.pending") {
+			// Clean only incomplete recovery points created by Mnemo; never
+			// delete unrelated pending files from the same directory.
+			release := strings.TrimSuffix(name, ".db.pending")
+			if _, err := pointPath(dataDir, release); err != nil {
+				continue
+			}
 			if err := os.Remove(filepath.Join(dir, name)); err != nil {
 				return err
 			}
