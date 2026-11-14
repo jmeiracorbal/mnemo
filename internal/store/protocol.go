@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 
-	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
@@ -152,6 +151,3 @@ func projectObservation(ref protocol.ResourceRef, obs *Observation) protocol.Obs
 	}
 }
 
-// The typed public contract does not use local SQLite row IDs. Internal
-// read and mutation operations remain owned by the same Store.
-var _ = dbgen.Queries{}

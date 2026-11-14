@@ -47,7 +47,7 @@ type Querier interface {
 	GetObservation(ctx context.Context, id int64) (GetObservationRow, error)
 	GetObservationBySyncIDIncludingDeleted(ctx context.Context, syncID sql.NullString) (GetObservationBySyncIDIncludingDeletedRow, error)
 	GetOpenSessionByMCPInstance(ctx context.Context, arg GetOpenSessionByMCPInstanceParams) (string, error)
-	GetProcessedMCPCommandResult(ctx context.Context, id string) (string, error)
+	GetProcessedMCPCommandResult(ctx context.Context, id string) (GetProcessedMCPCommandResultRow, error)
 	GetProjectByID(ctx context.Context, id string) (Project, error)
 	GetProvenanceContext(ctx context.Context, id int64) (GetProvenanceContextRow, error)
 	GetProvenanceContextID(ctx context.Context, arg GetProvenanceContextIDParams) (int64, error)
