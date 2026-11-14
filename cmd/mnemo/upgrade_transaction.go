@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"context"
 
 	"github.com/jmeiracorbal/mnemo/internal/db/recovery"
 	"github.com/jmeiracorbal/mnemo/internal/store"
-	"context"
 )
 
 type upgradeTransaction struct {
@@ -20,6 +20,8 @@ type upgradeTransaction struct {
 	Backup   string `json:"backup"`
 	Snapshot string `json:"snapshot,omitempty"`
 	Phase    string `json:"phase"`
+	SchemaChanged bool `json:"schema_changed,omitempty"`
+	HadSchemaMarker bool `json:"had_schema_marker,omitempty"`
 }
 
 func transactionPath() (string, error) {
@@ -136,11 +138,9 @@ func activeTransactionInstaller(binary string) (bool, error) {
 }
 
 func beginUpgradeTransaction(binary, backup string) error {
-	if _, err := readUpgradeTransaction(); err != nil {
-		return err
-	} else if tx, _ := readUpgradeTransaction(); tx != nil {
-		return fmt.Errorf("unresolved upgrade transaction already exists")
-	}
+	previous, err := readUpgradeTransaction()
+	if err != nil { return err }
+	if previous != nil { return fmt.Errorf("unresolved upgrade transaction already exists") }
 	binary, err := filepath.Abs(binary)
 	if err != nil {
 		return err
@@ -152,7 +152,12 @@ func beginUpgradeTransaction(binary, backup string) error {
 	if _, err := os.Stat(backup); err != nil {
 		return fmt.Errorf("preserved binary: %w", err)
 	}
-	return persistUpgradeTransaction(upgradeTransaction{Binary: binary, Backup: backup, Phase: "prepared"}, true)
+	if filepath.Dir(binary) != filepath.Dir(backup) || !strings.HasPrefix(filepath.Base(backup),filepath.Base(binary)+".rollback.") {
+		return fmt.Errorf("upgrade backup must be in the executable directory")
+	}
+	hadMarker := false
+	if _,err:=os.Stat(binary+".schema-changed");err==nil {hadMarker=true} else if !errors.Is(err,os.ErrNotExist) {return err}
+	return persistUpgradeTransaction(upgradeTransaction{Binary: binary, Backup: backup, Phase: "prepared", HadSchemaMarker: hadMarker}, true)
 }
 
 func setUpgradeSnapshot(release string) error {
@@ -174,6 +179,14 @@ func setUpgradeSnapshot(release string) error {
 	return persistUpgradeTransaction(*tx, false)
 }
 
+func recordSchemaChange() error {
+	tx,err:=readUpgradeTransaction()
+	if err!=nil{return err}
+	if tx==nil || tx.Phase!="prepared" {return fmt.Errorf("no prepared upgrade transaction")}
+	tx.SchemaChanged=true
+	return persistUpgradeTransaction(*tx,false)
+}
+
 func commitUpgradeTransaction() error {
 	tx, err := readUpgradeTransaction()
 	if err != nil {
@@ -182,11 +195,19 @@ func commitUpgradeTransaction() error {
 	if tx == nil || tx.Phase != "prepared" {
 		return fmt.Errorf("no prepared upgrade transaction")
 	}
-	tx.Phase = "committed"
-	if err := persistUpgradeTransaction(*tx, false); err != nil {
-		return err
+	if tx.SchemaChanged {
+		marker:=tx.Binary+".schema-changed"
+		if _,err:=os.Stat(marker);errors.Is(err,os.ErrNotExist) {
+			file,err:=os.OpenFile(marker,os.O_WRONLY|os.O_CREATE|os.O_EXCL,0600)
+			if err!=nil{return err}
+			if _,err=file.Write([]byte("schema migration committed\n"));err!=nil{_ = file.Close();return err}
+			if err=file.Sync();err!=nil{_ = file.Close();return err}
+			if err=file.Close();err!=nil{return err}
+			if err=syncTransactionDirectory(filepath.Dir(tx.Binary));err!=nil{return err}
+		} else if err!=nil {return err}
 	}
-	return finalizeUpgradeTransaction(*tx)
+	tx.Phase="committed"
+	return persistUpgradeTransaction(*tx,false)
 }
 
 func finalizeUpgradeTransaction(tx upgradeTransaction) error {
@@ -197,6 +218,10 @@ func finalizeUpgradeTransaction(tx upgradeTransaction) error {
 	cfg, err := store.DefaultConfig()
 	if err != nil {
 		return err
+	}
+	// A schema boundary belongs to this release, not a failed update.
+	if !tx.SchemaChanged {
+		if err:=os.Remove(tx.Binary+".schema-changed");err!=nil && !errors.Is(err,os.ErrNotExist){return err}
 	}
 	// Always release the write fence after the committed phase is durable.
 	for _, file := range []string{
@@ -261,6 +286,7 @@ func recoverUpgradeTransaction(force bool) (bool, error) {
 		return false, err
 	}
 	tx.Phase = "committed"
+	tx.SchemaChanged = tx.HadSchemaMarker
 	if err := persistUpgradeTransaction(*tx, false); err != nil {
 		return false, err
 	}
@@ -283,7 +309,7 @@ func recoverControllerStartup() error {
 
 func runControllerTransaction(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: mnemo controller transaction <begin|snapshot|commit|recover>")
+		return fmt.Errorf("usage: mnemo controller transaction <begin|snapshot|schema|commit|finalize|recover>")
 	}
 	switch args[0] {
 	case "begin":
@@ -296,16 +322,21 @@ func runControllerTransaction(args []string) error {
 			return fmt.Errorf("usage: mnemo controller transaction snapshot --release=ID")
 		}
 		return setUpgradeSnapshot(strings.TrimPrefix(args[1], "--release="))
+	case "schema":
+		if len(args)!=2 || args[1]!="--changed" {return fmt.Errorf("usage: mnemo controller transaction schema --changed")}
+		return recordSchemaChange()
 	case "commit":
-		if len(args) != 1 {
-			return fmt.Errorf("usage: mnemo controller transaction commit")
-		}
+		if len(args) != 1 {return fmt.Errorf("usage: mnemo controller transaction commit")}
 		return commitUpgradeTransaction()
+	case "finalize":
+		if len(args)!=1 {return fmt.Errorf("usage: mnemo controller transaction finalize")}
+		tx,err:=readUpgradeTransaction()
+		if err!=nil{return err}
+		if tx==nil || tx.Phase!="committed" {return fmt.Errorf("no committed transaction")}
+		return finalizeUpgradeTransaction(*tx)
 	case "recover":
-		if len(args) != 1 {
-			return fmt.Errorf("usage: mnemo controller transaction recover")
-		}
-		_, err := recoverUpgradeTransaction(false)
+		if len(args)>2 || (len(args)==2 && args[1]!="--force") {return fmt.Errorf("usage: mnemo controller transaction recover [--force]")}
+		_,err:=recoverUpgradeTransaction(len(args)==2)
 		return err
 	default:
 		return fmt.Errorf("unknown controller transaction operation %q", args[0])
