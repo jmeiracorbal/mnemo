@@ -56,4 +56,20 @@ func runControllerPreflight() error {
 	return events.WaitUpgradeReady(ctx, cfg, 3*time.Second)
 }
 
+// runControllerVerify is called by install.sh after a managed-service restart.
+// It performs a real read and durable processing check without changing memories.
+func runControllerVerify() error {
+	storeConfig, err := store.DefaultConfig()
+	if err != nil {
+		return err
+	}
+	cfg, err := events.LoadConfig(storeConfig.DataDir)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	return events.VerifyUpgrade(ctx, cfg)
+}
+
 const orphanedSessionSweepInterval = 5 * time.Minute
