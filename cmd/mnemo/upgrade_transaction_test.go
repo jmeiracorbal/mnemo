@@ -82,7 +82,7 @@ func TestInterruptedUpgradeRecoversCommittedWALDataAndExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer recovered.Close()
+	defer func() { _ = recovered.Close() }()
 	var count int
 	if err := recovered.QueryRow("SELECT COUNT(*) FROM memories").Scan(&count); err != nil {
 		t.Fatal(err)
@@ -125,7 +125,7 @@ func TestCommittedUpgradeNeverReplaysOldSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer current.Close()
+	defer func() { _ = current.Close() }()
 	var count int
 	if err := current.QueryRow("SELECT COUNT(*) FROM memories").Scan(&count); err != nil {
 		t.Fatal(err)
