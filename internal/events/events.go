@@ -259,9 +259,10 @@ func (c *Controller) preflightDurables() error {
 		} else if err != nil {
 			return fmt.Errorf("inspect durable %s: %w", durable.consumer, err)
 		} else {
-			if consumer.NumPending == 0 && consumer.NumAckPending == 0 {
-				continue
-			}
+			// JetStream may report zero pending immediately after a publish
+			// even when the stream already contains an unacknowledged record.
+			// Scan from the durable acknowledgment floor, not its eventual
+			// pending counter, before handing messages to go-events.
 			from = consumer.AckFloor.Stream + 1
 		}
 		for seq := from; seq <= stream.State.LastSeq; seq++ {
