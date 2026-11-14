@@ -35,6 +35,11 @@ INSTALL_DEST=""
 INSTALL_SWITCHED=false
 INSTALL_VERIFIED=false
 INSTALL_RESTORE_AGENT="claudecode"
+INSTALL_RELEASE=""
+INSTALL_STOPPED=false
+INSTALL_DB_SNAPSHOT=""
+INSTALL_MAINTENANCE=""
+INSTALL_SQLITE_CHANGED=false
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -57,13 +62,47 @@ finish_install() {
   local status=$?
   trap - EXIT
 
-  if [ "$INSTALL_SWITCHED" = "true" ] && [ "$INSTALL_VERIFIED" != "true" ]; then
-    warn "The new controller was not verified; restoring the previous version."
-    if [ -n "$INSTALL_BACKUP" ] && [ -f "$INSTALL_BACKUP" ]; then
-      if mv -f -- "$INSTALL_BACKUP" "$INSTALL_DEST"; then
-        INSTALL_BACKUP=""
+  if [ "$INSTALL_SWITCHED" = "true" ] && [ "$INSTALL_VERIFIED" != "true" ] ||
+     [ "$INSTALL_STOPPED" = "true" ] && [ "$INSTALL_VERIFIED" != "true" ]; then
+    warn "The release transaction was not verified; recovering the previous Mnemo installation."
+
+    local recovery_bin="$INSTALL_DOWNLOAD"
+    if [ "$INSTALL_SWITCHED" = "true" ]; then
+      recovery_bin="$INSTALL_DEST"
+      # A failed service bootstrap may mean there is nothing left to stop;
+      # restore is still guarded against any active controller.
+      "$recovery_bin" controller stop >/dev/null 2>&1 || :
+    fi
+
+    local db_recovered=true
+    if [ -n "$INSTALL_DB_SNAPSHOT" ]; then
+      if ! "$recovery_bin" db recovery restore --release="$INSTALL_DB_SNAPSHOT"; then
+        db_recovered=false
+        printf '[mnemo] CRITICAL: SQLite rollback failed. The binary and recovery point are preserved; the previous controller will not start against an unknown schema.\n' >&2
+        status=1
+      fi
+    fi
+
+    if [ "$db_recovered" = "true" ]; then
+      if [ "$INSTALL_SWITCHED" = "true" ]; then
+        if [ -n "$INSTALL_BACKUP" ] && [ -f "$INSTALL_BACKUP" ]; then
+          if mv -f -- "$INSTALL_BACKUP" "$INSTALL_DEST"; then
+            INSTALL_BACKUP=""
+          else
+            db_recovered=false
+            printf '[mnemo] CRITICAL: could not restore the previous Mnemo executable.\n' >&2
+          fi
+        else
+          rm -f -- "$INSTALL_DEST"
+        fi
+      fi
+    fi
+    if [ "$db_recovered" = "true" ]; then
+      [ -z "$INSTALL_MAINTENANCE" ] || rm -f -- "$INSTALL_MAINTENANCE"
+      INSTALL_MAINTENANCE=""
+      if [ -n "$INSTALL_BACKUP" ] || [ -x "$INSTALL_DEST" ]; then
         if ! "$INSTALL_DEST" setup refresh --agent="$INSTALL_RESTORE_AGENT" --mnemo-bin="$INSTALL_DEST"; then
-          printf '[mnemo] CRITICAL: previous binary restored, but the old controller could not be restarted.\n' >&2
+          printf '[mnemo] CRITICAL: previous controller could not be restarted.\n' >&2
           status=1
         else
           local restored=false
@@ -76,26 +115,23 @@ finish_install() {
             sleep 1
           done
           if [ "$restored" != "true" ]; then
-            printf '[mnemo] CRITICAL: previous binary restored, but controller health is unconfirmed.\n' >&2
+            printf '[mnemo] CRITICAL: previous controller health is unconfirmed.\n' >&2
             status=1
           else
-            info "Previous Mnemo version restored and responding."
+            info "Previous Mnemo executable and SQLite state recovered."
           fi
         fi
-      else
-        printf '[mnemo] CRITICAL: could not restore the previous Mnemo binary.\n' >&2
-        status=1
       fi
-    else
-      # First-time installation has no previous version to recover.
-      rm -f -- "$INSTALL_DEST"
     fi
+    status=1
   fi
   [ -z "$INSTALL_DOWNLOAD" ] || rm -f -- "$INSTALL_DOWNLOAD"
   [ -z "$INSTALL_CHECKSUM" ] || rm -f -- "$INSTALL_CHECKSUM"
   [ -z "$INSTALL_BACKUP" ] || rm -f -- "$INSTALL_BACKUP"
   [ -z "$INSTALL_PREVIOUS_TMP" ] || rm -f -- "$INSTALL_PREVIOUS_TMP"
   [ -z "$INSTALL_MARKER" ] || rm -f -- "$INSTALL_MARKER"
+  # A failed SQLite restore leaves the maintenance marker in place to prevent
+  # any newer controller from acknowledging writes against the wrong schema.
   exit "$status"
 }
 
