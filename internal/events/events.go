@@ -364,6 +364,11 @@ func (c *Controller) handleEvent(_ context.Context, delivery goevents.Event) err
 	if err := json.Unmarshal(delivery.Data, &event); err != nil {
 		return fmt.Errorf("decode durable event: %w", err)
 	}
+	// Keep real deliveries durable and unacknowledged until the installer
+	// commits or rolls back its database snapshot. Health probes are safe.
+	if event.Type != EventHealthProbe && UpgradeMaintenance(c.cfg) {
+		return fmt.Errorf("%w: database recovery window is active", errRetryableDelivery)
+	}
 	if err := event.Validate(); err != nil {
 		return err
 	}
@@ -392,6 +397,9 @@ func (c *Controller) handleCommand(_ context.Context, delivery goevents.Event) e
 		// The previous controller acknowledged malformed durable commands
 		// without replaying them. Keep the same poison-message behavior.
 		return nil
+	}
+	if command.Action != "health_probe" && UpgradeMaintenance(c.cfg) {
+		return fmt.Errorf("%w: database recovery window is active", errRetryableDelivery)
 	}
 	if err := command.Validate(); err != nil {
 		c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
@@ -427,6 +435,10 @@ func (c *Controller) handleRPC(message *nats.Msg) {
 	}
 	if strings.TrimSpace(request.Action) == "" {
 		c.replyRPC(message, RPCResponse{Error: "action is required"})
+		return
+	}
+	if request.Action != "health_probe" && UpgradeMaintenance(c.cfg) {
+		c.replyRPC(message, RPCResponse{Error: "Mnemo upgrade in progress; retry after controller recovery"})
 		return
 	}
 	payload, err := c.store.ExecuteMCPAction(context.Background(), request.Action, request.Payload)
@@ -627,4 +639,14 @@ func VerifyUpgrade(ctx context.Context, cfg Config) error {
 		case <-ticker.C:
 		}
 	}
+}
+
+
+// UpgradeMaintenance prevents new user writes while a release transaction
+// might restore SQLite. Durable deliveries are NAKed, never acknowledged or
+// dropped, and read-only installer health probes remain available.
+func UpgradeMaintenance(cfg Config) bool {
+	path := filepath.Join(filepath.Dir(cfg.DataDir), "upgrade.maintenance")
+	_, err := os.Stat(path)
+	return err == nil || !os.IsNotExist(err)
 }
