@@ -349,7 +349,9 @@ func (c *Controller) handleEvent(_ context.Context, delivery goevents.Event) err
 func (c *Controller) handleCommand(_ context.Context, delivery goevents.Event) error {
 	var command Command
 	if err := json.Unmarshal(delivery.Data, &command); err != nil {
-		return fmt.Errorf("decode durable command: %w", err)
+		// The previous controller acknowledged malformed durable commands
+		// without replaying them. Keep the same poison-message behavior.
+		return nil
 	}
 	if err := command.Validate(); err != nil {
 		c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
