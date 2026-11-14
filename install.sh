@@ -246,8 +246,8 @@ download_binary() {
     # If the journal already exists, its recovery owns this marker and backup.
     # Otherwise the former installer died before starting the transaction.
     if [ ! -e "$HOME/.mnemo/upgrade.transaction" ]; then
-      rm -f -- "$marker" "${dest}.rollback.${prior_pid}" ||
-        err "Cannot clean up an interrupted pre-transaction download."
+      rm -f -- "$marker" "${dest}.rollback.${prior_pid}" "$HOME/.mnemo/upgrade.transaction.writing" ||
+        err "Cannot clean up an interrupted pre-transaction installation."
     fi
   fi
   # PID-addressed artifacts let an interrupted run clean only its own files.
