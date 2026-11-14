@@ -11,7 +11,7 @@ import (
 func TestTargetUpDownAndRepeatedApplication(t *testing.T) {
  db,err:=sql.Open("sqlite",":memory:")
  if err!=nil {t.Fatal(err)}
- defer db.Close()
+ defer func() { _ = db.Close() }()
  db.SetMaxOpenConns(1)
  if _,err:=ApplyTarget(db,"0031");err!=nil {t.Fatal(err)}
  if _,err:=ApplyTarget(db,"0032");err!=nil {t.Fatal(err)}
@@ -31,7 +31,7 @@ func TestTargetUpDownAndRepeatedApplication(t *testing.T) {
 func TestTargetRefusesIrreversibleDowngradeWithoutChanges(t *testing.T) {
  db,err:=sql.Open("sqlite",":memory:")
  if err!=nil {t.Fatal(err)}
- defer db.Close()
+ defer func() { _ = db.Close() }()
  db.SetMaxOpenConns(1)
  if _,err:=Apply(db);err!=nil {t.Fatal(err)}
  var before int
