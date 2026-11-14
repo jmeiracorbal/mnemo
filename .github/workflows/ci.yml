@@ -52,6 +52,9 @@ jobs:
       - name: Validate installer syntax
         run: bash -n install.sh
 
+      - name: Verify transactional installer and rollback
+        run: bash tests/install_upgrade_test.sh
+
       - name: Test
         run: go test ./...
 
