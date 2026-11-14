@@ -456,13 +456,19 @@ main() {
     mv -f -- "$INSTALL_PREVIOUS_TMP" "${mnemo_bin}.previous" || err "Could not commit the previous-version recovery slot."
     INSTALL_PREVIOUS_TMP=""
   fi
-  # Keep the controller's durable write fence active until every potentially
-  # failing commit operation is complete. Only then release queued writes.
+  # Record schema transitions before committing. A late old-process event
+  # must never trigger a binary-only downgrade against an incompatible DB.
+  if [ "$INSTALL_SQLITE_CHANGED" = "true" ]; then
+    local guard="$HOME/.mnemo/recovery/schema-migrated-$INSTALL_RELEASE"
+    printf '%s\n' "$INSTALL_RELEASE" > "$guard" || err "Could not record the schema recovery boundary."
+  fi
+  # The release is committed before the write fence is lifted. Otherwise a
+  # signal between fence removal and commit could roll back acknowledged saves.
+  INSTALL_VERIFIED=true
   if [ -n "$INSTALL_MAINTENANCE" ]; then
-    rm -f -- "$INSTALL_MAINTENANCE" || err "Could not release the controller write fence."
+    rm -f -- "$INSTALL_MAINTENANCE" || err "Update committed, but the controller write fence could not be released."
     INSTALL_MAINTENANCE=""
   fi
-  INSTALL_VERIFIED=true
   ok "Controller verified; upgrade committed."
 }
 
