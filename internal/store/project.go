@@ -19,7 +19,9 @@ func (s *Store) EnsureProject(id, name string) error {
 	if name == "" {
 		name = id
 	}
-	return s.q.EnsureProject(context.Background(), dbgen.EnsureProjectParams{ID: id, Name: name})
+	return s.withTx(func(tx *sql.Tx) error {
+		return s.q.WithTx(tx).EnsureProject(context.Background(), dbgen.EnsureProjectParams{ID:id,Name:name})
+	})
 }
 
 func (s *Store) ensureProjectTx(tx *sql.Tx, id string) error {
@@ -245,12 +247,11 @@ func (s *Store) RenameProject(selector ProjectRenameSelector, newName string) (*
 	if !plan.WillChange {
 		return result, nil
 	}
-	if err := s.q.UpsertProjectName(context.Background(), dbgen.UpsertProjectNameParams{
-		ID:   plan.Project.ID,
-		Name: plan.NewName,
-	}); err != nil {
-		return nil, fmt.Errorf("rename project metadata: %w", err)
-	}
+	if err := s.withTx(func(tx *sql.Tx) error {
+		return s.q.WithTx(tx).UpsertProjectName(context.Background(),dbgen.UpsertProjectNameParams{
+			ID:plan.Project.ID,Name:plan.NewName,
+		})
+	});err!=nil{return nil,fmt.Errorf("rename project metadata: %w",err)}
 	return result, nil
 }
 
