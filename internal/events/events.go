@@ -452,6 +452,53 @@ func (c *Controller) Close() {
 func (c *Controller) LocalAddress() net.Addr { return c.server.Addr() }
 
 
+// WaitUpgradeReady gives in-flight saves time to finish before an upgrade.
+// Both durable consumers must remain drained for the full quiet period.
+// A timeout leaves the old controller running; no messages are discarded.
+func WaitUpgradeReady(ctx context.Context, cfg Config, quietPeriod time.Duration) error {
+	if quietPeriod <= 0 {
+		return fmt.Errorf("upgrade quiet period must be positive")
+	}
+	const pollInterval = 200 * time.Millisecond
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	var quietSince time.Time
+	var lastPending error
+	for {
+		if err := ctx.Err(); err != nil {
+			if lastPending != nil {
+				return fmt.Errorf("upgrade blocked: pending saves did not finish within the grace period: %v: %w", lastPending, err)
+			}
+			return fmt.Errorf("upgrade grace period ended: %w", err)
+		}
+		err := CheckUpgradeReady(ctx, cfg)
+		switch {
+		case err == nil:
+			if quietSince.IsZero() {
+				quietSince = time.Now()
+			}
+			if time.Since(quietSince) >= quietPeriod {
+				return nil
+			}
+		case errors.Is(err, errUpgradePending):
+			quietSince = time.Time{}
+			lastPending = err
+		default:
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			if lastPending != nil {
+				return fmt.Errorf("upgrade blocked: pending saves did not finish within the grace period: %v: %w", lastPending, ctx.Err())
+			}
+			return fmt.Errorf("upgrade grace period ended: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+var errUpgradePending = errors.New("pending durable deliveries")
+
 // CheckUpgradeReady inspects the running, pre-upgrade controller without
 // altering stream, consumer, or message state. The installer calls it before
 // replacing the binary. Both event and command streams must be fully drained.
@@ -494,7 +541,7 @@ func CheckUpgradeReady(ctx context.Context, cfg Config) error {
 			return fmt.Errorf("upgrade blocked: durable %s has an incompatible configuration", durable.consumer)
 		}
 		if consumer.NumPending != 0 || consumer.NumAckPending != 0 {
-			return fmt.Errorf("upgrade blocked: durable %s has %d pending and %d awaiting acknowledgment; allow the current controller to finish processing", durable.consumer, consumer.NumPending, consumer.NumAckPending)
+			return fmt.Errorf("upgrade blocked: %w: durable %s has %d pending and %d awaiting acknowledgment", errUpgradePending, durable.consumer, consumer.NumPending, consumer.NumAckPending)
 		}
 	}
 	return nil
