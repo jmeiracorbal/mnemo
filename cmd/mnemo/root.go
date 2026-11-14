@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
 	"github.com/jmeiracorbal/mnemo/internal/store"
