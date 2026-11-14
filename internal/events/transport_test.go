@@ -153,8 +153,8 @@ func TestAcknowledgedLegacyMessagesSurviveRestartWithoutReplay(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	cancel()
-	<-done
-	t.Fatal("updated controller did not acknowledge delivery and initialize command consumer")
+	shutdownErr := <-done
+	t.Fatalf("updated controller did not acknowledge delivery and initialize command consumer (shutdown: %v)", shutdownErr)
 }
 
 func transportTestFreePort(t *testing.T) int {
