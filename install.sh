@@ -235,7 +235,8 @@ download_binary() {
     # Exclusive marker prevents concurrent installers and differentiates an
     # in-progress transaction from failures after a successful upgrade.
     local marker="${dest}.upgrading"
-    if ! ( set -C; printf '%s\\n' "$" > "$marker" ) 2>/dev/null; then
+    local marker_pid="$BASHPID"
+    if ! ( set -C; echo "$marker_pid" > "$marker" ) 2>/dev/null; then
       err "Another Mnemo upgrade is already running or left an unresolved upgrade marker: ${marker}"
     fi
     INSTALL_MARKER="$marker"
