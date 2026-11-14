@@ -247,20 +247,23 @@ func (c *Controller) preflightDurables() error {
 		if err != nil {
 			return fmt.Errorf("inspect stream %s: %w", durable.stream, err)
 		}
+		if stream.State.Msgs == 0 {
+			continue
+		}
 		consumer, err := c.js.ConsumerInfo(durable.stream, durable.consumer)
+		from := stream.State.FirstSeq
 		if errors.Is(err, nats.ErrConsumerNotFound) {
-			if stream.State.Msgs != 0 {
-				return fmt.Errorf("unsafe go-events cutover: stream %s has messages but durable %s does not exist", durable.stream, durable.consumer)
-			}
-			continue
-		}
-		if err != nil {
+			// A first-time installation may have published valid, header-identified
+			// events before the consumer was created. Inspect rather than reject them.
+		} else if err != nil {
 			return fmt.Errorf("inspect durable %s: %w", durable.consumer, err)
+		} else {
+			if consumer.NumPending == 0 && consumer.NumAckPending == 0 {
+				continue
+			}
+			from = consumer.AckFloor.Stream + 1
 		}
-		if consumer.NumPending == 0 && consumer.NumAckPending == 0 {
-			continue
-		}
-		for seq := consumer.AckFloor.Stream + 1; seq <= stream.State.LastSeq; seq++ {
+		for seq := from; seq <= stream.State.LastSeq; seq++ {
 			message, err := c.js.GetMsg(durable.stream, seq)
 			if errors.Is(err, nats.ErrMsgNotFound) {
 				continue
