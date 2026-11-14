@@ -245,5 +245,8 @@ func (s *Store) withTx(fn func(tx *sql.Tx) error) error {
 	defer tx.Rollback()
 	if err := fn(tx); err != nil {return err}
 	if err:=s.checkUpgradeWrites();err!=nil{return err}
-	return s.commitHook(tx)
+	if err:=s.commitHook(tx);err!=nil{return err}
+	// The fence can appear while SQLite commits. Never acknowledge a write
+	// that raced with a recovery snapshot, even after a successful COMMIT.
+	return s.checkUpgradeWrites()
 }
