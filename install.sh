@@ -25,7 +25,7 @@ AGENT="${MNEMO_AGENT:-auto}"
 # Installer-internal Mnemo commands must not recursively offer another update.
 export MNEMO_NO_UPDATE_CHECK=1
 
-# Transaction state belongs to the installer, not the running controller.
+# State is durable in ~/.mnemo/upgrade.transaction, not in shell variables.
 INSTALL_DOWNLOAD=""
 INSTALL_CHECKSUM=""
 INSTALL_BACKUP=""
@@ -34,15 +34,10 @@ INSTALL_MARKER=""
 INSTALL_DEST=""
 INSTALL_SWITCHED=false
 INSTALL_VERIFIED=false
-INSTALL_RESTORE_AGENT="claudecode"
-INSTALL_RELEASE=""
-INSTALL_STOPPED=false
-INSTALL_DB_SNAPSHOT=""
-INSTALL_MAINTENANCE=""
-INSTALL_SQLITE_CHANGED=false
-INSTALL_SCHEMA_MARKER=""
-INSTALL_SCHEMA_MARKER_ADDED=false
+INSTALL_TXN=false
 INSTALL_RECOVERY_FAILED=false
+INSTALL_RESTORE_AGENT="claudecode"
+INSTALL_SQLITE_CHANGED=false
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -59,89 +54,61 @@ dry() {
   fi
 }
 
-# The EXIT handler owns recovery for every failure after the binary switch.
-# The previous binary remains available until the new service is verified.
+# An update cannot report failure after a database change without recovering
+# the previous executable and SQLite first. No second binary-only rollback path
+# is permitted for an existing installation.
 finish_install() {
   local status=$?
   trap - EXIT
 
-  if [ "$INSTALL_SWITCHED" = "true" ] && [ "$INSTALL_VERIFIED" != "true" ] ||
-     [ "$INSTALL_STOPPED" = "true" ] && [ "$INSTALL_VERIFIED" != "true" ]; then
-    warn "The release transaction was not verified; recovering the previous Mnemo installation."
-
+  if [ "$INSTALL_VERIFIED" != "true" ] && [ "$INSTALL_TXN" = "true" ]; then
+    warn "The release was not committed; restoring the previous installation."
     local recovery_bin="$INSTALL_DOWNLOAD"
     if [ "$INSTALL_SWITCHED" = "true" ]; then
       recovery_bin="$INSTALL_DEST"
-      # A failed service bootstrap may mean there is nothing left to stop;
-      # restore is still guarded against any active controller.
-      "$recovery_bin" controller stop >/dev/null 2>&1 || :
     fi
-
-    local db_recovered=true
-    if [ -n "$INSTALL_DB_SNAPSHOT" ]; then
-      if ! "$recovery_bin" db recovery restore --release="$INSTALL_DB_SNAPSHOT"; then
-        db_recovered=false
-        INSTALL_RECOVERY_FAILED=true
-        printf '[mnemo] CRITICAL: SQLite rollback failed. The binary and recovery point are preserved; the previous controller will not start against an unknown schema.\n' >&2
-        status=1
-      fi
-    fi
-
-    if [ "$db_recovered" = "true" ]; then
-      if [ "$INSTALL_SWITCHED" = "true" ]; then
-        if [ -n "$INSTALL_BACKUP" ] && [ -f "$INSTALL_BACKUP" ]; then
-          if mv -f -- "$INSTALL_BACKUP" "$INSTALL_DEST"; then
-            INSTALL_BACKUP=""
-          else
-            db_recovered=false
-            INSTALL_RECOVERY_FAILED=true
-            printf '[mnemo] CRITICAL: could not restore the previous Mnemo executable.\n' >&2
+    if ! "$recovery_bin" controller stop >/dev/null 2>&1; then
+      INSTALL_RECOVERY_FAILED=true
+      printf '[mnemo] CRITICAL: could not stop the controller; SQLite recovery is fenced.\n' >&2
+    elif ! "$recovery_bin" controller transaction recover --force; then
+      INSTALL_RECOVERY_FAILED=true
+      printf '[mnemo] CRITICAL: release recovery failed; the journal, backup and write fence are preserved.\n' >&2
+    else
+      INSTALL_TXN=false
+      INSTALL_BACKUP=""
+      if ! "$INSTALL_DEST" setup refresh --agent="$INSTALL_RESTORE_AGENT" --mnemo-bin="$INSTALL_DEST"; then
+        printf '[mnemo] CRITICAL: previous controller could not restart after recovery.\n' >&2
+      else
+        local attempt restored=false
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          if "$INSTALL_DEST" stats >/dev/null 2>&1; then
+            restored=true
+            break
           fi
+          sleep 1
+        done
+        if [ "$restored" = "true" ]; then
+          info "Previous Mnemo executable and SQLite state recovered."
         else
-          rm -f -- "$INSTALL_DEST"
+          printf '[mnemo] CRITICAL: recovered controller health is unconfirmed.\n' >&2
         fi
       fi
     fi
-    if [ "$db_recovered" = "true" ]; then
-      [ -z "$INSTALL_MAINTENANCE" ] || rm -f -- "$INSTALL_MAINTENANCE"
-      INSTALL_MAINTENANCE=""
-      if [ -n "$INSTALL_BACKUP" ] || [ -x "$INSTALL_DEST" ]; then
-        if ! "$INSTALL_DEST" setup refresh --agent="$INSTALL_RESTORE_AGENT" --mnemo-bin="$INSTALL_DEST"; then
-          printf '[mnemo] CRITICAL: previous controller could not be restarted.\n' >&2
-          status=1
-        else
-          local restored=false
-          local attempt
-          for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            if "$INSTALL_DEST" stats >/dev/null 2>&1; then
-              restored=true
-              break
-            fi
-            sleep 1
-          done
-          if [ "$restored" != "true" ]; then
-            printf '[mnemo] CRITICAL: previous controller health is unconfirmed.\n' >&2
-            status=1
-          else
-            info "Previous Mnemo executable and SQLite state recovered."
-          fi
-        fi
-      fi
-    fi
-    if [ "$INSTALL_SCHEMA_MARKER_ADDED" = "true" ] && [ "$INSTALL_RECOVERY_FAILED" != "true" ]; then
-      rm -f -- "$INSTALL_SCHEMA_MARKER" || :
-    fi
+    status=1
+  elif [ "$INSTALL_VERIFIED" != "true" ] && [ "$INSTALL_SWITCHED" = "true" ]; then
+    # There is no previous executable on a first-time installation.
+    rm -f -- "$INSTALL_DEST"
     status=1
   fi
   [ -z "$INSTALL_DOWNLOAD" ] || rm -f -- "$INSTALL_DOWNLOAD"
   [ -z "$INSTALL_CHECKSUM" ] || rm -f -- "$INSTALL_CHECKSUM"
+  [ -z "$INSTALL_PREVIOUS_TMP" ] || rm -f -- "$INSTALL_PREVIOUS_TMP"
   if [ "$INSTALL_RECOVERY_FAILED" != "true" ]; then
     [ -z "$INSTALL_BACKUP" ] || rm -f -- "$INSTALL_BACKUP"
-    [ -z "$INSTALL_PREVIOUS_TMP" ] || rm -f -- "$INSTALL_PREVIOUS_TMP"
     [ -z "$INSTALL_MARKER" ] || rm -f -- "$INSTALL_MARKER"
+  else
+    status=1
   fi
-  # A failed SQLite restore leaves the maintenance marker in place to prevent
-  # any newer controller from acknowledging writes against the wrong schema.
   exit "$status"
 }
 
@@ -265,7 +232,12 @@ download_binary() {
   fi
 
   chmod +x "$INSTALL_DOWNLOAD"
-  INSTALL_RELEASE="$version"
+  # Recover abandoned installs before checking the old controller or reserving
+  # a new transaction. An active concurrent installer is never overridden.
+  if [ -f "$HOME/.mnemo/upgrade.transaction" ]; then
+    "$INSTALL_DOWNLOAD" controller transaction recover || err "Unresolved Mnemo update; recovery was not possible."
+    "$dest" setup refresh --agent="$INSTALL_RESTORE_AGENT" --mnemo-bin="$dest" || err "Could not restart recovered Mnemo."
+  fi
   # Every upgrade waits for a stable, acknowledged durable queue before
   # replacing the controller executable. Active agent/Mnemo sessions stay open.
   if [ -f "$HOME/.mnemo/config.toml" ]; then
@@ -291,18 +263,19 @@ download_binary() {
   # Stop all database writers before the snapshot. During the subsequent
   # start-and-verify phase, the new controller will NAK real durable deliveries
   # until the installer commits the release. Active agent sessions stay open.
-  if [ -f "$HOME/.mnemo/config.toml" ] && [ -f "$dest" ]; then
-    INSTALL_MAINTENANCE="$HOME/.mnemo/upgrade.maintenance"
-    if ! ( set -C; echo "$version" > "$INSTALL_MAINTENANCE" ) 2>/dev/null; then
+  if [ -f "$dest" ]; then
+    "$INSTALL_DOWNLOAD" controller transaction begin --binary="$dest" --backup="$INSTALL_BACKUP" ||
+      err "Could not persist the upgrade transaction."
+    INSTALL_TXN=true
+    if ! ( set -C; echo "$version" > "$HOME/.mnemo/upgrade.maintenance" ) 2>/dev/null; then
       err "An SQLite recovery transaction is already active."
     fi
-    INSTALL_STOPPED=true
     "$INSTALL_DOWNLOAD" controller stop || err "Could not stop the previous controller safely."
   fi
 
   if [ -f "$HOME/.mnemo/memory.db" ]; then
-    if [ "$INSTALL_STOPPED" != "true" ]; then
-      err "Existing SQLite database has no confirmed stopped managed controller. Update canceled."
+    if [ "$INSTALL_TXN" != "true" ]; then
+      err "Existing SQLite database has no recoverable previous executable."
     fi
     # The restore point belongs to the *installed* release, not the target.
     # Include an attempt identifier so retries never overwrite earlier data.
@@ -310,10 +283,13 @@ download_binary() {
     previous_release=$("$dest" version | awk '{print $2}')
     local snapshot_id="${previous_release}-$(date -u +%Y%m%dT%H%M%S)-$$"
     "$INSTALL_DOWNLOAD" db recovery snapshot --release="$snapshot_id" || err "Could not preserve the pre-upgrade SQLite state."
-    INSTALL_DB_SNAPSHOT="$snapshot_id"
+    "$INSTALL_DOWNLOAD" controller transaction snapshot --release="$snapshot_id" ||
+      err "Could not record the verified SQLite recovery point."
     if ! "$INSTALL_DOWNLOAD" db migrate --check >/dev/null 2>&1; then
       "$INSTALL_DOWNLOAD" db migrate || err "SQLite migration failed; restoring the pre-upgrade recovery point."
       INSTALL_SQLITE_CHANGED=true
+      "$INSTALL_DOWNLOAD" controller transaction schema --changed ||
+        err "Could not record the schema compatibility boundary."
     fi
   fi
 
@@ -463,24 +439,16 @@ main() {
     mv -f -- "$INSTALL_PREVIOUS_TMP" "${mnemo_bin}.previous" || err "Could not commit the previous-version recovery slot."
     INSTALL_PREVIOUS_TMP=""
   fi
-  # Prevent the runtime from restoring an old executable without also
-  # restoring its schema. The marker is tied to the installed binary path.
-  if [ "$INSTALL_SQLITE_CHANGED" = "true" ]; then
-    if [ ! -e "$INSTALL_SCHEMA_MARKER" ]; then
-      if ! ( set -C; printf '%s\n' "$INSTALL_RELEASE" > "$INSTALL_SCHEMA_MARKER" ); then
-        err "Could not record the schema recovery boundary."
-      fi
-      INSTALL_SCHEMA_MARKER_ADDED=true
-    fi
-  elif [ -e "$INSTALL_SCHEMA_MARKER" ]; then
-    rm -f -- "$INSTALL_SCHEMA_MARKER" || err "Could not clear obsolete schema compatibility marker."
-  fi
-  # The release is committed before the write fence is lifted. Otherwise a
-  # signal between fence removal and commit could roll back acknowledged saves.
-  INSTALL_VERIFIED=true
-  if [ -n "$INSTALL_MAINTENANCE" ]; then
-    rm -f -- "$INSTALL_MAINTENANCE" || err "Update committed, but the controller write fence could not be released."
-    INSTALL_MAINTENANCE=""
+  if [ "$INSTALL_TXN" = "true" ]; then
+    # Commit is durable before releasing the write fence. If the process dies
+    # during cleanup, the next controller sees a committed journal and will not
+    # replay an old SQLite snapshot over acknowledged new writes.
+    "$mnemo_bin" controller transaction commit || err "Could not commit release transaction."
+    INSTALL_VERIFIED=true
+    "$mnemo_bin" controller transaction finalize || err "Could not finalize release transaction."
+    INSTALL_TXN=false
+  else
+    INSTALL_VERIFIED=true
   fi
   ok "Controller verified; upgrade committed."
 }
