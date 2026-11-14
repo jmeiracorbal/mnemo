@@ -29,6 +29,7 @@ export MNEMO_NO_UPDATE_CHECK=1
 INSTALL_DOWNLOAD=""
 INSTALL_CHECKSUM=""
 INSTALL_BACKUP=""
+INSTALL_PREVIOUS_TMP=""
 INSTALL_MARKER=""
 INSTALL_DEST=""
 INSTALL_SWITCHED=false
@@ -93,6 +94,7 @@ finish_install() {
   [ -z "$INSTALL_DOWNLOAD" ] || rm -f -- "$INSTALL_DOWNLOAD"
   [ -z "$INSTALL_CHECKSUM" ] || rm -f -- "$INSTALL_CHECKSUM"
   [ -z "$INSTALL_BACKUP" ] || rm -f -- "$INSTALL_BACKUP"
+  [ -z "$INSTALL_PREVIOUS_TMP" ] || rm -f -- "$INSTALL_PREVIOUS_TMP"
   [ -z "$INSTALL_MARKER" ] || rm -f -- "$INSTALL_MARKER"
   exit "$status"
 }
@@ -385,9 +387,13 @@ main() {
   # Keep precisely one preceding release as the runtime safety rollback
   # target in case a delayed legacy publisher appears after installation.
   if [ -n "$INSTALL_BACKUP" ]; then
-    mv -f -- "$INSTALL_BACKUP" "${mnemo_bin}.previous" || err "Could not commit the previous-version recovery slot."
-    INSTALL_BACKUP=""
+    INSTALL_PREVIOUS_TMP=$(mktemp "${mnemo_bin}.previous.XXXXXX")
+    cp -p -- "$INSTALL_BACKUP" "$INSTALL_PREVIOUS_TMP" || err "Could not copy the previous-version recovery slot."
+    mv -f -- "$INSTALL_PREVIOUS_TMP" "${mnemo_bin}.previous" || err "Could not commit the previous-version recovery slot."
+    INSTALL_PREVIOUS_TMP=""
   fi
+  # Preserve the transaction backup until the commit flag is set, so a
+  # failure at any point above still has a complete rollback source.
   INSTALL_VERIFIED=true
   ok "Controller verified; upgrade committed."
 }
