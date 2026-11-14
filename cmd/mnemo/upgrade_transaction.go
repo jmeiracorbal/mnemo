@@ -235,6 +235,11 @@ func finalizeUpgradeTransaction(tx upgradeTransaction) error {
 			return fmt.Errorf("finish upgrade %s: %w", file, err)
 		}
 	}
+	if tx.Snapshot != "" {
+		if err:=recovery.PruneRecoveryPoints(cfg.DataDir,tx.Snapshot,3);err!=nil {
+			return fmt.Errorf("prune completed release recovery points: %w",err)
+		}
+	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
