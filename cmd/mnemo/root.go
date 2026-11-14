@@ -138,6 +138,9 @@ func addCommandTree(root *cobra.Command) {
 		&cobra.Command{Use: "preflight", Short: "Verify no durable messages remain pending before upgrade", RunE: func(*cobra.Command, []string) error {
 			return runControllerPreflight()
 		}},
+		&cobra.Command{Use: "verify", Short: "Verify controller, SQLite and durable processing after upgrade", RunE: func(*cobra.Command, []string) error {
+			return runControllerVerify()
+		}},
 	)
 	addChildren(root, "events",
 		command("publish --project PROJECT --directory DIR --execution-key KEY --type TYPE --payload VALUE", "Publish a durable typed event", runEvents),
