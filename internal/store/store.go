@@ -161,6 +161,9 @@ func New(cfg Config) (*Store, error) {
 	if !filepath.IsAbs(cfg.DataDir) {
 		return nil, fmt.Errorf("mnemo: data directory must be an absolute path, got %q", cfg.DataDir)
 	}
+	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
+		return nil, fmt.Errorf("mnemo: create data dir: %w", err)
+	}
 	// Ordinary CLI and MCP processes must not open or migrate SQLite during a
 	// release rollback. Only the managed controller's verification run is allowed.
 	if !cfg.AllowUpgradeMaintenance {
@@ -169,9 +172,6 @@ func New(cfg Config) (*Store, error) {
 		} else if !os.IsNotExist(err) {
 			return nil,fmt.Errorf("mnemo: inspect upgrade transaction: %w",err)
 		}
-	}
-	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
-		return nil, fmt.Errorf("mnemo: create data dir: %w", err)
 	}
 
 	dbPath := filepath.Join(cfg.DataDir, "memory.db")
