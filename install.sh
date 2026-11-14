@@ -22,6 +22,8 @@ INSTALL_DIR="${MNEMO_INSTALL_DIR:-$HOME/.local/bin}"
 DRY_RUN="${MNEMO_DRY_RUN:-false}"
 MNEMO_VERSION="${MNEMO_VERSION:-}"
 AGENT="${MNEMO_AGENT:-auto}"
+# Installer-internal Mnemo commands must not recursively offer another update.
+export MNEMO_NO_UPDATE_CHECK=1
 
 # Transaction state belongs to the installer, not the running controller.
 INSTALL_DOWNLOAD=""
@@ -193,6 +195,8 @@ download_binary() {
   INSTALL_DEST="$dest"
   INSTALL_DOWNLOAD=$(mktemp "${dest}.download.XXXXXX")
   trap finish_install EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
 
   fetch "$binary_url" "$INSTALL_DOWNLOAD" || err "Download failed: ${binary_url}"
 
