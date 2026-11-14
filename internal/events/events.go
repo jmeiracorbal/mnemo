@@ -574,3 +574,57 @@ func CheckHealth(ctx context.Context, cfg Config) error {
 	}
 	return nil
 }
+
+
+// VerifyUpgrade proves that the installed controller can execute a durable MCP
+// command, read SQLite and acknowledge a real JetStream event. This is run by
+// the installer automatically after the service restart, not by the user.
+func VerifyUpgrade(ctx context.Context, cfg Config) error {
+	var sqliteReady bool
+	if err := Call(ctx, cfg, "health_probe", struct{}{}, &sqliteReady); err != nil {
+		return fmt.Errorf("durable command and SQLite probe: %w", err)
+	}
+	if !sqliteReady {
+		return fmt.Errorf("controller did not confirm SQLite readiness")
+	}
+
+	probe, err := NewEvent(EventHealthProbe, "_mnemo_upgrade_probe", "upgrade", struct{}{})
+	if err != nil {
+		return err
+	}
+	if err := Publish(ctx, cfg, probe); err != nil {
+		return fmt.Errorf("publish event probe: %w", err)
+	}
+	nc, err := nats.Connect(cfg.URL(), nats.Timeout(2*time.Second))
+	if err != nil {
+		return fmt.Errorf("connect for event acknowledgment: %w", err)
+	}
+	defer nc.Close()
+	js, err := nc.JetStream(nats.Context(ctx))
+	if err != nil {
+		return fmt.Errorf("inspect event acknowledgment: %w", err)
+	}
+	message, err := js.GetLastMsg(streamName, cfg.publishSubject(probe.Project), nats.Context(ctx))
+	if err != nil {
+		return fmt.Errorf("read published probe: %w", err)
+	}
+	if message.Header.Get("Nats-Msg-Id") != probe.ID {
+		return fmt.Errorf("event probe identity changed before acknowledgment")
+	}
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		consumer, err := js.ConsumerInfo(streamName, consumerName, nats.Context(ctx))
+		if err != nil {
+			return fmt.Errorf("inspect event consumer: %w", err)
+		}
+		if consumer.AckFloor.Stream >= message.Sequence {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("event probe was not acknowledged: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
