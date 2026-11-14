@@ -296,6 +296,9 @@ func (c *Controller) Run(ctx context.Context) error {
 		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: onTransportError,
 	}, nats.Timeout(2*time.Second))
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
 		return fmt.Errorf("open event transport: %w", err)
 	}
 	defer func() { _ = eventBus.Close() }()
@@ -304,6 +307,9 @@ func (c *Controller) Run(ctx context.Context) error {
 		AckWait: 30*time.Second, RetryDelay: time.Second, OnError: onTransportError,
 	}, nats.Timeout(2*time.Second))
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
 		return fmt.Errorf("open command transport: %w", err)
 	}
 	defer func() { _ = commandBus.Close() }()
@@ -314,11 +320,17 @@ func (c *Controller) Run(ctx context.Context) error {
 		return nil
 	})
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
 		return fmt.Errorf("subscribe event stream: %w", err)
 	}
 	defer func() { _ = eventSub.Close() }()
 	commandSub, err := commandBus.Subscribe(ctx, commandSubject, c.handleCommand)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
 		return fmt.Errorf("subscribe command stream: %w", err)
 	}
 	defer func() { _ = commandSub.Close() }()
