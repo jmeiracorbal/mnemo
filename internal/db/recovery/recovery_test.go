@@ -66,7 +66,7 @@ func TestSnapshotIncludesCommittedWALAndRestoreRemovesNewerWrites(t *testing.T) 
 		t.Fatal(err)
 	}
 	recovered := openRecoveryTestDB(t, dbPath)
-	defer recovered.Close()
+	defer func() { _ = recovered.Close() }()
 	if count := recoveryCount(t, recovered); count != 1 {
 		t.Fatalf("recovered %d rows, expected one committed pre-upgrade row", count)
 	}
@@ -96,7 +96,7 @@ func TestInvalidRestoreDoesNotReplaceCurrentDatabase(t *testing.T) {
 		t.Fatal("corrupt recovery point was accepted")
 	}
 	original := openRecoveryTestDB(t, dbPath)
-	defer original.Close()
+	defer func() { _ = original.Close() }()
 	if count := recoveryCount(t, original); count != 1 {
 		t.Fatalf("original database changed after rejected restore: %d", count)
 	}
@@ -116,7 +116,7 @@ func TestSnapshotFailsClosedWhenRecoveryPointIsPending(t *testing.T) {
 	if _, err := db.Exec("CREATE TABLE saved (value TEXT)"); err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	p := filepath.Join(dataDir, "recovery")
 	if err := os.MkdirAll(p, 0700); err != nil {
 		t.Fatal(err)
