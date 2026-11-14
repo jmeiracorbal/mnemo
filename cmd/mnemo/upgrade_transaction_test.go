@@ -197,3 +197,17 @@ func TestInterruptedRealMigrationRestoresMigrationHistoryAndMemories(t *testing.
 	if err := recovered.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version='9999'").Scan(&memories); err != nil {t.Fatal(err)}
 	if memories != 0 {t.Fatal("failed upgrade migration history survived rollback")}
 }
+
+func TestFailedRollbackKeepsWriteFenceAndTransactionJournal(t *testing.T) {
+	dataDir, binary, backup, db := transactionFixture(t)
+	if err := db.Close(); err != nil { t.Fatal(err) }
+	if err := os.Remove(backup); err != nil { t.Fatal(err) }
+	if err := recoverControllerStartup(); err == nil || !strings.Contains(err.Error(),"recovery") {
+		t.Fatalf("missing old binary did not fail closed: %v",err)
+	}
+	for _, path := range []string{filepath.Join(dataDir,"upgrade.maintenance"),filepath.Join(dataDir,"upgrade.transaction")} {
+		if _,err:=os.Stat(path);err!=nil{t.Fatalf("failed recovery dropped safety marker %s: %v",path,err)}
+	}
+	current,err:=os.ReadFile(binary)
+	if err!=nil || string(current)!="new binary" {t.Fatalf("failed recovery changed active binary: %q %v",current,err)}
+}
