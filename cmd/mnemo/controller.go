@@ -40,6 +40,7 @@ func runController(s *store.Store) error {
 		Log:      os.Stderr,
 	}.Run(ctx)
 	return controller.Run(ctx)
+}
 
 // runControllerPreflight is a read-only verification that is safe to run
 // against the previous binary's live JetStream before the installer replaces it.
