@@ -67,7 +67,7 @@ func Call(ctx context.Context, cfg Config, action string, payload any, output an
 
 func isMutation(action string) bool {
 	switch action {
-	case "resolve_session", "close_sessions", "bind_execution_session",
+	case "health_probe", "resolve_session", "close_sessions", "bind_execution_session",
 		"add_observation", "update_observation", "delete_observation",
 		"add_prompt", "passive_capture", "merge_tags", "agent_tool",
 		"import", "merge_projects", "rename_project",
