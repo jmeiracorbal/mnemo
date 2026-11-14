@@ -45,6 +45,7 @@ case "$1/$2" in
           cp "$HOME/.mnemo/recovery/$release.db" "$HOME/.mnemo/memory.db"
         fi
         cp "$(cat "$HOME/.mnemo/txn-backup")" "$(cat "$HOME/.mnemo/txn-binary")"
+        rm -f "$(cat "$HOME/.mnemo/txn-binary").upgrading"
         rm -f "$(cat "$HOME/.mnemo/txn-backup")"
         rm -f "$HOME/.mnemo/upgrade.maintenance" "$HOME/.mnemo/upgrade.transaction"
         rm -f "$HOME/.mnemo/txn-binary" "$HOME/.mnemo/txn-backup" "$HOME/.mnemo/txn-snapshot" "$HOME/.mnemo/txn-schema"
