@@ -48,13 +48,13 @@ func Snapshot(ctx context.Context, dataDir, release string) (string, error) {
 	if err := file.Close(); err != nil {
 		return "", err
 	}
-	defer os.Remove(pending)
+	defer func() { _ = os.Remove(pending) }()
 
 	db, err := sql.Open("sqlite", source)
 	if err != nil {
 		return "", err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	db.SetMaxOpenConns(1)
 	if err := checkIntegrity(ctx, db); err != nil {
 		return "", fmt.Errorf("source integrity: %w", err)
@@ -128,7 +128,7 @@ func Restore(ctx context.Context, dataDir, release string) error {
 	if err != nil {
 		return fmt.Errorf("reserve restore file: %w", err)
 	}
-	defer os.Remove(pending)
+	defer func() { _ = os.Remove(pending) }()
 	_, copyErr := io.Copy(output, input)
 	syncErr := output.Sync()
 	closeErr := output.Close()
@@ -167,7 +167,7 @@ func verifyFile(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	return checkIntegrity(ctx, db)
 }
 
