@@ -103,7 +103,10 @@ func hasHelpArg(args []string) bool {
 }
 
 func addCommandTree(root *cobra.Command) {
-	addChildren(root, "db", command("migrate [--data-dir=DIR] [--check] [--json]", "Validate or apply database migrations", runDBMigrate))
+	addChildren(root, "db",
+		command("migrate [--data-dir=DIR] [--check] [--json]", "Validate or apply database migrations", runDBMigrate),
+		command("recovery <snapshot|restore|verify> --release=VERSION", "Manage SQLite release recovery points", runDBRecovery),
+	)
 	addChildren(root, "setup",
 		command("status [--json] [--agent=AGENT] [--home=DIR]", "Show global agent setup status", runSetupStatus),
 		command("print-config AGENT [--home=DIR] [--mnemo-bin=PATH]", "Print manual setup config snippets", runSetupPrintConfig),
