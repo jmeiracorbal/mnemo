@@ -70,6 +70,8 @@ printf old > "$HOME/active-controller"
 MOCK_VERIFY_RESULT=ok bash "$repo_root/install.sh" >/dev/null
 [ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = new ]
 [ "$(cat "$HOME/active-controller")" = new ]
+[ "$("$MNEMO_INSTALL_DIR/mnemo.previous" version)" = old ]
+[ ! -e "$MNEMO_INSTALL_DIR/mnemo.upgrading" ]
 grep -q '^preflight$' "$MOCK_LOG"
 grep -q '^verify$' "$MOCK_LOG"
 check_no_residue
@@ -82,6 +84,7 @@ if MOCK_VERIFY_RESULT=fail bash "$repo_root/install.sh" > "$fixture/failure.log"
 fi
 [ "$("$MNEMO_INSTALL_DIR/mnemo" version)" = old ]
 [ "$(cat "$HOME/active-controller")" = old ]
+[ ! -e "$MNEMO_INSTALL_DIR/mnemo.upgrading" ]
 grep -q 'Previous Mnemo version restored and responding' "$fixture/failure.log"
 check_no_residue
 
