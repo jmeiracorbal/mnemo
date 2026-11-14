@@ -117,7 +117,8 @@ check_no_residue() {
   [ ! -e "$HOME/.mnemo/upgrade.transaction" ]
   [ ! -e "$HOME/.mnemo/upgrade.transaction.writing" ]
   if find "$MNEMO_INSTALL_DIR" -type f \( -name 'mnemo.rollback.*' -o -name 'mnemo.download.*' -o -name 'mnemo.checksum.*' \) | grep -q .; then
-    echo 'installer left temporary files behind' >&2
+    echo 'installer left temporary files behind:' >&2
+    find "$MNEMO_INSTALL_DIR" -type f \( -name 'mnemo.rollback.*' -o -name 'mnemo.download.*' -o -name 'mnemo.checksum.*' \) -print >&2
     exit 1
   fi
 }
