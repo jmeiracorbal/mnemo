@@ -212,7 +212,7 @@ func Apply(db *sql.DB) (Status, error) {
   if _,err:=os.Stat(DBPath(dataDir)); err!=nil{return Status{},fmt.Errorf("target schema requires an existing database: %w",err)}
   db,err:=sql.Open("sqlite",DBPath(dataDir))
   if err!=nil{return Status{},err}
-  defer db.Close()
+  defer func() { _ = db.Close() }()
   if err:=applyPragmas(db);err!=nil{return Status{},err}
   status,err:=ApplyTarget(db,target)
   status.DBPath=DBPath(dataDir)
