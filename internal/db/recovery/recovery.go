@@ -245,7 +245,8 @@ func PruneRecoveryPoints(dataDir, protected string, retain int) error {
 			continue
 		}
 		if _, err := pointPath(dataDir, name[:len(name)-3]); err != nil {
-			return err
+			// Unknown files are not Mnemo recovery points and must be kept.
+			continue
 		}
 		info, err := entry.Info()
 		if err != nil {
