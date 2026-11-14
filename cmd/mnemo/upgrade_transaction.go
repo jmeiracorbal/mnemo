@@ -22,6 +22,8 @@ type upgradeTransaction struct {
 	Phase    string `json:"phase"`
 	SchemaChanged bool `json:"schema_changed,omitempty"`
 	HadSchemaMarker bool `json:"had_schema_marker,omitempty"`
+	Recovered bool `json:"recovered,omitempty"`
+	PreviousReady bool `json:"previous_ready,omitempty"`
 }
 
 func transactionPath() (string, error) {
@@ -226,6 +228,17 @@ func finalizeUpgradeTransaction(tx upgradeTransaction) error {
 	if err != nil {
 		return err
 	}
+	// Only a committed new release replaces the previous-version slot.
+	// An interrupted uncommitted release restores the existing slot unchanged.
+	if !tx.Recovered && !tx.PreviousReady {
+		pending := tx.Binary+".previous.pending"
+		if err:=os.Remove(pending);err!=nil && !errors.Is(err,os.ErrNotExist){return err}
+		if err:=os.Link(tx.Backup,pending);err!=nil{return fmt.Errorf("preserve previous executable: %w",err)}
+		if err:=os.Rename(pending,tx.Binary+".previous");err!=nil{return err}
+		if err:=syncTransactionDirectory(filepath.Dir(tx.Binary));err!=nil{return err}
+		tx.PreviousReady=true
+		if err:=persistUpgradeTransaction(tx,false);err!=nil{return err}
+	}
 	// A schema boundary belongs to this release, not a failed update.
 	if !tx.SchemaChanged {
 		if err:=os.Remove(tx.Binary+".schema-changed");err!=nil && !errors.Is(err,os.ErrNotExist){return err}
@@ -236,6 +249,7 @@ func finalizeUpgradeTransaction(tx upgradeTransaction) error {
 		tx.Binary + ".upgrading",
 		tx.Binary + ".recovering",
 		tx.Backup,
+		tx.Binary + ".previous.pending",
 		path + ".writing",
 	} {
 		if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -296,6 +310,7 @@ func recoverUpgradeTransaction(force bool) (bool, error) {
 		return false, err
 	}
 	tx.Phase = "committed"
+	tx.Recovered = true
 	tx.SchemaChanged = tx.HadSchemaMarker
 	if err := persistUpgradeTransaction(*tx, false); err != nil {
 		return false, err
