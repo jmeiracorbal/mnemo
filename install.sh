@@ -40,6 +40,7 @@ INSTALL_STOPPED=false
 INSTALL_DB_SNAPSHOT=""
 INSTALL_MAINTENANCE=""
 INSTALL_SQLITE_CHANGED=false
+INSTALL_RECOVERY_FAILED=false
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ finish_install() {
     if [ -n "$INSTALL_DB_SNAPSHOT" ]; then
       if ! "$recovery_bin" db recovery restore --release="$INSTALL_DB_SNAPSHOT"; then
         db_recovered=false
+        INSTALL_RECOVERY_FAILED=true
         printf '[mnemo] CRITICAL: SQLite rollback failed. The binary and recovery point are preserved; the previous controller will not start against an unknown schema.\n' >&2
         status=1
       fi
@@ -90,6 +92,7 @@ finish_install() {
             INSTALL_BACKUP=""
           else
             db_recovered=false
+            INSTALL_RECOVERY_FAILED=true
             printf '[mnemo] CRITICAL: could not restore the previous Mnemo executable.\n' >&2
           fi
         else
@@ -127,9 +130,11 @@ finish_install() {
   fi
   [ -z "$INSTALL_DOWNLOAD" ] || rm -f -- "$INSTALL_DOWNLOAD"
   [ -z "$INSTALL_CHECKSUM" ] || rm -f -- "$INSTALL_CHECKSUM"
-  [ -z "$INSTALL_BACKUP" ] || rm -f -- "$INSTALL_BACKUP"
-  [ -z "$INSTALL_PREVIOUS_TMP" ] || rm -f -- "$INSTALL_PREVIOUS_TMP"
-  [ -z "$INSTALL_MARKER" ] || rm -f -- "$INSTALL_MARKER"
+  if [ "$INSTALL_RECOVERY_FAILED" != "true" ]; then
+    [ -z "$INSTALL_BACKUP" ] || rm -f -- "$INSTALL_BACKUP"
+    [ -z "$INSTALL_PREVIOUS_TMP" ] || rm -f -- "$INSTALL_PREVIOUS_TMP"
+    [ -z "$INSTALL_MARKER" ] || rm -f -- "$INSTALL_MARKER"
+  fi
   # A failed SQLite restore leaves the maintenance marker in place to prevent
   # any newer controller from acknowledging writes against the wrong schema.
   exit "$status"
