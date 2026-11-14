@@ -135,10 +135,26 @@ func TestAcknowledgedLegacyMessagesSurviveRestartWithoutReplay(t *testing.T) {
 	case <-time.After(5*time.Second):
 		t.Fatal("new event not delivered after restart")
 	}
-	cancel()
-	if err := <-done; err != nil {
-		t.Fatal(err)
+	// Processing the store effect is not yet an acknowledgment. Wait for both
+	// durable consumers to be ready and the new event to be acknowledged before
+	// canceling the controller context.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		eventConsumer, eventErr := updated.js.ConsumerInfo(streamName, consumerName)
+		_, commandErr := updated.js.ConsumerInfo(commandStreamName, commandConsumerName)
+		if eventErr == nil && commandErr == nil && eventConsumer.NumAckPending == 0 &&
+			eventConsumer.AckFloor.Stream > published.Sequence {
+			cancel()
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
+	cancel()
+	<-done
+	t.Fatal("updated controller did not acknowledge delivery and initialize command consumer")
 }
 
 func transportTestFreePort(t *testing.T) int {
