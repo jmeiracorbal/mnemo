@@ -1,9 +1,12 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
 func TestEnsureControllerServiceRestartsOnlyWhenNeeded(t *testing.T) {
@@ -52,5 +55,17 @@ func TestEnsureControllerServiceRestartsOnlyWhenNeeded(t *testing.T) {
 	}
 	if restarts != 4 {
 		t.Fatalf("restarts = %d, want 4", restarts)
+	}
+}
+
+func TestStoreCommandPropagatesControllerError(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	fatal := errors.New("durable transport failed")
+	cmd := storeCommand("serve", "test controller", func(*store.Store) error {
+		return fatal
+	})
+	cmd.SetArgs(nil)
+	if err := cmd.Execute(); !errors.Is(err, fatal) {
+		t.Fatalf("controller exit error = %v; want %v", err, fatal)
 	}
 }
