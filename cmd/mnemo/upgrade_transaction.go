@@ -141,7 +141,7 @@ func beginUpgradeTransaction(binary, backup string) error {
 	previous, err := readUpgradeTransaction()
 	if err != nil { return err }
 	if previous != nil { return fmt.Errorf("unresolved upgrade transaction already exists") }
-	binary, err := filepath.Abs(binary)
+	binary, err = filepath.Abs(binary)
 	if err != nil {
 		return err
 	}
