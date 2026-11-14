@@ -2,11 +2,14 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/protocol"
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
 
@@ -14,12 +17,39 @@ import (
 // result in the same SQLite transaction. A JetStream redelivery therefore
 // receives the original result without applying the mutation again.
 func (s *Store) ApplyMCPCommand(id, action string, payload json.RawMessage) (json.RawMessage, error) {
+	// JetStream delivery IDs change on each send. The public request ID does not:
+	// it identifies the mutation even when the original response was lost.
+	key := id
+	var request protocol.Request
+	if action == protocol.Version {
+		if err := json.Unmarshal(payload, &request); err != nil {
+			return protocolFailure(protocol.CodeInvalidRequest, "invalid protocol request"), nil
+		}
+		if err := request.Validate(); err != nil {
+			return protocolFailure(protocol.CodeInvalidRequest, err.Error()), nil
+		}
+		if request.Operation != protocol.OperationObservationCreate {
+			return protocolFailure(protocol.CodeInvalidRequest, "non-mutating protocol operation submitted as durable command"), nil
+		}
+		key = protocol.Version + ":" + request.RequestID
+	}
+
+	// Include action and payload to reject accidental request ID reuse.
+	hash := sha256.Sum256(append([]byte(action+"\x00"), payload...))
+	fingerprint := hex.EncodeToString(hash[:])
 	var result json.RawMessage
 	err := s.withTx(func(tx *sql.Tx) error {
 		q := s.q.WithTx(tx)
-		prior, err := q.GetProcessedMCPCommandResult(context.Background(), id)
+		prior, err := q.GetProcessedMCPCommandResult(context.Background(), key)
 		if err == nil {
-			result = json.RawMessage(prior)
+			if prior.Action != action || prior.RequestHash != fingerprint {
+				if action == protocol.Version {
+					result = protocolFailure(protocol.CodeConflict, "request_id already used with a different operation or payload")
+					return nil
+				}
+				return fmt.Errorf("durable command ID already used with different content")
+			}
+			result = json.RawMessage(prior.ResultJson)
 			return nil
 		}
 		if err != sql.ErrNoRows {
@@ -33,7 +63,7 @@ func (s *Store) ApplyMCPCommand(id, action string, payload json.RawMessage) (jso
 			return err
 		}
 		if err := q.InsertProcessedMCPCommand(context.Background(), dbgen.InsertProcessedMCPCommandParams{
-			ID: id, Action: action, ResultJson: string(computed),
+			ID: key, Action: action, ResultJson: string(computed), RequestHash: fingerprint,
 		}); err != nil {
 			return err
 		}
@@ -50,6 +80,8 @@ func (s *Store) ExecuteMCPAction(ctx context.Context, action string, payload jso
 	_ = ctx // Store's public operations use their own transaction contexts.
 	var result any
 	switch action {
+	case protocol.Version:
+		return s.ExecuteProtocolRequest(ctx, payload)
 	case "health_probe":
 		// Probe the real SQLite connection and an existing table without
 		// changing the user's database or creating durable command markers.

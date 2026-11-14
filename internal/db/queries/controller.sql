@@ -22,8 +22,8 @@ SELECT session_id FROM execution_sessions
 WHERE project = sqlc.arg('project') AND execution_key = sqlc.arg('execution_key');
 
 -- name: GetProcessedMCPCommandResult :one
-SELECT result_json FROM processed_mcp_commands WHERE id = sqlc.arg('id');
+SELECT action, request_hash, result_json FROM processed_mcp_commands WHERE id = sqlc.arg('id');
 
 -- name: InsertProcessedMCPCommand :exec
-INSERT INTO processed_mcp_commands (id, action, result_json)
-VALUES (sqlc.arg('id'), sqlc.arg('action'), sqlc.arg('result_json'));
+INSERT INTO processed_mcp_commands (id, action, result_json, request_hash)
+VALUES (sqlc.arg('id'), sqlc.arg('action'), sqlc.arg('result_json'), sqlc.arg('request_hash'));
