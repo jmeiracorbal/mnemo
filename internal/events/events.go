@@ -440,6 +440,55 @@ func (c *Controller) Close() {
 // LocalAddress is exposed for diagnostics and tests only.
 func (c *Controller) LocalAddress() net.Addr { return c.server.Addr() }
 
+
+// CheckUpgradeReady inspects the running, pre-upgrade controller without
+// altering stream, consumer, or message state. The installer calls it before
+// replacing the binary. Both event and command streams must be fully drained.
+func CheckUpgradeReady(ctx context.Context, cfg Config) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	nc, err := nats.Connect(cfg.URL(), nats.Timeout(2*time.Second))
+	if err != nil {
+		return fmt.Errorf("connect existing controller before upgrade: %w", err)
+	}
+	defer nc.Close()
+	js, err := nc.JetStream(nats.Context(ctx))
+	if err != nil {
+		return fmt.Errorf("open existing JetStream before upgrade: %w", err)
+	}
+	for _, durable := range []struct {
+		stream string
+		consumer string
+		subject string
+	}{
+		{streamName, consumerName, cfg.subject()},
+		{commandStreamName, commandConsumerName, commandSubject},
+	} {
+		stream, err := js.StreamInfo(durable.stream, nats.Context(ctx))
+		if err != nil {
+			return fmt.Errorf("inspect existing stream %s: %w", durable.stream, err)
+		}
+		consumer, err := js.ConsumerInfo(durable.stream, durable.consumer, nats.Context(ctx))
+		if errors.Is(err, nats.ErrConsumerNotFound) {
+			if stream.State.Msgs != 0 {
+				return fmt.Errorf("upgrade blocked: %s contains %d messages but its durable consumer is absent", durable.stream, stream.State.Msgs)
+			}
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("inspect existing durable %s: %w", durable.consumer, err)
+		}
+		if consumer.Config.FilterSubject != durable.subject || consumer.Config.AckPolicy != nats.AckExplicitPolicy || consumer.Config.DeliverSubject != "" {
+			return fmt.Errorf("upgrade blocked: durable %s has an incompatible configuration", durable.consumer)
+		}
+		if consumer.NumPending != 0 || consumer.NumAckPending != 0 {
+			return fmt.Errorf("upgrade blocked: durable %s has %d pending and %d awaiting acknowledgment; allow the current controller to finish processing", durable.consumer, consumer.NumPending, consumer.NumAckPending)
+		}
+	}
+	return nil
+}
+
 // CheckHealth verifies that the singleton controller configured for this
 // installation is reachable. MCP processes must call this; they never create it.
 func CheckHealth(ctx context.Context, cfg Config) error {
