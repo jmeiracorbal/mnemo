@@ -27,14 +27,14 @@ func New(dataDir string) (*Client, error) {
 
 func (c *Client) call(ctx context.Context, request protocol.Request, output any) error {
 	if c == nil {
-		return fmt.Errorf("Mnemo client is nil")
+		return fmt.Errorf("mnemo client is nil")
 	}
 	if err := request.Validate(); err != nil {
 		return err
 	}
 	var response protocol.Response
 	if err := events.Call(ctx, c.config, protocol.Version, request, &response); err != nil {
-		return fmt.Errorf("Mnemo controller request: %w", err)
+		return fmt.Errorf("mnemo controller request: %w", err)
 	}
 	if response.Version != protocol.Version {
 		return &protocol.Error{Code: protocol.CodeUnsupportedVersion, Message: "invalid controller protocol version"}

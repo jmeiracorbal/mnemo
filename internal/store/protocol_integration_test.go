@@ -155,7 +155,7 @@ func TestPublicProtocolLostReplyCannotDuplicateCommittedMemory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer bus.Close()
+	defer func() { _ = bus.Close() }()
 	if err := bus.Publish(ctx, goevents.Event{ID: command.ID, Topic: "mnemo.commands", Data: encoded}); err != nil {
 		t.Fatal(err)
 	}
