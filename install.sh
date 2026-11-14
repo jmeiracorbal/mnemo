@@ -230,7 +230,7 @@ download_binary() {
     rm -f -- "${dest}.download.${prior_pid}" "${dest}.checksum.${prior_pid}" ||
       err "Cannot clean interrupted download artifacts."
   fi
-  local installer_pid="$"
+  local installer_pid="$$"
   INSTALL_DOWNLOAD="${dest}.download.${installer_pid}"
   INSTALL_CHECKSUM="${dest}.checksum.${installer_pid}"
   ( umask 077; set -C; : > "$INSTALL_DOWNLOAD" ) ||
@@ -274,7 +274,7 @@ download_binary() {
     # Exclusive marker prevents concurrent installers and differentiates an
     # in-progress transaction from failures after a successful upgrade.
     local marker="${dest}.upgrading"
-    local marker_pid="$"
+    local marker_pid="$$"
     if ! ( set -C; echo "$marker_pid" > "$marker" ) 2>/dev/null; then
       err "Another Mnemo upgrade is already running or left an unresolved upgrade marker: ${marker}"
     fi
