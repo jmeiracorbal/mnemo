@@ -32,14 +32,13 @@ case "$1/$2" in
         printf prepared > "$HOME/.mnemo/upgrade.transaction"
         ;;
       snapshot) printf '%s' "$4" | sed 's/^--release=//' > "$HOME/.mnemo/txn-snapshot" ;;
-      schema) printf changed > "$HOME/.mnemo/txn-schema" ;;
       commit) printf committed > "$HOME/.mnemo/upgrade.transaction" ;;
       finalize)
         [ "$(cat "$HOME/.mnemo/upgrade.transaction")" = committed ] || exit 1
         cp "$(cat "$HOME/.mnemo/txn-backup")" "$(cat "$HOME/.mnemo/txn-binary").previous"
         rm -f "$(cat "$HOME/.mnemo/txn-backup")"
         rm -f "$HOME/.mnemo/upgrade.maintenance" "$HOME/.mnemo/upgrade.transaction"
-        rm -f "$HOME/.mnemo/txn-binary" "$HOME/.mnemo/txn-backup" "$HOME/.mnemo/txn-snapshot" "$HOME/.mnemo/txn-schema"
+        rm -f "$HOME/.mnemo/txn-binary" "$HOME/.mnemo/txn-backup" "$HOME/.mnemo/txn-snapshot"
         ;;
       recover)
         if [ -f "$HOME/.mnemo/txn-snapshot" ]; then
@@ -50,7 +49,7 @@ case "$1/$2" in
         rm -f "$(cat "$HOME/.mnemo/txn-binary").upgrading"
         rm -f "$(cat "$HOME/.mnemo/txn-backup")"
         rm -f "$HOME/.mnemo/upgrade.maintenance" "$HOME/.mnemo/upgrade.transaction"
-        rm -f "$HOME/.mnemo/txn-binary" "$HOME/.mnemo/txn-backup" "$HOME/.mnemo/txn-snapshot" "$HOME/.mnemo/txn-schema"
+        rm -f "$HOME/.mnemo/txn-binary" "$HOME/.mnemo/txn-backup" "$HOME/.mnemo/txn-snapshot"
         ;;
       *) exit 1 ;;
     esac
@@ -120,7 +119,7 @@ export PATH="$fixture/mock-bin:$PATH"
 reset_old() {
   cp "$fixture/old" "$MNEMO_INSTALL_DIR/mnemo"
   printf old > "$HOME/active-controller"
-  rm -f "$HOME/.mnemo/memory.db" "$MNEMO_INSTALL_DIR/mnemo.schema-changed"
+  rm -f "$HOME/.mnemo/memory.db"
 }
 
 check_no_residue() {
