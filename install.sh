@@ -158,12 +158,12 @@ download_binary() {
   fi
 
   chmod +x "$tmp"
-  # The existing controller must drain both durable streams before replacing
-  # its executable. On failure, leave the installed binary and service intact.
+  # Every upgrade waits for a stable, acknowledged durable queue before
+  # replacing the controller executable. Active agent/Mnemo sessions stay open.
   if [ -f "$HOME/.mnemo/config.toml" ]; then
-    info "Checking pending durable events and commands before upgrading..."
+    info "Waiting for pending memory saves to complete before restarting the controller..."
     if ! "$tmp" controller preflight; then
-      err "Upgrade blocked: the existing controller is unavailable or has unprocessed durable messages. The installed binary was not changed."
+      err "Update canceled: pending saves did not finish or the controller is unavailable. The running controller and installed binary are unchanged."
     fi
   fi
 
