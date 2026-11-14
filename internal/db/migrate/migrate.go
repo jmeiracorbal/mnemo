@@ -158,6 +158,93 @@ func Apply(db *sql.DB) (Status, error) {
 	return status, nil
 }
 
+
+ // ApplyTarget applies pending migrations up to target, or reverses migrations
+ // down to target only when an explicit, verified down script exists. It never
+ // guesses how to reverse destructive migrations.
+ func ApplyTarget(db *sql.DB, target string) (Status, error) {
+  migrations, err := LoadMigrations()
+  if err != nil { return Status{}, err }
+  known := false
+  for _, migration := range migrations {
+   if migration.Version == target { known = true; break }
+  }
+  if !known { return Status{}, fmt.Errorf("unknown target schema version %q", target) }
+  if _, err := db.Exec(metadataDDL); err != nil { return Status{}, err }
+  current, err := checkAgainstMigrations(db, migrations)
+  if err != nil { return current, err }
+  applied := make(map[string]bool, len(current.Applied))
+  for _, row := range current.Applied { applied[row.Version] = true }
+  // A downgrade is checked in full before touching schema or data. Refuse an
+  // incomplete reversal instead of leaving the database partway downgraded.
+  for i:=len(migrations)-1; i>=0; i-- {
+   m := migrations[i]
+   if CompareMigrationVersions(m.Version, target) <= 0 || !applied[m.Version] { continue }
+   if _, err := reverseSQL(m); err != nil { return current, err }
+  }
+  for i:=len(migrations)-1; i>=0; i-- {
+   m:=migrations[i]
+   if CompareMigrationVersions(m.Version,target)>0 && applied[m.Version] {
+    if err:=reverseMigration(db,m); err!=nil { return current,err }
+   }
+  }
+  for _,m:=range migrations {
+   if CompareMigrationVersions(m.Version,target)>0 { break }
+   if !applied[m.Version] {
+    if err:=applyMigration(db,m); err!=nil { return current,err }
+   }
+  }
+  result,err:=checkAgainstMigrations(db,migrations)
+  if err!=nil { return result,err }
+  if result.CurrentVersion!=target {
+   return result,fmt.Errorf("schema target %s not reached (current %s)",target,result.CurrentVersion)
+  }
+  if target==latestVersion(migrations) {
+   if err:=ValidateCurrent(db); err!=nil{return result,err}
+  }
+  result.Message="database schema is at target version "+target
+  return result,nil
+ }
+
+ // TargetDataDir requires exclusive offline ownership before it is called.
+ func TargetDataDir(dataDir,target string) (Status,error) {
+  if !filepath.IsAbs(dataDir) {return Status{},fmt.Errorf("data directory must be absolute")}
+  if _,err:=os.Stat(DBPath(dataDir)); err!=nil{return Status{},fmt.Errorf("target schema requires an existing database: %w",err)}
+  db,err:=sql.Open("sqlite",DBPath(dataDir))
+  if err!=nil{return Status{},err}
+  defer db.Close()
+  if err:=applyPragmas(db);err!=nil{return Status{},err}
+  status,err:=ApplyTarget(db,target)
+  status.DBPath=DBPath(dataDir)
+  status.Exists=true
+  return status,err
+ }
+
+ // reverseSQL is deliberately opt-in. No historical migration is assumed
+ // reversible merely because its forward SQL can be executed again.
+ func reverseSQL(m Migration) (string,error) {
+  name:=filepath.ToSlash(filepath.Join("migrations",m.Version+"-"+m.Name+".down.sql"))
+  content,err:=fs.ReadFile(dbfiles.Migrations,name)
+  if err!=nil {return "",fmt.Errorf("migration %s is not reversible: %w",m.Version,err)}
+  if strings.TrimSpace(string(content))=="" {return "",fmt.Errorf("migration %s has an empty reverse script",m.Version)}
+  return string(content),nil
+ }
+
+ func reverseMigration(db *sql.DB,m Migration) error {
+  sqlText,err:=reverseSQL(m)
+  if err!=nil{return err}
+  tx,err:=db.Begin()
+  if err!=nil{return err}
+  defer tx.Rollback()
+  if _,err:=tx.Exec(sqlText);err!=nil{return fmt.Errorf("reverse migration %s: %w",m.Version,err)}
+  result,err:=tx.Exec("DELETE FROM schema_migrations WHERE version = ? AND checksum = ?",m.Version,m.Checksum)
+  if err!=nil{return err}
+  count,err:=result.RowsAffected()
+  if err!=nil{return err}
+  if count!=1{return fmt.Errorf("migration %s history did not match the reverse operation",m.Version)}
+  return tx.Commit()
+ }
+
 func Check(db *sql.DB) (Status, error) {
 	migrations, err := LoadMigrations()
 	if err != nil {
@@ -190,7 +277,7 @@ func LoadMigrations() ([]Migration, error) {
 	var migrations []Migration
 	seen := map[string]bool{}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") || strings.HasSuffix(entry.Name(), ".down.sql") {
 			continue
 		}
 		version, name, ok := parseMigrationName(entry.Name())
