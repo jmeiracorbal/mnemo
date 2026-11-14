@@ -68,6 +68,12 @@ func TestRunUpdateCommandPromptsAndInstalls(t *testing.T) {
 	if !strings.Contains(stderr.String(), "Update now? [y/N]") {
 		t.Fatalf("missing confirmation prompt: %q", stderr.String())
 	}
+	if !strings.Contains(stderr.String(), "close all active Mnemo memory sessions") {
+		t.Fatalf("existing update notice must warn about session closure: %q", stderr.String())
+	}
+	if strings.Index(stderr.String(), "close all active Mnemo memory sessions") > strings.Index(stderr.String(), "Update now? [y/N]") {
+		t.Fatalf("session closure warning must precede confirmation: %q", stderr.String())
+	}
 }
 
 func TestRunUpdateCommandDeclineSkipsInstall(t *testing.T) {
@@ -91,16 +97,20 @@ func TestRunUpdateCommandDeclineSkipsInstall(t *testing.T) {
 	if installed || status.Installed || status.Message != "update declined" {
 		t.Fatalf("declined update should not install: status=%+v installed=%v", status, installed)
 	}
+	if !strings.Contains(stderr.String(), "close all active Mnemo memory sessions") {
+		t.Fatalf("declined update did not display safety notice: %q", stderr.String())
+	}
 }
 
 func TestRunUpdateCommandYesInstallsSelectedAgent(t *testing.T) {
 	restore := setTestVersion("v0.33.1")
 	defer restore()
 	var gotAgent string
+	var stderr bytes.Buffer
 	status, err := runUpdateCommand(context.Background(), []string{"--yes", "--agent=codex"}, updateRuntime{
 		stdin:  strings.NewReader(""),
 		stdout: io.Discard,
-		stderr: io.Discard,
+		stderr: &stderr,
 		check:  fakeUpdateCheck("0.34.0"),
 		install: func(_ context.Context, _ string, agent string, _ io.Writer, _ io.Writer) error {
 			gotAgent = agent
@@ -112,6 +122,10 @@ func TestRunUpdateCommandYesInstallsSelectedAgent(t *testing.T) {
 	}
 	if !status.Installed || gotAgent != "codex" {
 		t.Fatalf("--yes did not install selected agent: status=%+v agent=%q", status, gotAgent)
+	}
+	if !strings.Contains(stderr.String(), "close all active Mnemo memory sessions") ||
+		strings.Contains(stderr.String(), "Update now? [y/N]") {
+		t.Fatalf("--yes should show safety notice without interactive confirmation: %q", stderr.String())
 	}
 }
 
@@ -151,8 +165,9 @@ func TestMaybeOfferUpdatePromptsAndInstalls(t *testing.T) {
 	if !installed {
 		t.Fatal("accepted update notice did not run installer")
 	}
-	if !strings.Contains(stderr.String(), "run 'mnemo update'") || !strings.Contains(stderr.String(), "Update now?") {
-		t.Fatalf("notice/prompt missing: %q", stderr.String())
+	if !strings.Contains(stderr.String(), "run 'mnemo update'") || !strings.Contains(stderr.String(), "Update now?") ||
+		!strings.Contains(stderr.String(), "close all active Mnemo memory sessions") {
+		t.Fatalf("notice/prompt/safety warning missing: %q", stderr.String())
 	}
 }
 
