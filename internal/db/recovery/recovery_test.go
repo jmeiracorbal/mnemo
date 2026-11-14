@@ -129,3 +129,36 @@ func TestSnapshotFailsClosedWhenRecoveryPointIsPending(t *testing.T) {
 		t.Fatalf("pending snapshot must block a new snapshot: %v", err)
 	}
 }
+
+func TestRecoveryPointCannotBeOverwrittenForSameRelease(t *testing.T) {
+	dataDir := t.TempDir()
+	dbPath := filepath.Join(dataDir, "memory.db")
+	db := openRecoveryTestDB(t, dbPath)
+	if _, err := db.Exec("CREATE TABLE saved (value TEXT PRIMARY KEY)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO saved(value) VALUES ('before')"); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := Snapshot(ctx, dataDir, "v1.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO saved(value) VALUES ('after')"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Snapshot(ctx, dataDir, "v1.2.0"); err == nil {
+		t.Fatal("existing release recovery point must never be overwritten")
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := Restore(ctx, dataDir, "v1.2.0"); err != nil {
+		t.Fatal(err)
+	}
+	recovered := openRecoveryTestDB(t, dbPath)
+	defer recovered.Close()
+	if got := recoveryCount(t, recovered); got != 1 {
+		t.Fatalf("immutable restore point was overwritten: got %d rows", got)
+	}
+}
