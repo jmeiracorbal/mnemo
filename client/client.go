@@ -34,7 +34,7 @@ func (c *Client) call(ctx context.Context, request protocol.Request, output any)
 		return err
 	}
 	var response protocol.Response
-	if err := events.Call(ctx, c.config, protocol.Version, request, &response); err != nil {
+	if err := events.Call(ctx, c.config, request, &response); err != nil {
 		return fmt.Errorf("mnemo controller request: %w", err)
 	}
 	if response.Version != protocol.Version {

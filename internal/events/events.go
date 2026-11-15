@@ -15,6 +15,7 @@ import (
 	goevents "github.com/jmeiracorbal/go-events"
 	goeventsnats "github.com/jmeiracorbal/go-events/adapters/nats"
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/protocol"
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/pelletier/go-toml/v2"
@@ -54,7 +55,7 @@ type DurableEvent struct {
 type ControllerStore interface {
 	ApplyDurableEvent(DurableEvent) error
 	ApplyMCPCommand(id, action string, payload json.RawMessage) (json.RawMessage, error)
-	ExecuteMCPAction(ctx context.Context, action string, payload json.RawMessage) (json.RawMessage, error)
+	ExecuteProtocolRequest(ctx context.Context, payload json.RawMessage) (json.RawMessage, error)
 }
 
 // Event is the wire contract shared by every agent adapter.
@@ -395,73 +396,61 @@ func (c *Controller) handleEvent(_ context.Context, delivery goevents.Event) err
 func (c *Controller) handleCommand(_ context.Context, delivery goevents.Event) error {
 	var command Command
 	if err := json.Unmarshal(delivery.Data, &command); err != nil {
-		// The previous controller acknowledged malformed durable commands
-		// without replaying them. Keep the same poison-message behavior.
-		return nil
+		return nil // malformed durable envelope cannot be retried usefully
 	}
-	if command.Action != "health_probe" && UpgradeMaintenance(c.cfg) {
+	if UpgradeMaintenance(c.cfg) {
 		return fmt.Errorf("%w: database recovery window is active", errRetryableDelivery)
 	}
-	if err := command.Validate(); err != nil {
-		c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
+	if err := command.Validate(); err != nil || command.Action != protocol.Version || command.ID != delivery.ID {
+		c.replyProtocolError(command.Reply, protocol.CodeInvalidRequest, "invalid Mnemo durable command")
 		return nil
 	}
-	if command.ID != delivery.ID {
-		c.replyTo(command.Reply, RPCResponse{Error: "command ID differs from transport ID"})
-		return nil
-	}
-	if command.Action == "health_probe" {
-		payload, err := c.store.ExecuteMCPAction(context.Background(), "health_probe", nil)
-		if err != nil {
-			c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
-			return nil
-		}
-		c.replyTo(command.Reply, RPCResponse{Payload: payload})
-		return nil
-	}
-	payload, err := c.store.ApplyMCPCommand(command.ID, command.Action, command.Payload)
+	raw, err := c.store.ApplyMCPCommand(command.ID, command.Action, command.Payload)
 	if err != nil {
-		c.replyTo(command.Reply, RPCResponse{Error: err.Error()})
+		c.replyProtocolError(command.Reply, protocol.CodeInternal, err.Error())
 		return nil
 	}
-	c.replyTo(command.Reply, RPCResponse{Payload: payload})
+	c.replyTo(command.Reply, raw)
 	return nil
 }
 
 func (c *Controller) handleRPC(message *nats.Msg) {
-	var request RPCRequest
+	var request protocol.Request
 	if err := json.Unmarshal(message.Data, &request); err != nil {
-		c.replyRPC(message, RPCResponse{Error: "decode request: " + err.Error()})
+		c.replyProtocolError(message.Reply, protocol.CodeInvalidRequest, "invalid Mnemo request envelope")
 		return
 	}
-	if strings.TrimSpace(request.Action) == "" {
-		c.replyRPC(message, RPCResponse{Error: "action is required"})
+	if err := request.Validate(); err != nil {
+		c.replyProtocolError(message.Reply, protocol.CodeInvalidRequest, err.Error())
 		return
 	}
-	if request.Action != "health_probe" && UpgradeMaintenance(c.cfg) {
-		c.replyRPC(message, RPCResponse{Error: "Mnemo upgrade in progress; retry after controller recovery"})
+	spec, ok := request.Operation.Spec()
+	if !ok || spec.Kind != protocol.KindQuery {
+		c.replyProtocolError(message.Reply, protocol.CodeInvalidRequest, "only queries are permitted on the direct request channel")
 		return
 	}
-	payload, err := c.store.ExecuteMCPAction(context.Background(), request.Action, request.Payload)
+	if request.Operation != protocol.OperationHealth && UpgradeMaintenance(c.cfg) {
+		c.replyProtocolError(message.Reply, protocol.CodeUnavailable, "Mnemo upgrade in progress")
+		return
+	}
+	payload, err := c.store.ExecuteProtocolRequest(context.Background(), message.Data)
 	if err != nil {
-		c.replyRPC(message, RPCResponse{Error: err.Error()})
+		c.replyProtocolError(message.Reply, protocol.CodeInternal, err.Error())
 		return
 	}
-	c.replyRPC(message, RPCResponse{Payload: payload})
+	c.replyTo(message.Reply, payload)
 }
 
-func (c *Controller) replyRPC(request *nats.Msg, response RPCResponse) {
-	c.replyTo(request.Reply, response)
+func (c *Controller) replyProtocolError(subject string, code protocol.ErrorCode, message string) {
+	data, _ := json.Marshal(protocol.Response{
+		Version: protocol.Version, Error: &protocol.Error{Code: code, Message: message},
+	})
+	c.replyTo(subject, data)
 }
 
-func (c *Controller) replyTo(subject string, response RPCResponse) {
-	if subject == "" {
-		return
-	}
-	payload, err := json.Marshal(response)
-	if err == nil {
-		_ = c.nc.Publish(subject, payload)
-	}
+func (c *Controller) replyTo(subject string, payload json.RawMessage) {
+	if subject == "" { return }
+	_ = c.nc.Publish(subject, payload)
 }
 
 func (c *Controller) Close() {
@@ -593,12 +582,16 @@ func CheckHealth(ctx context.Context, cfg Config) error {
 // command, read SQLite and acknowledge a real JetStream event. This is run by
 // the installer automatically after the service restart, not by the user.
 func VerifyUpgrade(ctx context.Context, cfg Config) error {
-	var sqliteReady bool
-	if err := Call(ctx, cfg, "health_probe", struct{}{}, &sqliteReady); err != nil {
+	probeRequest, err := protocol.NewRequest(protocol.OperationSessionClose, uuid.NewString(), protocol.SessionCloseInput{
+		InstanceID: "_mnemo_upgrade_probe_" + uuid.NewString(),
+	})
+	if err != nil { return err }
+	var probeResponse protocol.Response
+	if err := Call(ctx, cfg, probeRequest, &probeResponse); err != nil {
 		return fmt.Errorf("durable command and SQLite probe: %w", err)
 	}
-	if !sqliteReady {
-		return fmt.Errorf("controller did not confirm SQLite readiness")
+	if probeResponse.Error != nil {
+		return fmt.Errorf("controller did not confirm SQLite readiness: %w", probeResponse.Error)
 	}
 
 	probe, err := NewEvent(EventHealthProbe, "_mnemo_upgrade_probe", "upgrade", struct{}{})
