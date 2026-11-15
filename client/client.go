@@ -113,3 +113,60 @@ func (c *Client) Create(ctx context.Context, requestID string, input protocol.Ob
 	}
 	return result.Ref, nil
 }
+
+func (c *Client) invoke(ctx context.Context, operation protocol.Operation, requestID string, input, output any) error {
+	request, err := protocol.NewRequest(operation, requestID, input)
+	if err != nil { return err }
+	return c.call(ctx, request, output)
+}
+
+// Search returns canonical observation references and rank metadata.
+func (c *Client) Search(ctx context.Context, input protocol.ObservationSearchInput) ([]protocol.ObservationMatch, error) {
+	var output protocol.ObservationSearchOutput
+	if err := c.invoke(ctx, protocol.OperationObservationSearch, "", input, &output); err != nil {
+		return nil, err
+	}
+	return output.Matches, nil
+}
+
+func (c *Client) Update(ctx context.Context, requestID string, input protocol.ObservationUpdateInput) (protocol.Observation, error) {
+	if err := input.Ref.Validate(); err != nil { return protocol.Observation{}, err }
+	var output protocol.ObservationGetOutput
+	if err := c.invoke(ctx, protocol.OperationObservationUpdate, requestID, input, &output); err != nil {
+		return protocol.Observation{}, err
+	}
+	if output.Observation.Ref != input.Ref {
+		return protocol.Observation{}, &protocol.Error{Code: protocol.CodeInternal, Message: "controller returned a different observation"}
+	}
+	return output.Observation, nil
+}
+
+func (c *Client) Delete(ctx context.Context, requestID string, ref protocol.ResourceRef) error {
+	if err := ref.Validate(); err != nil { return err }
+	return c.invoke(ctx, protocol.OperationObservationDelete, requestID, protocol.ObservationDeleteInput{Ref: ref}, nil)
+}
+
+func (c *Client) Timeline(ctx context.Context, input protocol.ObservationTimelineInput) (protocol.ObservationTimelineOutput, error) {
+	var output protocol.ObservationTimelineOutput
+	if err := input.Ref.Validate(); err != nil { return output, err }
+	if err := c.invoke(ctx, protocol.OperationObservationTimeline, "", input, &output); err != nil { return output, err }
+	return output, nil
+}
+
+func (c *Client) Context(ctx context.Context, input protocol.ContextBuildInput) (string, error) {
+	var output protocol.ContextBuildOutput
+	if err := c.invoke(ctx, protocol.OperationContextBuild, "", input, &output); err != nil { return "", err }
+	return output.Text, nil
+}
+
+func (c *Client) Limits(ctx context.Context) (protocol.LimitsOutput, error) {
+	var output protocol.LimitsOutput
+	if err := c.invoke(ctx, protocol.OperationLimitsGet, "", nil, &output); err != nil { return output, err }
+	return output, nil
+}
+
+func (c *Client) Stats(ctx context.Context) (protocol.StatsOutput, error) {
+	var output protocol.StatsOutput
+	if err := c.invoke(ctx, protocol.OperationStatsGet, "", nil, &output); err != nil { return output, err }
+	return output, nil
+}
