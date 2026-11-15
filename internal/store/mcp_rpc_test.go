@@ -154,3 +154,16 @@ func TestApplyMCPCommandExecutesPiToolAgainstCanonicalExecutionSession(t *testin
 		t.Fatalf("observations = %+v, want one Pi observation", observations)
 	}
 }
+
+func TestRetiredObservationActionsAreRejected(t *testing.T) {
+	memory, err := New(FallbackConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = memory.Close() }()
+	for _, action := range []string{"add_observation", "get_observation"} {
+		if _, err := memory.ExecuteMCPAction(context.Background(), action, json.RawMessage(`{}`)); err == nil {
+			t.Fatalf("retired action %q still available", action)
+		}
+	}
+}
