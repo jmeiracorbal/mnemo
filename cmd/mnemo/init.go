@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/jmeiracorbal/mnemo/internal/agentinit"
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
 // runInit activates mnemo for one or more agents in the current project.
@@ -117,18 +117,15 @@ func runMigrateProjects() {
 	legacyKey := deriveLegacyKey(legacyRoot)
 	name := filepath.Base(root)
 
-	cfg, err := loadEventsConfig()
+	api, err := loadMnemoClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo migrate: controller unavailable: %v\n", err)
 		os.Exit(1)
 	}
-	input := struct {
-		LegacyKey string `json:"legacy_key"`
-		ProjectID string `json:"project_id"`
-		Name      string `json:"name"`
-	}{legacyKey, projectID, name}
-	var result store.MigrateResult
-	if err := events.Call(context.Background(), cfg, "migrate_project_identity", input, &result); err != nil {
+	result, err := api.MigrateProjectIdentity(context.Background(), uuid.NewString(), protocol.ProjectIdentityMigrateInput{
+		LegacyKey: legacyKey, ProjectID: projectID, Name: name,
+	})
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo migrate: %v\n", err)
 		os.Exit(1)
 	}
