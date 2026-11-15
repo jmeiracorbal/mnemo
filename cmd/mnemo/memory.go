@@ -201,9 +201,3 @@ func runImport() {
 	fmt.Printf("Import complete: %d sessions, %d observations\n", result.SessionsImported, result.ObservationsImported)
 }
 
-func runCapture() {
-	fmt.Fprintln(os.Stderr, "mnemo capture: this command is deprecated.")
-	fmt.Fprintln(os.Stderr, "  Session identity is now owned by the controller runtime.")
-	fmt.Fprintln(os.Stderr, "  Use the MCP tool mem_capture_passive to capture learnings through an active agent session.")
-	os.Exit(1)
-}
