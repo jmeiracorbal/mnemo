@@ -10,8 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmeiracorbal/mnemo/client"
 	"github.com/jmeiracorbal/mnemo/protocol"
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	"github.com/jmeiracorbal/mnemo/internal/store"
+		"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
 // runSave is retired: session lifecycle is now owned by the controller.
@@ -116,14 +115,6 @@ func loadMnemoClient() (*client.Client, error) {
 	cfg, err := store.DefaultConfig()
 	if err != nil { return nil, err }
 	return client.New(cfg.DataDir)
-}
-
-func loadEventsConfig() (events.Config, error) {
-	storeConfig, err := store.DefaultConfig()
-	if err != nil {
-		return events.Config{}, err
-	}
-	return events.LoadConfig(storeConfig.DataDir)
 }
 
 // runSession handles session subcommands. Lifecycle operations (start/compact/end)

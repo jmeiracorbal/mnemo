@@ -2,8 +2,7 @@ package protocol
 
 import (
 	"encoding/json"
-	"fmt"
-	"strings"
+		"strings"
 	"time"
 )
 
@@ -28,7 +27,7 @@ func (e Event) Validate() error {
 		return &Error{Code: CodeInvalidRequest, Message: "event execution_key or agent_id and native_id are required"}
 	}
 	if !json.Valid(e.Payload) || e.OccurredAt.IsZero() {
-		return &Error{Code: CodeInvalidRequest, Message: fmt.Sprintf("event payload and occurred_at must be valid")}
+		return &Error{Code: CodeInvalidRequest, Message: "event payload and occurred_at must be valid"}
 	}
 	return nil
 }
