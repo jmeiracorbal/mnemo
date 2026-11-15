@@ -466,6 +466,93 @@ func (s *Store) ExecuteProtocolRequest(ctx context.Context, payload json.RawMess
 			out.Refs = append(out.Refs, ref)
 		}
 		result = out
+	case protocol.OperationArchiveExport:
+		data, err := s.Export()
+		if err != nil { return nil, err }
+		out := protocol.ArchiveExportOutput{Version: protocol.Version, ExportedAt: data.ExportedAt}
+		for _, sess := range data.Sessions {
+			out.Sessions = append(out.Sessions, protocol.ArchiveSession{
+				SessionID: sess.ID, ProjectID: sess.Project, Directory: sess.Directory,
+				StartedAt: sess.StartedAt, EndedAt: sess.EndedAt, Summary: sess.Summary,
+				IsDeleted: sess.IsDeleted, Tags: sess.Tags, Provenance: archiveProvenance(sess.Provenance),
+			})
+		}
+		for _, obs := range data.Observations {
+			if obs.Project == nil {
+				return nil, fmt.Errorf("export observation has no Mnemo project")
+			}
+			ref, err := protocol.NewObservationRef(*obs.Project, obs.SyncID)
+			if err != nil { return nil, err }
+			out.Observations = append(out.Observations, protocol.ArchiveObservation{
+				Ref: ref, SessionID: obs.SessionID, Type: obs.Type,
+				Title: obs.Title, Content: obs.Content, ToolName: obs.ToolName,
+				Scope: obs.Scope, TopicKey: obs.TopicKey, Tags: obs.Tags,
+				RevisionCount: obs.RevisionCount, DuplicateCount: obs.DuplicateCount,
+				LastSeenAt: obs.LastSeenAt, CreatedAt: obs.CreatedAt,
+				UpdatedAt: obs.UpdatedAt, IsDeleted: obs.IsDeleted,
+				Provenance: archiveProvenance(obs.Provenance),
+			})
+		}
+		for _, prompt := range data.Prompts {
+			out.Prompts = append(out.Prompts, protocol.ArchivePrompt{
+				ProjectID: prompt.Project, SyncID: prompt.SyncID, SessionID: prompt.SessionID,
+				Content: prompt.Content, CreatedAt: prompt.CreatedAt, IsDeleted: prompt.IsDeleted,
+				Provenance: archiveProvenance(prompt.Provenance),
+			})
+		}
+		result = out
+	case protocol.OperationArchiveImport:
+		var input protocol.ArchiveImportInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid archive.import input"}
+			break
+		}
+		if input.Archive.Version != protocol.Version {
+			response.Error = &protocol.Error{Code: protocol.CodeUnsupportedVersion, Message: "unsupported Mnemo archive version"}
+			break
+		}
+		data := &ExportData{Version: input.Archive.Version, ExportedAt: input.Archive.ExportedAt}
+		for _, sess := range input.Archive.Sessions {
+			data.Sessions = append(data.Sessions, Session{
+				ID: sess.SessionID, Project: sess.ProjectID, Directory: sess.Directory,
+				StartedAt: sess.StartedAt, EndedAt: sess.EndedAt, Summary: sess.Summary,
+				IsDeleted: sess.IsDeleted, Tags: sess.Tags,
+				Provenance: archiveStoredProvenance(sess.Provenance),
+			})
+		}
+		for _, obs := range input.Archive.Observations {
+			if err := obs.Ref.Validate(); err != nil {
+				response.Error = &protocol.Error{Code: protocol.CodeInvalidReference, Message: err.Error()}
+				break
+			}
+			project := obs.Ref.ProjectID
+			data.Observations = append(data.Observations, Observation{
+				SyncID: obs.Ref.SyncID, SessionID: obs.SessionID, Project: &project,
+				Type: obs.Type, Title: obs.Title, Content: obs.Content,
+				ToolName: obs.ToolName, Scope: obs.Scope, TopicKey: obs.TopicKey,
+				Tags: obs.Tags, RevisionCount: obs.RevisionCount,
+				DuplicateCount: obs.DuplicateCount, LastSeenAt: obs.LastSeenAt,
+				CreatedAt: obs.CreatedAt, UpdatedAt: obs.UpdatedAt,
+				IsDeleted: obs.IsDeleted,
+				Provenance: archiveStoredProvenance(obs.Provenance),
+			})
+		}
+		if response.Error != nil { break }
+		for _, prompt := range input.Archive.Prompts {
+			data.Prompts = append(data.Prompts, Prompt{
+				Project: prompt.ProjectID, SyncID: prompt.SyncID, SessionID: prompt.SessionID,
+				Content: prompt.Content, CreatedAt: prompt.CreatedAt,
+				IsDeleted: prompt.IsDeleted,
+				Provenance: archiveStoredProvenance(prompt.Provenance),
+			})
+		}
+		imported, err := s.Import(data)
+		if err != nil { return nil, err }
+		result = protocol.ArchiveImportOutput{
+			SessionsImported: imported.SessionsImported,
+			ObservationsImported: imported.ObservationsImported,
+			PromptsImported: imported.PromptsImported,
+		}
 	case protocol.OperationObservationGet:
 		var input protocol.ObservationGetInput
 		if err := json.Unmarshal(request.Payload, &input); err != nil {
@@ -684,4 +771,26 @@ func (s *Store) protocolRefForID(id int64) (protocol.ResourceRef, error) {
 	if err != nil { return protocol.ResourceRef{}, err }
 	if obs.Project == nil { return protocol.ResourceRef{}, fmt.Errorf("observation has no project identity") }
 	return protocol.NewObservationRef(*obs.Project, obs.SyncID)
+}
+
+func archiveProvenance(input *Provenance) *protocol.Provenance {
+	if input == nil { return nil }
+	return &protocol.Provenance{
+		AgentID: input.AgentID, SourceKindID: input.SourceKindID,
+		ToolID: input.ToolID, ModelID: input.ModelID, ModelProvider: input.ModelProvider,
+		MCPClientID: input.MCPClientID, MCPClientName: input.MCPClientName,
+		MCPClientVersion: input.MCPClientVersion,
+		MCPTransport: input.MCPClientTransport,
+	}
+}
+
+func archiveStoredProvenance(input *protocol.Provenance) *Provenance {
+	if input == nil { return nil }
+	return &Provenance{
+		AgentID: input.AgentID, SourceKindID: input.SourceKindID,
+		ToolID: input.ToolID, ModelID: input.ModelID, ModelProvider: input.ModelProvider,
+		MCPClientID: input.MCPClientID, MCPClientName: input.MCPClientName,
+		MCPClientVersion: input.MCPClientVersion,
+		MCPClientTransport: input.MCPTransport,
+	}
 }
