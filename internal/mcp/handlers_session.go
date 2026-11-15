@@ -7,8 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmeiracorbal/mnemo/protocol"
-	"github.com/jmeiracorbal/mnemo/internal/store"
-	"github.com/mark3labs/mcp-go/mcp"
+		"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -26,19 +25,13 @@ func handleSessionSummary(s MemoryBackend, runtime *Runtime) server.ToolHandlerF
 		if err != nil {
 			return mcp.NewToolResultError("No active session: " + err.Error()), nil
 		}
-		provenance := store.MCPProvenance(store.ToolMemSessionSummary)
+		provenance := mcpProvenance("mem_session_summary")
 
 		_, err = s.CreateObservation(ctx, uuid.NewString(), protocol.ObservationCreateInput{
 			SessionID: sessionID, ProjectID: project, Type: "session_summary",
 			Title: fmt.Sprintf("Session summary: %s", project),
 			Content: content,
-			Provenance: protocol.Provenance{
-			AgentID: provenance.AgentID, SourceKindID: provenance.SourceKindID,
-			ToolID: provenance.ToolID, ModelID: provenance.ModelID,
-			ModelProvider: provenance.ModelProvider,
-			MCPClientID: provenance.MCPClientID, MCPClientName: provenance.MCPClientName,
-			MCPClientVersion: provenance.MCPClientVersion, MCPTransport: provenance.MCPTransport,
-		},
+			Provenance: provenance,
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to save session summary: " + err.Error()), nil
@@ -72,12 +65,9 @@ func handleCapturePassive(s MemoryBackend, runtime *Runtime) server.ToolHandlerF
 			source = "mcp-passive"
 		}
 
-		result, err := s.PassiveCapture(store.PassiveCaptureParams{
-			SessionID:  sessionID,
-			Content:    content,
-			Project:    project,
-			Source:     source,
-			Provenance: store.MCPProvenance(store.ToolMemCapturePassive),
+		result, err := s.CapturePassive(ctx, uuid.NewString(), protocol.CapturePassiveInput{
+			SessionID: sessionID, ProjectID: project, Content: content,
+			Source: source, Provenance: mcpProvenance("mem_capture_passive"),
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Passive capture failed: " + err.Error()), nil

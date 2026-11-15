@@ -275,7 +275,7 @@ func (s *Store) ExecuteProtocolRequest(ctx context.Context, payload json.RawMess
 		}
 		observations, sessions, err := s.MergeTags(input.From, input.To)
 		if err != nil { return nil, err }
-		result = protocol.TagMergeOutput{Observations: observations, Sessions: sessions}
+		result = protocol.TagMergeOutput{Observations: observations, Sessions: sessions, CanonicalTo: NormalizeTag(input.To)}
 	case protocol.OperationPromptCreate:
 		var input protocol.PromptCreateInput
 		if err := json.Unmarshal(request.Payload, &input); err != nil || input.ProjectID == "" || input.SessionID == "" || input.Content == "" {

@@ -98,6 +98,7 @@ type TagMergeInput struct {
 type TagMergeOutput struct {
 	Observations int `json:"observations"`
 	Sessions int `json:"sessions"`
+	CanonicalTo string `json:"canonical_to"`
 }
 
 type TagStatsOutput struct {

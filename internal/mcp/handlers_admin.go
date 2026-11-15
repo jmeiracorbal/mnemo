@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/protocol"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-var loadMCPStats = func(s MemoryBackend) (*store.Stats, error) {
-	return s.Stats()
+var loadMCPStats = func(ctx context.Context, s MemoryBackend) (protocol.StatsOutput, error) {
+	return s.Stats(ctx)
 }
 
 func handleStats(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		stats, err := loadMCPStats(s)
+		stats, err := loadMCPStats(ctx, s)
 		if err != nil {
 			return mcp.NewToolResultError("Failed to get stats: " + err.Error()), nil
 		}
@@ -37,48 +37,32 @@ func handleStats(s MemoryBackend) server.ToolHandlerFunc {
 
 func handleTimeline(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		observationID := int64(intArg(req, "observation_id", 0))
-		if observationID == 0 {
-			return mcp.NewToolResultError("observation_id is required"), nil
-		}
-		before := intArg(req, "before", 5)
-		after := intArg(req, "after", 5)
-
-		result, err := s.Timeline(observationID, before, after)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Timeline error: %s", err)), nil
-		}
-
+		raw, _ := req.GetArguments()["ref"].(string)
+		ref, err := protocol.ParseResourceRef(raw)
+		if err != nil { return mcp.NewToolResultError("Invalid Mnemo reference: " + err.Error()), nil }
+		timeline, err := s.Timeline(ctx, protocol.ObservationTimelineInput{
+			Ref: ref, Before: intArg(req, "before", 5), After: intArg(req, "after", 5),
+		})
+		if err != nil { return mcp.NewToolResultError("Timeline error: " + err.Error()), nil }
 		var b strings.Builder
-
-		if result.SessionInfo != nil {
-			summary := ""
-			if result.SessionInfo.Summary != nil {
-				summary = fmt.Sprintf(" — %s", truncate(*result.SessionInfo.Summary, 100))
-			}
-			fmt.Fprintf(&b, "Session: %s (%s)%s\n", result.SessionInfo.Project, result.SessionInfo.StartedAt, summary)
-			fmt.Fprintf(&b, "Total observations in session: %d\n\n", result.TotalInRange)
-		}
-
-		if len(result.Before) > 0 {
-			b.WriteString("─── Before ───\n")
-			for _, e := range result.Before {
-				fmt.Fprintf(&b, "  #%d [%s] %s — %s\n", e.ID, e.Type, e.Title, truncate(e.Content, 150))
+		fmt.Fprintf(&b, "Session: %s (%s)\n", timeline.SessionID, timeline.SessionStart)
+		fmt.Fprintf(&b, "Total observations in session: %d\n\n", timeline.TotalInRange)
+		if len(timeline.Before) > 0 {
+			b.WriteString("--- Before ---\n")
+			for _, o := range timeline.Before {
+				fmt.Fprintf(&b, "%s [%s] %s — %s\n", o.Ref.String(), o.Type, o.Title, truncate(o.Content, 150))
 			}
 			b.WriteString("\n")
 		}
-
-		fmt.Fprintf(&b, ">>> #%d [%s] %s <<<\n", result.Focus.ID, result.Focus.Type, result.Focus.Title)
-		fmt.Fprintf(&b, "    %s\n", truncate(result.Focus.Content, 500))
-		fmt.Fprintf(&b, "    %s\n\n", result.Focus.CreatedAt)
-
-		if len(result.After) > 0 {
-			b.WriteString("─── After ───\n")
-			for _, e := range result.After {
-				fmt.Fprintf(&b, "  #%d [%s] %s — %s\n", e.ID, e.Type, e.Title, truncate(e.Content, 150))
+		focus := timeline.Focus
+		fmt.Fprintf(&b, ">>> %s [%s] %s <<<\n", focus.Ref.String(), focus.Type, focus.Title)
+		fmt.Fprintf(&b, "    %s\n    %s\n\n", truncate(focus.Content, 500), focus.CreatedAt)
+		if len(timeline.After) > 0 {
+			b.WriteString("--- After ---\n")
+			for _, o := range timeline.After {
+				fmt.Fprintf(&b, "%s [%s] %s — %s\n", o.Ref.String(), o.Type, o.Title, truncate(o.Content, 150))
 			}
 		}
-
 		return mcp.NewToolResultText(b.String()), nil
 	}
 }
