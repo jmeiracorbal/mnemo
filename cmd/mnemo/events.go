@@ -13,8 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 	"github.com/jmeiracorbal/mnemo/internal/adapters/mapping"
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
 // runEvents only publishes to the controller. It deliberately does not open a
@@ -47,48 +46,29 @@ func runEvents() {
 	if err := eventValidateMarker(project, directory); err != nil {
 		eventFail(err)
 	}
-	storeConfig, err := store.DefaultConfig()
-	if err != nil {
-		eventFail(err)
-	}
-	cfg, err := events.LoadConfig(storeConfig.DataDir)
-	if err != nil {
-		eventFail(err)
-	}
-
+	api, err := loadMnemoClient()
+	if err != nil { eventFail(err) }
 	switch command {
 	case "publish":
-		payload := json.RawMessage(values["payload"])
-		event := events.Event{ID: uuid.NewString(), Type: values["type"], Project: project, ExecutionKey: values["execution-key"], Agent: agents.Agent(values["agent"]), NativeID: values["native-id"], Payload: payload, OccurredAt: time.Now().UTC()}
-		if err := event.Validate(); err != nil {
-			eventFail(err)
+		event := protocol.Event{
+			ID: uuid.NewString(), Type: values["type"], ProjectID: project,
+			ExecutionKey: values["execution-key"], AgentID: values["agent"],
+			NativeID: values["native-id"], Payload: json.RawMessage(values["payload"]),
+			OccurredAt: time.Now().UTC(),
 		}
-		if err := events.Publish(context.Background(), cfg, event); err != nil {
-			eventFail(err)
-		}
+		if err := api.PublishEvent(context.Background(), event); err != nil { eventFail(err) }
 	case "invoke":
 		payload := json.RawMessage(values["payload"])
-		if !json.Valid(payload) {
-			eventFail(fmt.Errorf("--payload must be valid JSON"))
-		}
+		if !json.Valid(payload) { eventFail(fmt.Errorf("--payload must be valid JSON")) }
 		if values["agent"] == "" || values["native-id"] == "" || values["tool"] == "" {
-			eventFail(fmt.Errorf("--agent, --native-id, and --tool are required"))
+			eventFail(fmt.Errorf("--agent, --native-id and --tool are required"))
 		}
-		var result struct {
-			Text string `json:"text"`
-		}
-		input := struct {
-			Agent     agents.Agent    `json:"agent"`
-			NativeID  string          `json:"native_id"`
-			Project   string          `json:"project"`
-			Directory string          `json:"directory"`
-			Tool      string          `json:"tool"`
-			Arguments json.RawMessage `json:"arguments"`
-		}{agents.Agent(values["agent"]), values["native-id"], project, directory, values["tool"], payload}
-		if err := events.Call(context.Background(), cfg, "agent_tool", input, &result); err != nil {
-			eventFail(err)
-		}
-		fmt.Println(result.Text)
+		var arguments map[string]any
+		if err := json.Unmarshal(payload, &arguments); err != nil { eventFail(err) }
+		text, err := invokeNativeMnemoTool(context.Background(), api,
+			project, directory, values["agent"], values["native-id"], values["tool"], arguments)
+		if err != nil { eventFail(err) }
+		fmt.Println(text)
 	default:
 		eventUsage()
 	}
