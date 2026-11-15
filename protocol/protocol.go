@@ -19,12 +19,6 @@ const Version = "mnemo/1"
 // with controller-internal action strings.
 type Operation string
 
-const (
-	OperationHealth            Operation = "health"
-	OperationObservationGet    Operation = "observation.get"
-	OperationObservationCreate Operation = "observation.create"
-)
-
 // Request is a transport-independent protocol envelope. RequestID is assigned
 // once by the caller for each logical mutation and MUST be reused for all
 // retries, including after a lost reply or timeout. A different mutation must
@@ -58,20 +52,20 @@ func (r Request) Validate() error {
 	if r.Version != Version {
 		return &Error{Code: CodeUnsupportedVersion, Message: fmt.Sprintf("unsupported Mnemo protocol version %q", r.Version)}
 	}
-	switch r.Operation {
-	case OperationHealth:
-	case OperationObservationGet:
-	case OperationObservationCreate:
-		if strings.TrimSpace(r.RequestID) == "" {
-			return &Error{Code: CodeInvalidRequest, Message: "observation.create requires a stable request_id"}
-		}
-	default:
+	spec, ok := r.Operation.Spec()
+	if !ok {
 		return &Error{Code: CodeInvalidRequest, Message: fmt.Sprintf("unsupported operation %q", r.Operation)}
+	}
+	if spec.Kind == KindEvent {
+		return &Error{Code: CodeInvalidRequest, Message: "event.publish requires the durable event envelope"}
+	}
+	if spec.Kind == KindCommand && strings.TrimSpace(r.RequestID) == "" {
+		return &Error{Code: CodeInvalidRequest, Message: "mutation requires a stable request_id"}
 	}
 	if len(r.Payload) > 0 && !json.Valid(r.Payload) {
 		return &Error{Code: CodeInvalidRequest, Message: "payload must contain valid JSON"}
 	}
-	if r.Operation != OperationHealth && (len(r.Payload) == 0 || string(r.Payload) == "null") {
+	if spec.RequiresPayload && (len(r.Payload) == 0 || string(r.Payload) == "null") {
 		return &Error{Code: CodeInvalidRequest, Message: "operation requires a payload"}
 	}
 	return nil

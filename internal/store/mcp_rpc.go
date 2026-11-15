@@ -33,7 +33,8 @@ func (s *Store) ApplyMCPCommand(id, action string, payload json.RawMessage) (jso
 			}
 			return protocolFailure(protocol.CodeInvalidRequest, err.Error()), nil
 		}
-		if request.Operation != protocol.OperationObservationCreate {
+		spec, ok := request.Operation.Spec()
+		if !ok || spec.Kind != protocol.KindCommand {
 			return protocolFailure(protocol.CodeInvalidRequest, "non-mutating protocol operation submitted as durable command"), nil
 		}
 		key = protocol.Version + ":" + request.RequestID

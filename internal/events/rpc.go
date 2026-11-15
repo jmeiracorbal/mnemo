@@ -69,7 +69,11 @@ func Call(ctx context.Context, cfg Config, action string, payload any, output an
 func isMutation(action string, payload json.RawMessage) bool {
 	if action == protocol.Version {
 		var request protocol.Request
-		return json.Unmarshal(payload, &request) == nil && request.Operation == protocol.OperationObservationCreate
+		if err := json.Unmarshal(payload, &request); err != nil {
+			return false
+		}
+		spec, ok := request.Operation.Spec()
+		return ok && spec.Kind == protocol.KindCommand
 	}
 	switch action {
 	case "health_probe", "resolve_session", "close_sessions", "bind_execution_session",
