@@ -2,7 +2,10 @@ package mcp
 
 import (
 	"context"
+	"path/filepath"
 
+	"github.com/jmeiracorbal/mnemo/client"
+	"github.com/jmeiracorbal/mnemo/protocol"
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
@@ -15,7 +18,7 @@ type MemoryBackend interface {
 	ResolveMCPInstanceSession(string, string, string, int) (string, error)
 	CloseMCPInstanceSessions(string) error
 	BindExecutionSession(string, agents.Agent, string, string) error
-	AddObservation(store.AddObservationParams) (int64, error)
+	CreateObservation(context.Context, string, protocol.ObservationCreateInput) (protocol.ResourceRef, error)
 	UpdateObservation(int64, store.UpdateObservationParams) (*store.Observation, error)
 	DeleteObservation(int64) error
 	AddPrompt(store.AddPromptParams) (int64, error)
@@ -27,14 +30,27 @@ type MemoryBackend interface {
 	RelatedTags(string, string, store.RelatedTagsOptions) ([]store.RelatedTag, error)
 	Stats() (*store.Stats, error)
 	Timeline(int64, int, int) (*store.TimelineResult, error)
-	GetObservation(int64) (*store.Observation, error)
+	GetObservationRef(context.Context, protocol.ResourceRef) (protocol.Observation, error)
 	MaxObservationLength() int
 }
 
 // ControllerBackend implements MemoryBackend without opening SQLite.
-type ControllerBackend struct{ cfg events.Config }
+type ControllerBackend struct {
+	cfg events.Config
+	api *client.Client
+}
 
-func NewControllerBackend(cfg events.Config) *ControllerBackend { return &ControllerBackend{cfg: cfg} }
+func NewControllerBackend(cfg events.Config) (*ControllerBackend, error) {
+	api, err := client.New(filepath.Dir(cfg.DataDir))
+	if err != nil {
+		return nil, err
+	}
+	return &ControllerBackend{cfg: cfg, api: api}, nil
+}
+
+func (b *ControllerBackend) Health(ctx context.Context) error {
+	return b.api.Health(ctx)
+}
 
 func (b *ControllerBackend) call(action string, input, output any) error {
 	return events.Call(context.Background(), b.cfg, action, input, output)
@@ -69,9 +85,8 @@ func (b *ControllerBackend) BindExecutionSession(project string, agent agents.Ag
 		SessionID string         `json:"session_id"`
 	}{project, agent, nativeID, sessionID}, nil)
 }
-func (b *ControllerBackend) AddObservation(params store.AddObservationParams) (int64, error) {
-	var out int64
-	return out, b.call("add_observation", params, &out)
+func (b *ControllerBackend) CreateObservation(ctx context.Context, requestID string, input protocol.ObservationCreateInput) (protocol.ResourceRef, error) {
+	return b.api.Create(ctx, requestID, input)
 }
 func (b *ControllerBackend) UpdateObservation(id int64, params store.UpdateObservationParams) (*store.Observation, error) {
 	var out store.Observation
@@ -149,12 +164,8 @@ func (b *ControllerBackend) Timeline(id int64, before, after int) (*store.Timeli
 	}{id, before, after}, &out)
 	return &out, err
 }
-func (b *ControllerBackend) GetObservation(id int64) (*store.Observation, error) {
-	var out store.Observation
-	err := b.call("get_observation", struct {
-		ID int64 `json:"id"`
-	}{id}, &out)
-	return &out, err
+func (b *ControllerBackend) GetObservationRef(ctx context.Context, ref protocol.ResourceRef) (protocol.Observation, error) {
+	return b.api.Get(ctx, ref)
 }
 func (b *ControllerBackend) MaxObservationLength() int {
 	var out int
@@ -164,5 +175,4 @@ func (b *ControllerBackend) MaxObservationLength() int {
 	return out
 }
 
-var _ MemoryBackend = (*store.Store)(nil)
 var _ MemoryBackend = (*ControllerBackend)(nil)
