@@ -7,8 +7,10 @@ import "time"
 type SessionResolveInput struct {
 	ProjectID string `json:"project_id"`
 	Directory string `json:"directory"`
-	InstanceID string `json:"instance_id"`
-	PID int `json:"pid"`
+	InstanceID string `json:"instance_id,omitempty"`
+	PID int `json:"pid,omitempty"`
+	AgentID string `json:"agent_id,omitempty"`
+	NativeID string `json:"native_id,omitempty"`
 }
 
 type SessionResolveOutput struct {

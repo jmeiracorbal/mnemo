@@ -169,11 +169,25 @@ func (s *Store) ExecuteProtocolRequest(ctx context.Context, payload json.RawMess
 			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid session.resolve input"}
 			break
 		}
-		if input.ProjectID == "" || input.InstanceID == "" || input.Directory == "" {
-			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "project_id, directory and instance_id are required"}
+		if input.ProjectID == "" || input.Directory == "" {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "project_id and directory are required"}
 			break
 		}
-		sessionID, err := s.ResolveMCPInstanceSession(input.ProjectID, input.Directory, input.InstanceID, input.PID)
+		mcpIdentity := input.InstanceID != ""
+		nativeIdentity := input.AgentID != "" && input.NativeID != ""
+		if mcpIdentity == nativeIdentity {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "choose exactly one of instance_id or agent_id and native_id"}
+			break
+		}
+		var sessionID string
+		var err error
+		if mcpIdentity {
+			sessionID, err = s.ResolveMCPInstanceSession(input.ProjectID, input.Directory, input.InstanceID, input.PID)
+		} else {
+			var identity agents.Identity
+			identity, err = agents.NewIdentity(agents.Agent(input.AgentID), input.ProjectID, input.NativeID)
+			if err == nil { sessionID, err = s.ensureExecutionSession(identity, input.Directory) }
+		}
 		if err != nil { return nil, err }
 		result = protocol.SessionResolveOutput{SessionID: sessionID}
 	case protocol.OperationSessionClose:
