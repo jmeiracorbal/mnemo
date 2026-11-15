@@ -596,8 +596,20 @@ func VerifyUpgrade(ctx context.Context, cfg Config) error {
 	}
 	if err != nil { return err }
 	var response protocol.Response
-	if err := Call(ctx, cfg, request, &response); err != nil {
-		return fmt.Errorf("SQLite and Mnemo protocol probe: %w", err)
+	// JetStream starts before the controller's query subscription is ready.
+	// Under maintenance, only the safe read-only probe is permitted, so
+	// explicitly wait for that subscription instead of bypassing it.
+	for {
+		err = Call(ctx, cfg, request, &response)
+		if err == nil { break }
+		if !errors.Is(err, nats.ErrNoResponders) {
+			return fmt.Errorf("SQLite and Mnemo protocol probe: %w", err)
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("controller never subscribed to Mnemo queries: %w", ctx.Err())
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
 	if response.Error != nil {
 		return fmt.Errorf("controller did not confirm SQLite readiness: %w", response.Error)
