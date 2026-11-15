@@ -555,8 +555,15 @@ func CheckUpgradeReady(ctx context.Context, cfg Config) error {
 		if consumer.Config.FilterSubject != durable.subject || consumer.Config.AckPolicy != nats.AckExplicitPolicy || consumer.Config.DeliverSubject != "" {
 			return fmt.Errorf("upgrade blocked: durable %s has an incompatible configuration", durable.consumer)
 		}
-		if consumer.NumPending != 0 || consumer.NumAckPending != 0 {
-			return fmt.Errorf("upgrade blocked: %w: durable %s has %d pending and %d awaiting acknowledgment", errUpgradePending, durable.consumer, consumer.NumPending, consumer.NumAckPending)
+		// JetStream's NumPending can lag immediately after a publish. The
+		// consumer covers the entire stream, so every sequence past the ACK
+		// floor is still in flight even if its pending counters read zero.
+		// Never upgrade while an unacknowledged message could be dropped.
+		behindAckFloor := stream.State.LastSeq > consumer.AckFloor.Stream
+		if consumer.NumPending != 0 || consumer.NumAckPending != 0 || behindAckFloor {
+			return fmt.Errorf("upgrade blocked: %w: durable %s has %d pending and %d awaiting acknowledgment (last sequence %d, ACK floor %d)",
+				errUpgradePending, durable.consumer, consumer.NumPending, consumer.NumAckPending,
+				stream.State.LastSeq, consumer.AckFloor.Stream)
 		}
 	}
 	return nil
