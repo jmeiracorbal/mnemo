@@ -276,6 +276,98 @@ func (s *Store) ExecuteProtocolRequest(ctx context.Context, payload json.RawMess
 		observations, sessions, err := s.MergeTags(input.From, input.To)
 		if err != nil { return nil, err }
 		result = protocol.TagMergeOutput{Observations: observations, Sessions: sessions}
+	case protocol.OperationPromptCreate:
+		var input protocol.PromptCreateInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil || input.ProjectID == "" || input.SessionID == "" || input.Content == "" {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "project_id, session_id and content are required"}
+			break
+		}
+		session, err := s.GetSession(input.SessionID)
+		if err != nil || session.Project != input.ProjectID {
+			response.Error = &protocol.Error{Code: protocol.CodeProjectMismatch, Message: "prompt session does not belong to specified project"}
+			break
+		}
+		if _, err := s.AddPrompt(AddPromptParams{
+			SessionID: input.SessionID, Project: input.ProjectID, Content: input.Content,
+			Provenance: provenanceFromPublic(input.Provenance),
+		}); err != nil { return nil, err }
+		result = protocol.PromptCreateOutput{Created: true}
+	case protocol.OperationCapturePassive:
+		var input protocol.CapturePassiveInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil || input.ProjectID == "" || input.SessionID == "" || input.Content == "" {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "project_id, session_id and content are required"}
+			break
+		}
+		session, err := s.GetSession(input.SessionID)
+		if err != nil || session.Project != input.ProjectID {
+			response.Error = &protocol.Error{Code: protocol.CodeProjectMismatch, Message: "passive capture session does not belong to specified project"}
+			break
+		}
+		captured, err := s.PassiveCapture(PassiveCaptureParams{
+			SessionID: input.SessionID, Project: input.ProjectID,
+			Content: input.Content, Source: input.Source,
+			Provenance: provenanceFromPublic(input.Provenance),
+		})
+		if err != nil { return nil, err }
+		result = protocol.CapturePassiveOutput{
+			Extracted: captured.Extracted, Saved: captured.Saved,
+			Duplicates: captured.Duplicates, SuggestedTags: captured.SuggestedTags,
+		}
+	case protocol.OperationProjectList:
+		projects, err := s.ListProjectSummaries()
+		if err != nil { return nil, err }
+		out := make([]protocol.ProjectSummary, 0, len(projects))
+		for _, item := range projects { out = append(out, publicProjectSummary(item)) }
+		result = protocol.ProjectListOutput{Projects: out}
+	case protocol.OperationProjectMergePlan, protocol.OperationProjectMerge:
+		var input protocol.ProjectPairInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil || input.From == "" || input.To == "" || input.From == input.To {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "distinct source and destination projects are required"}
+			break
+		}
+		if request.Operation == protocol.OperationProjectMergePlan {
+			plan, err := s.BuildProjectMergePlan(input.From, input.To)
+			if err != nil { return nil, err }
+			result = publicMergePlan(plan)
+		} else {
+			merged, err := s.MergeProjects(input.From, input.To)
+			if err != nil { return nil, err }
+			result = protocol.ProjectMergeOutput{
+				Plan: publicMergePlan(&merged.Plan), Merged: merged.Merged,
+				ObservationsUpdated: merged.ObservationsUpdated,
+				SessionsUpdated: merged.SessionsUpdated, PromptsUpdated: merged.PromptsUpdated,
+				SourceProjectDeleted: merged.SourceProjectDeleted,
+			}
+		}
+	case protocol.OperationProjectRenamePlan, protocol.OperationProjectRename:
+		var input protocol.ProjectRenameInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil || input.Name == "" || (input.Selector.ID == "" && input.Selector.Path == "") {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "project selector and new name are required"}
+			break
+		}
+		selector := ProjectRenameSelector{ID: input.Selector.ID, Path: input.Selector.Path}
+		if request.Operation == protocol.OperationProjectRenamePlan {
+			plan, err := s.BuildProjectRenamePlan(selector, input.Name)
+			if err != nil { return nil, err }
+			result = publicRenamePlan(plan)
+		} else {
+			renamed, err := s.RenameProject(selector, input.Name)
+			if err != nil { return nil, err }
+			result = protocol.ProjectRenameOutput{Plan: publicRenamePlan(&renamed.Plan), Renamed: renamed.Renamed}
+		}
+	case protocol.OperationProjectIdentityMigrate:
+		var input protocol.ProjectIdentityMigrateInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil || input.LegacyKey == "" || input.ProjectID == "" {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "legacy_key and project_id are required"}
+			break
+		}
+		migrated, err := s.MigrateProject(input.LegacyKey, input.ProjectID)
+		if err != nil { return nil, err }
+		if err := s.EnsureProject(input.ProjectID, input.Name); err != nil { return nil, err }
+		result = protocol.ProjectIdentityMigrateOutput{
+			Migrated: migrated.Migrated, ObservationsUpdated: migrated.ObservationsUpdated,
+			SessionsUpdated: migrated.SessionsUpdated, PromptsUpdated: migrated.PromptsUpdated,
+		}
 	case protocol.OperationObservationGet:
 		var input protocol.ObservationGetInput
 		if err := json.Unmarshal(request.Payload, &input); err != nil {
@@ -453,4 +545,38 @@ func publicTags(tags []TagInfo) []protocol.TagInfo {
 		})
 	}
 	return out
+}
+
+func provenanceFromPublic(input protocol.Provenance) ProvenanceInput {
+	return ProvenanceInput{
+		AgentID: input.AgentID, SourceKindID: input.SourceKindID,
+		ToolID: input.ToolID, ModelID: input.ModelID, ModelProvider: input.ModelProvider,
+		MCPClientID: input.MCPClientID, MCPClientName: input.MCPClientName,
+		MCPClientVersion: input.MCPClientVersion, MCPTransport: input.MCPTransport,
+	}
+}
+
+func publicProjectSummary(s ProjectSummary) protocol.ProjectSummary {
+	return protocol.ProjectSummary{
+		ID: s.ID, Name: s.Name, CreatedAt: s.CreatedAt, Directory: s.Directory,
+		SessionCount: s.SessionCount, ObservationCount: s.ObservationCount,
+		PromptCount: s.PromptCount, LastSeenAt: s.LastSeenAt,
+	}
+}
+
+func publicMergePlan(plan *ProjectMergePlan) protocol.ProjectMergePlan {
+	return protocol.ProjectMergePlan{
+		From: publicProjectSummary(plan.From), To: publicProjectSummary(plan.To),
+		Observations: plan.Observations, Sessions: plan.Sessions, Prompts: plan.Prompts,
+		SourceProjectRows: plan.SourceProjectRows,
+		WillDeleteSourceProject: plan.WillDeleteSourceProject,
+	}
+}
+
+func publicRenamePlan(plan *ProjectRenamePlan) protocol.ProjectRenamePlan {
+	return protocol.ProjectRenamePlan{
+		Project: publicProjectSummary(plan.Project), Selector: plan.Selector,
+		SelectorValue: plan.SelectorValue, NewName: plan.NewName,
+		WillChange: plan.WillChange,
+	}
 }
