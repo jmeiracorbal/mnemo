@@ -582,16 +582,25 @@ func CheckHealth(ctx context.Context, cfg Config) error {
 // command, read SQLite and acknowledge a real JetStream event. This is run by
 // the installer automatically after the service restart, not by the user.
 func VerifyUpgrade(ctx context.Context, cfg Config) error {
-	probeRequest, err := protocol.NewRequest(protocol.OperationSessionClose, uuid.NewString(), protocol.SessionCloseInput{
-		InstanceID: "_mnemo_upgrade_probe_" + uuid.NewString(),
-	})
-	if err != nil { return err }
-	var probeResponse protocol.Response
-	if err := Call(ctx, cfg, probeRequest, &probeResponse); err != nil {
-		return fmt.Errorf("durable command and SQLite probe: %w", err)
+	// During upgrade maintenance only read-only protocol health is safe. At
+	// normal startup also verify the durable command stream using a no-op
+	// close on a unique, nonexistent controller session.
+	var request protocol.Request
+	var err error
+	if UpgradeMaintenance(cfg) {
+		request, err = protocol.NewRequest(protocol.OperationHealth, "", nil)
+	} else {
+		request, err = protocol.NewRequest(protocol.OperationSessionClose, uuid.NewString(), protocol.SessionCloseInput{
+			InstanceID: "_mnemo_upgrade_probe_" + uuid.NewString(),
+		})
 	}
-	if probeResponse.Error != nil {
-		return fmt.Errorf("controller did not confirm SQLite readiness: %w", probeResponse.Error)
+	if err != nil { return err }
+	var response protocol.Response
+	if err := Call(ctx, cfg, request, &response); err != nil {
+		return fmt.Errorf("SQLite and Mnemo protocol probe: %w", err)
+	}
+	if response.Error != nil {
+		return fmt.Errorf("controller did not confirm SQLite readiness: %w", response.Error)
 	}
 
 	probe, err := NewEvent(EventHealthProbe, "_mnemo_upgrade_probe", "upgrade", struct{}{})
