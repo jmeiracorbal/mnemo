@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 	goevents "github.com/jmeiracorbal/go-events"
 	goeventsnats "github.com/jmeiracorbal/go-events/adapters/nats"
 	"github.com/jmeiracorbal/mnemo/protocol"
