@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/jmeiracorbal/mnemo/internal/events"
+	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
@@ -225,4 +226,16 @@ func (c *Client) MergeTags(ctx context.Context, requestID string, input protocol
 	var output protocol.TagMergeOutput
 	err := c.invoke(ctx, protocol.OperationTagMerge, requestID, input, &output)
 	return output, err
+}
+
+// PublishEvent durably publishes a domain event with its original event ID,
+// using the existing Mnemo controller stream rather than a parallel bus.
+func (c *Client) PublishEvent(ctx context.Context, event protocol.Event) error {
+	if c == nil { return fmt.Errorf("mnemo client is nil") }
+	if err := event.Validate(); err != nil { return err }
+	return events.Publish(ctx, c.config, events.Event{
+		ID: event.ID, Type: event.Type, Project: event.ProjectID,
+		ExecutionKey: event.ExecutionKey, Agent: agents.Agent(event.AgentID),
+		NativeID: event.NativeID, Payload: event.Payload, OccurredAt: event.OccurredAt,
+	})
 }
