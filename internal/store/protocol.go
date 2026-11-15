@@ -141,12 +141,12 @@ func (s *Store) ExecuteProtocolRequest(ctx context.Context, payload json.RawMess
 			if timeline.SessionInfo.Summary != nil { out.SessionSummary = *timeline.SessionInfo.Summary }
 		}
 		for _, item := range timeline.Before {
-			ref, err := protocol.NewObservationRef(input.Ref.ProjectID, item.SyncID)
+			ref, err := s.protocolTimelineRef(input.Ref.ProjectID, item.ID)
 			if err != nil { return nil, err }
 			out.Before = append(out.Before, projectTimelineObservation(ref, &item))
 		}
 		for _, item := range timeline.After {
-			ref, err := protocol.NewObservationRef(input.Ref.ProjectID, item.SyncID)
+			ref, err := s.protocolTimelineRef(input.Ref.ProjectID, item.ID)
 			if err != nil { return nil, err }
 			out.After = append(out.After, projectTimelineObservation(ref, &item))
 		}
@@ -320,4 +320,13 @@ func projectTimelineObservation(ref protocol.ResourceRef, entry *TimelineEntry) 
 		RevisionCount: entry.RevisionCount, DuplicateCount: entry.DuplicateCount,
 		CreatedAt: entry.CreatedAt, UpdatedAt: entry.UpdatedAt,
 	}
+}
+
+func (s *Store) protocolTimelineRef(projectID string, id int64) (protocol.ResourceRef, error) {
+	obs, err := s.GetObservation(id)
+	if err != nil { return protocol.ResourceRef{}, err }
+	if obs.Project == nil || *obs.Project != projectID {
+		return protocol.ResourceRef{}, fmt.Errorf("timeline observation belongs to a different project")
+	}
+	return protocol.NewObservationRef(projectID, obs.SyncID)
 }
