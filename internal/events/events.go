@@ -642,11 +642,13 @@ func VerifyUpgrade(ctx context.Context, cfg Config) error {
 	defer ticker.Stop()
 	for {
 		consumer, err := js.ConsumerInfo(streamName, consumerName, nats.Context(ctx))
-		if err != nil {
-			return fmt.Errorf("inspect event consumer: %w", err)
-		}
-		if consumer.AckFloor.Stream >= message.Sequence {
+		if err == nil && consumer.AckFloor.Stream >= message.Sequence {
 			return nil
+		}
+		// The controller registers the query subscription before the durable
+		// event consumer; wait only for that startup transition.
+		if err != nil && !errors.Is(err, nats.ErrConsumerNotFound) {
+			return fmt.Errorf("inspect event consumer: %w", err)
 		}
 		select {
 		case <-ctx.Done():

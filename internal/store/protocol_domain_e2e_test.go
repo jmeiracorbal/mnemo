@@ -59,7 +59,7 @@ func TestPublicMemoryCurationAndTopicConsolidation(t *testing.T) {
 	defer cancel()
 	first, err := api.Create(ctx, "curation-create-first", protocol.ObservationCreateInput{
 		ProjectID: "curation-project", Type: "decision", Title: "Old design",
-		Content: "An older architecture", TopicKey: "topic-old",
+		Content: "An older architecture", TopicKey: "topic-replaced",
 	})
 	if err != nil { t.Fatal(err) }
 	second, err := api.Create(ctx, "curation-create-second", protocol.ObservationCreateInput{
