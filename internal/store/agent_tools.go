@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/protocol"
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 )
 
@@ -50,7 +51,25 @@ func (s *Store) ExecuteAgentTool(input AgentToolRequest) (AgentToolResult, error
 	switch input.Tool {
 	case "mem_search":
 		value, err := s.Search(stringArg(args, "query"), SearchOptions{Type: stringArg(args, "type"), Project: stringArg(args, "project"), Scope: stringArg(args, "scope"), TopicKey: stringArg(args, "topic_key"), Tags: splitTags(stringArg(args, "tags")), PreferTags: splitTags(stringArg(args, "prefer_tags")), Limit: intArg(args, "limit", 10)})
-		return agentToolJSON(value, err)
+		if err != nil {
+			return AgentToolResult{}, err
+		}
+		type searchEntry struct {
+			SearchResult
+			Ref protocol.ResourceRef `json:"ref"`
+		}
+		entries := make([]searchEntry, 0, len(value))
+		for _, obs := range value {
+			if obs.Project == nil {
+				return AgentToolResult{}, fmt.Errorf("observation has no Mnemo project identity")
+			}
+			ref, err := protocol.NewObservationRef(*obs.Project, obs.SyncID)
+			if err != nil {
+				return AgentToolResult{}, err
+			}
+			entries = append(entries, searchEntry{SearchResult: obs, Ref: ref})
+		}
+		return agentToolJSON(entries, nil)
 	case "mem_suggest_topic_key":
 		title, content := stringArg(args, "title"), stringArg(args, "content")
 		if strings.TrimSpace(title) == "" && strings.TrimSpace(content) == "" {
@@ -61,11 +80,11 @@ func (s *Store) ExecuteAgentTool(input AgentToolRequest) (AgentToolResult, error
 		value, err := s.FormatContextOpts(stringArg(args, "project"), stringArg(args, "scope"), ContextOptions{Tags: splitTags(stringArg(args, "tags")), PreferTags: splitTags(stringArg(args, "prefer_tags")), TopicKey: stringArg(args, "topic_key")})
 		return agentToolJSON(value, err)
 	case "mem_get_observation":
-		id := int64(intArg(args, "id", 0))
-		if id == 0 {
-			return AgentToolResult{}, fmt.Errorf("id is required")
+		ref, err := protocol.ParseResourceRef(stringArg(args, "ref"))
+		if err != nil {
+			return AgentToolResult{}, err
 		}
-		value, err := s.GetObservation(id)
+		value, _, err := s.protocolGetObservation(context.Background(), ref)
 		return agentToolJSON(value, err)
 	case "mem_update":
 		return s.executeAgentUpdate(args)
@@ -106,7 +125,20 @@ func (s *Store) ExecuteAgentTool(input AgentToolRequest) (AgentToolResult, error
 			typ = "manual"
 		}
 		title, content := stringArg(args, "title"), stringArg(args, "content")
-		if _, err := s.AddObservation(AddObservationParams{SessionID: sessionID, Type: typ, Title: title, Content: content, Project: input.Project, Scope: stringArg(args, "scope"), TopicKey: stringArg(args, "topic_key"), Tags: splitTags(stringArg(args, "tags")), Provenance: provenance}); err != nil {
+		if _, err := s.protocolCreateObservation(protocol.ObservationCreateInput{
+			SessionID: sessionID, ProjectID: input.Project, Type: typ,
+			Title: title, Content: content, Scope: stringArg(args, "scope"),
+			TopicKey: stringArg(args, "topic_key"), Tags: splitTags(stringArg(args, "tags")),
+			Provenance: protocol.Provenance{
+			AgentID: provenance.AgentID, SourceKindID: provenance.SourceKindID,
+			ToolID: provenance.ToolID, ModelID: provenance.ModelID,
+			ModelProvider: provenance.ModelProvider,
+			MCPClientID: provenance.MCPClientID,
+			MCPClientName: provenance.MCPClientName,
+			MCPClientVersion: provenance.MCPClientVersion,
+			MCPTransport: provenance.MCPTransport,
+		},
+		}); err != nil {
 			return AgentToolResult{}, err
 		}
 		return AgentToolResult{Text: fmt.Sprintf("Memory saved: %q (%s)", title, typ)}, nil
@@ -117,7 +149,20 @@ func (s *Store) ExecuteAgentTool(input AgentToolRequest) (AgentToolResult, error
 		}
 		return AgentToolResult{Text: fmt.Sprintf("Prompt saved: %q", truncateAgentTool(content, 80))}, nil
 	case "mem_session_summary":
-		if _, err := s.AddObservation(AddObservationParams{SessionID: sessionID, Type: "session_summary", Title: fmt.Sprintf("Session summary: %s", input.Project), Content: stringArg(args, "content"), Project: input.Project, Provenance: provenance}); err != nil {
+		if _, err := s.protocolCreateObservation(protocol.ObservationCreateInput{
+			SessionID: sessionID, ProjectID: input.Project, Type: "session_summary",
+			Title: fmt.Sprintf("Session summary: %s", input.Project),
+			Content: stringArg(args, "content"),
+			Provenance: protocol.Provenance{
+			AgentID: provenance.AgentID, SourceKindID: provenance.SourceKindID,
+			ToolID: provenance.ToolID, ModelID: provenance.ModelID,
+			ModelProvider: provenance.ModelProvider,
+			MCPClientID: provenance.MCPClientID,
+			MCPClientName: provenance.MCPClientName,
+			MCPClientVersion: provenance.MCPClientVersion,
+			MCPTransport: provenance.MCPTransport,
+		},
+		}); err != nil {
 			return AgentToolResult{}, err
 		}
 		return AgentToolResult{Text: fmt.Sprintf("Session summary saved for project %q", input.Project)}, nil
