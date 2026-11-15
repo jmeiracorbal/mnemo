@@ -170,3 +170,59 @@ func (c *Client) Stats(ctx context.Context) (protocol.StatsOutput, error) {
 	if err := c.invoke(ctx, protocol.OperationStatsGet, "", nil, &output); err != nil { return output, err }
 	return output, nil
 }
+
+func (c *Client) ResolveSession(ctx context.Context, requestID string, input protocol.SessionResolveInput) (string, error) {
+	var output protocol.SessionResolveOutput
+	if err := c.invoke(ctx, protocol.OperationSessionResolve, requestID, input, &output); err != nil { return "", err }
+	return output.SessionID, nil
+}
+
+func (c *Client) CloseSession(ctx context.Context, requestID string, input protocol.SessionCloseInput) error {
+	return c.invoke(ctx, protocol.OperationSessionClose, requestID, input, nil)
+}
+
+func (c *Client) BindExecutionSession(ctx context.Context, requestID string, input protocol.SessionBindExecutionInput) error {
+	return c.invoke(ctx, protocol.OperationSessionBindExecution, requestID, input, nil)
+}
+
+func (c *Client) SessionExists(ctx context.Context, sessionID string) (bool, error) {
+	var output protocol.SessionExistsOutput
+	err := c.invoke(ctx, protocol.OperationSessionExists, "", protocol.SessionIDInput{SessionID: sessionID}, &output)
+	return output.Exists, err
+}
+
+func (c *Client) SessionObservationCount(ctx context.Context, sessionID string) (int, error) {
+	var output protocol.SessionCountOutput
+	err := c.invoke(ctx, protocol.OperationSessionObservationCount, "", protocol.SessionIDInput{SessionID: sessionID}, &output)
+	return output.Count, err
+}
+
+func (c *Client) SessionProjectObservationCount(ctx context.Context, sessionID string) (int, error) {
+	var output protocol.SessionCountOutput
+	err := c.invoke(ctx, protocol.OperationSessionProjectObservationCount, "", protocol.SessionIDInput{SessionID: sessionID}, &output)
+	return output.Count, err
+}
+
+func (c *Client) ListTags(ctx context.Context, projectID string) ([]protocol.TagInfo, error) {
+	var output protocol.TagListOutput
+	err := c.invoke(ctx, protocol.OperationTagList, "", protocol.TagListInput{ProjectID: projectID}, &output)
+	return output.Tags, err
+}
+
+func (c *Client) TagStats(ctx context.Context, input protocol.TagStatsInput) ([]protocol.TagInfo, error) {
+	var output protocol.TagStatsOutput
+	err := c.invoke(ctx, protocol.OperationTagStats, "", input, &output)
+	return output.Tags, err
+}
+
+func (c *Client) RelatedTags(ctx context.Context, input protocol.TagRelatedInput) ([]protocol.RelatedTag, error) {
+	var output protocol.TagRelatedOutput
+	err := c.invoke(ctx, protocol.OperationTagRelated, "", input, &output)
+	return output.Tags, err
+}
+
+func (c *Client) MergeTags(ctx context.Context, requestID string, input protocol.TagMergeInput) (protocol.TagMergeOutput, error) {
+	var output protocol.TagMergeOutput
+	err := c.invoke(ctx, protocol.OperationTagMerge, requestID, input, &output)
+	return output, err
+}
