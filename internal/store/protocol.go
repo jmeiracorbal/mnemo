@@ -109,25 +109,47 @@ func (s *Store) protocolGetObservation(ctx context.Context, ref protocol.Resourc
 }
 
 func (s *Store) protocolCreateObservation(input protocol.ObservationCreateInput) (protocol.ResourceRef, error) {
-	// One persistent session per project for direct API writes. A Mnemo memory
-	// always belongs to a real project, never to the harness that requested it.
-	sessionID := "mnemo-protocol-" + input.ProjectID
-	existing, err := s.q.GetSessionPayload(context.Background(), sessionID)
-	if err == sql.ErrNoRows {
-		if err := s.withTx(func(tx *sql.Tx) error {
-			return s.createSessionTx(tx, sessionID, input.ProjectID, "mnemo/1", ProvenanceInput{})
-		}); err != nil {
-			return protocol.ResourceRef{}, err
+	sessionID := input.SessionID
+	if sessionID != "" {
+		// An MCP adapter has already resolved the agent's Mnemo session.
+		// Never redirect it into a synthetic session or another project.
+		session, err := s.GetSession(sessionID)
+		if err != nil {
+			return protocol.ResourceRef{}, fmt.Errorf("lookup observation session: %w", err)
 		}
-	} else if err != nil {
-		return protocol.ResourceRef{}, err
-	} else if existing.Project != input.ProjectID || existing.IsDeleted != 0 {
-		return protocol.ResourceRef{}, fmt.Errorf("protocol session identity conflicts with existing session")
+		if session.Project != input.ProjectID {
+			return protocol.ResourceRef{}, fmt.Errorf("observation session belongs to another project")
+		}
+	} else {
+		// Standalone callers without an agent session use one Mnemo-owned
+		// persistent session per project. No consumer or harness owns it.
+		sessionID = "mnemo-protocol-" + input.ProjectID
+		existing, err := s.q.GetSessionPayload(context.Background(), sessionID)
+		if err == sql.ErrNoRows {
+			if err := s.withTx(func(tx *sql.Tx) error {
+				return s.createSessionTx(tx, sessionID, input.ProjectID, "mnemo/1", ProvenanceInput{})
+			}); err != nil {
+				return protocol.ResourceRef{}, err
+			}
+		} else if err != nil {
+			return protocol.ResourceRef{}, err
+		} else if existing.Project != input.ProjectID || existing.IsDeleted != 0 {
+			return protocol.ResourceRef{}, fmt.Errorf("protocol session identity conflicts with existing session")
+		}
 	}
 	id, err := s.AddObservation(AddObservationParams{
 		SessionID: sessionID, Project: input.ProjectID, Type: input.Type,
 		Title: input.Title, Content: input.Content, Scope: input.Scope,
 		TopicKey: input.TopicKey, Tags: input.Tags,
+		Provenance: ProvenanceInput{
+			AgentID: input.Provenance.AgentID, SourceKindID: input.Provenance.SourceKindID,
+			ToolID: input.Provenance.ToolID, ModelID: input.Provenance.ModelID,
+			ModelProvider: input.Provenance.ModelProvider,
+			MCPClientID: input.Provenance.MCPClientID,
+			MCPClientName: input.Provenance.MCPClientName,
+			MCPClientVersion: input.Provenance.MCPClientVersion,
+			MCPTransport: input.Provenance.MCPTransport,
+		},
 	})
 	if err != nil {
 		return protocol.ResourceRef{}, err
@@ -144,9 +166,15 @@ func projectObservation(ref protocol.ResourceRef, obs *Observation) protocol.Obs
 	if obs.TopicKey != nil {
 		topic = *obs.TopicKey
 	}
+	var toolName string
+	if obs.ToolName != nil {
+		toolName = *obs.ToolName
+	}
 	return protocol.Observation{
-		Ref: ref, Type: obs.Type, Title: obs.Title, Content: obs.Content,
+		Ref: ref, SessionID: obs.SessionID,
+		Type: obs.Type, Title: obs.Title, Content: obs.Content, ToolName: toolName,
 		Scope: obs.Scope, TopicKey: topic, Tags: obs.Tags,
+		RevisionCount: obs.RevisionCount, DuplicateCount: obs.DuplicateCount,
 		CreatedAt: obs.CreatedAt, UpdatedAt: obs.UpdatedAt,
 	}
 }
