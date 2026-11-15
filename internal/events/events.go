@@ -578,7 +578,7 @@ func CheckHealth(ctx context.Context, cfg Config) error {
 }
 
 
-// VerifyUpgrade proves that the installed controller can execute a durable MCP
+// VerifyUpgrade proves that the controller can execute a durable mnemo/1
 // command, read SQLite and acknowledge a real JetStream event. This is run by
 // the installer automatically after the service restart, not by the user.
 func VerifyUpgrade(ctx context.Context, cfg Config) error {
