@@ -28,11 +28,8 @@ func (*transportTestStore) ApplyMCPCommand(string, string, json.RawMessage) (jso
 	return json.RawMessage(`null`), nil
 }
 
-func (*transportTestStore) ExecuteMCPAction(_ context.Context, action string, _ json.RawMessage) (json.RawMessage, error) {
-	if action == "health_probe" {
-		return json.RawMessage(`true`), nil
-	}
-	return json.RawMessage(`null`), nil
+func (*transportTestStore) ExecuteProtocolRequest(_ context.Context, _ json.RawMessage) (json.RawMessage, error) {
+	return json.RawMessage(`{"version":"mnemo/1","payload":{"ready":true}}`), nil
 }
 
 func TestPublishedEventRetainsWireShapeAndAddsTransportIdentity(t *testing.T) {

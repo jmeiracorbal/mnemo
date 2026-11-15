@@ -9,70 +9,52 @@ import (
 	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
-func TestApplyMCPCommandImportIsAtomic(t *testing.T) {
+func TestPublicArchiveImportIsAtomicAndIdempotent(t *testing.T) {
 	src, err := New(FallbackConfig(t.TempDir()))
-	if err != nil {
-		t.Fatal(err)
-	}
+	if err != nil { t.Fatal(err) }
 	t.Cleanup(func() { _ = src.Close() })
-
 	sessionID, err := src.ResolveMCPInstanceSession("import-project", t.TempDir(), "instance-import", 1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	if err != nil { t.Fatal(err) }
 	if _, err := src.AddObservation(AddObservationParams{
 		SessionID: sessionID, Project: "import-project", Type: "manual",
 		Title: "imported obs", Content: "content for import test",
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	exported, err := src.Export()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	}); err != nil { t.Fatal(err) }
+	exported, err := src.ExecuteProtocolRequest(context.Background(), mustPublicRequest(t, protocol.OperationArchiveExport, "", nil))
+	if err != nil { t.Fatal(err) }
+	var exportedResponse protocol.Response
+	if err := json.Unmarshal(exported, &exportedResponse); err != nil { t.Fatal(err) }
+	if exportedResponse.Error != nil { t.Fatal(exportedResponse.Error) }
+	var archive protocol.ArchiveExportOutput
+	if err := json.Unmarshal(exportedResponse.Payload, &archive); err != nil { t.Fatal(err) }
 	dst, err := New(FallbackConfig(t.TempDir()))
-	if err != nil {
-		t.Fatal(err)
-	}
+	if err != nil { t.Fatal(err) }
 	t.Cleanup(func() { _ = dst.Close() })
-
-	payload, err := json.Marshal(exported)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	first, err := dst.ApplyMCPCommand("import-cmd-1", "import", payload)
-	if err != nil {
-		t.Fatalf("first import: %v", err)
-	}
-
-	var firstResult ImportResult
-	if err := json.Unmarshal(first, &firstResult); err != nil {
-		t.Fatalf("unmarshal first result: %v", err)
-	}
-	if firstResult.ObservationsImported != 1 {
-		t.Fatalf("observations imported = %d, want 1", firstResult.ObservationsImported)
-	}
-
-	// Replay must return the cached result without re-importing.
-	second, err := dst.ApplyMCPCommand("import-cmd-1", "import", payload)
-	if err != nil {
-		t.Fatalf("replay import: %v", err)
-	}
-	if string(first) != string(second) {
-		t.Fatalf("replayed result = %s, want %s", second, first)
-	}
-
-	// Verify the import and the command record committed atomically.
+	request := mustPublicRequest(t, protocol.OperationArchiveImport, "import-cmd-1", protocol.ArchiveImportInput{Archive: archive})
+	first, err := dst.ApplyMCPCommand("transport-1", protocol.Version, request)
+	if err != nil { t.Fatal(err) }
+	var firstResponse protocol.Response
+	if err := json.Unmarshal(first, &firstResponse); err != nil { t.Fatal(err) }
+	if firstResponse.Error != nil { t.Fatal(firstResponse.Error) }
+	var imported protocol.ArchiveImportOutput
+	if err := json.Unmarshal(firstResponse.Payload, &imported); err != nil { t.Fatal(err) }
+	if imported.ObservationsImported != 1 { t.Fatalf("imported %d observations", imported.ObservationsImported) }
+	second, err := dst.ApplyMCPCommand("transport-2", protocol.Version, request)
+	if err != nil { t.Fatal(err) }
+	if string(first) != string(second) { t.Fatal("replayed import returned a different result") }
 	rows, err := dst.q.ExportObservations(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	if err != nil { t.Fatal(err) }
 	if len(rows) != 1 || rows[0].Title != "imported obs" {
-		t.Fatalf("observations in dst = %d, want 1 with title 'imported obs'", len(rows))
+		t.Fatalf("import was not atomic or duplicated: %+v", rows)
 	}
+}
+
+func mustPublicRequest(t *testing.T, operation protocol.Operation, id string, payload any) json.RawMessage {
+	t.Helper()
+	request, err := protocol.NewRequest(operation, id, payload)
+	if err != nil { t.Fatal(err) }
+	body, err := json.Marshal(request)
+	if err != nil { t.Fatal(err) }
+	return body
 }
 
 func TestApplyMCPCommandReturnsStoredResultWithoutRepeatingMutation(t *testing.T) {
@@ -144,15 +126,17 @@ func TestNativeSessionResolveUsesCanonicalExecutionIdentity(t *testing.T) {
 	}
 }
 
-func TestRetiredObservationActionsAreRejected(t *testing.T) {
+func TestRetiredActionRPCIsRejected(t *testing.T) {
 	memory, err := New(FallbackConfig(t.TempDir()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = memory.Close() }()
-	for _, action := range []string{"add_observation", "get_observation"} {
-		if _, err := memory.ExecuteMCPAction(context.Background(), action, json.RawMessage(`{}`)); err == nil {
-			t.Fatalf("retired action %q still available", action)
+	if err != nil { t.Fatal(err) }
+	t.Cleanup(func() { _ = memory.Close() })
+	for _, action := range []string{"add_observation", "get_observation", "agent_tool", "search", "merge_projects"} {
+		body, err := memory.ApplyMCPCommand("old-command", action, json.RawMessage(`{}`))
+		if err != nil { t.Fatal(err) }
+		var response protocol.Response
+		if err := json.Unmarshal(body, &response); err != nil { t.Fatal(err) }
+		if response.Error == nil || response.Error.Code != protocol.CodeInvalidRequest {
+			t.Fatalf("retired action %q accepted: %s", action, body)
 		}
 	}
 }
