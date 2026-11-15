@@ -27,7 +27,7 @@ const parameters = Type.Object({
   query: Type.Optional(Type.String()), type: Type.Optional(Type.String()), scope: Type.Optional(Type.String()),
   title: Type.Optional(Type.String()), content: Type.Optional(Type.String()), topic_key: Type.Optional(Type.String()),
   tags: Type.Optional(Type.String()), prefer_tags: Type.Optional(Type.String()), source: Type.Optional(Type.String()),
-  id: Type.Optional(Type.Number()), ref: Type.Optional(Type.String()), limit: Type.Optional(Type.Number()), min_count: Type.Optional(Type.Number()),
+  ref: Type.Optional(Type.String()), limit: Type.Optional(Type.Number()), min_count: Type.Optional(Type.Number()),
   max_count: Type.Optional(Type.Number()), unused_since: Type.Optional(Type.String()), sort_by: Type.Optional(Type.String()),
   from: Type.Optional(Type.String()), to: Type.Optional(Type.String()), tag: Type.Optional(Type.String()),
   since: Type.Optional(Type.String()), min_cooccurrence: Type.Optional(Type.Number()),

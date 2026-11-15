@@ -110,27 +110,6 @@ func invokeNativeMnemoTool(ctx context.Context, api *client.Client,
 		})
 		if err != nil { return "", err }
 		return jsonText(value)
-	}
-
-	// Mutating tools resolve the real native agent execution session, preserving
-	// its identity rather than allocating an unrelated MCP session.
-	sessionID, err := api.ResolveSession(ctx, uuid.NewString(), protocol.SessionResolveInput{
-		ProjectID: project, Directory: directory, AgentID: agent, NativeID: nativeID,
-	})
-	if err != nil { return "", err }
-	provenance := protocol.Provenance{AgentID: agent, SourceKindID: "agent_adapter", ToolID: tool}
-	switch tool {
-	case "mem_save":
-		kind := stringArg("type")
-		if kind == "" { kind = "manual" }
-		title, content := stringArg("title"), stringArg("content")
-		ref, err := api.Create(ctx, uuid.NewString(), protocol.ObservationCreateInput{
-			ProjectID: project, SessionID: sessionID, Type: kind,
-			Title: title, Content: content, Scope: stringArg("scope"),
-			TopicKey: stringArg("topic_key"), Tags: tags("tags"), Provenance: provenance,
-		})
-		if err != nil { return "", err }
-		return fmt.Sprintf("Memory saved: %q (%s)\nReference: %s", title, kind, ref.String()), nil
 	case "mem_update":
 		ref, err := protocol.ParseResourceRef(stringArg("ref"))
 		if err != nil { return "", err }
@@ -153,6 +132,28 @@ func invokeNativeMnemoTool(ctx context.Context, api *client.Client,
 		})
 		if err != nil { return "", err }
 		return jsonText(merged)
+
+	}
+
+	// Mutating tools resolve the real native agent execution session, preserving
+	// its identity rather than allocating an unrelated MCP session.
+	sessionID, err := api.ResolveSession(ctx, uuid.NewString(), protocol.SessionResolveInput{
+		ProjectID: project, Directory: directory, AgentID: agent, NativeID: nativeID,
+	})
+	if err != nil { return "", err }
+	provenance := protocol.Provenance{AgentID: agent, SourceKindID: "agent_adapter", ToolID: tool}
+	switch tool {
+	case "mem_save":
+		kind := stringArg("type")
+		if kind == "" { kind = "manual" }
+		title, content := stringArg("title"), stringArg("content")
+		ref, err := api.Create(ctx, uuid.NewString(), protocol.ObservationCreateInput{
+			ProjectID: project, SessionID: sessionID, Type: kind,
+			Title: title, Content: content, Scope: stringArg("scope"),
+			TopicKey: stringArg("topic_key"), Tags: tags("tags"), Provenance: provenance,
+		})
+		if err != nil { return "", err }
+		return fmt.Sprintf("Memory saved: %q (%s)\nReference: %s", title, kind, ref.String()), nil
 	case "mem_save_prompt":
 		content := stringArg("content")
 		if err := api.CreatePrompt(ctx, uuid.NewString(), protocol.PromptCreateInput{
