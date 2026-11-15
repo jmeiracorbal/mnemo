@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
 func TestParseMemoriesConsolidateTopicRequiresSafetyFlag(t *testing.T) {
@@ -24,13 +24,13 @@ func TestParseMemoriesConsolidateTopicRequiresSafetyFlag(t *testing.T) {
 }
 
 func TestPrintMemoriesReviewReportJSON(t *testing.T) {
-	report := store.MemoryReviewReport{Groups: []store.MemoryConflictGroup{{
+	report := protocol.MemoryReviewOutput{Groups: []protocol.MemoryConflictGroup{{
 		Kind:            "duplicate-title",
 		Reason:          "same title",
 		Confidence:      0.65,
 		SuggestedAction: "review",
-		Observations: []store.MemoryConflictObservation{{
-			ID:        1,
+		Observations: []protocol.MemoryReviewObservation{{
+			Ref:       protocol.ResourceRef{ProjectID: "project-1", SyncID: "obs-1"},
 			Type:      "decision",
 			Title:     "Cache strategy",
 			Scope:     "project",
@@ -43,7 +43,7 @@ func TestPrintMemoriesReviewReportJSON(t *testing.T) {
 	if err := printJSONTo(&out, report); err != nil {
 		t.Fatalf("print json: %v", err)
 	}
-	var got store.MemoryReviewReport
+	var got protocol.MemoryReviewOutput
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("unmarshal report: %v", err)
 	}
@@ -53,14 +53,14 @@ func TestPrintMemoriesReviewReportJSON(t *testing.T) {
 }
 
 func TestPrintMemoriesReviewReportText(t *testing.T) {
-	report := &store.MemoryReviewReport{Total: 1, Groups: []store.MemoryConflictGroup{{
+	report := &protocol.MemoryReviewOutput{Total: 1, Groups: []protocol.MemoryConflictGroup{{
 		Kind:            "topic-conflict",
 		Reason:          "same topic",
 		Confidence:      0.85,
 		TopicKey:        "architecture/api",
 		SuggestedAction: "supersede stale memory",
-		Observations: []store.MemoryConflictObservation{{
-			ID:        7,
+		Observations: []protocol.MemoryReviewObservation{{
+			Ref:       protocol.ResourceRef{ProjectID: "project-1", SyncID: "obs-7"},
 			Type:      "decision",
 			Title:     "Use REST",
 			Scope:     "project",
