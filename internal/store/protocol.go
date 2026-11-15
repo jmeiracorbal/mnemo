@@ -44,6 +44,124 @@ func (s *Store) ExecuteProtocolRequest(ctx context.Context, payload json.RawMess
 			return nil, fmt.Errorf("protocol health SQLite read: %w", err)
 		}
 		result = protocol.HealthOutput{Ready: true}
+	case protocol.OperationLimitsGet:
+		result = protocol.LimitsOutput{MaxObservationLength: s.MaxObservationLength()}
+	case protocol.OperationStatsGet:
+		stats, err := s.Stats()
+		if err != nil {
+			return nil, err
+		}
+		result = protocol.StatsOutput{
+			TotalSessions: stats.TotalSessions,
+			TotalObservations: stats.TotalObservations,
+			TotalPrompts: stats.TotalPrompts,
+			Projects: stats.Projects,
+		}
+	case protocol.OperationObservationSearch:
+		var input protocol.ObservationSearchInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid observation.search input"}
+			break
+		}
+		rows, err := s.Search(input.Query, SearchOptions{
+			Project: input.ProjectID, Type: input.Type, Scope: input.Scope,
+			TopicKey: input.TopicKey, Tags: input.Tags, PreferTags: input.PreferTags,
+			Limit: input.Limit,
+		})
+		if err != nil { return nil, err }
+		found := make([]protocol.ObservationMatch, 0, len(rows))
+		for _, item := range rows {
+			if item.Project == nil {
+				return nil, fmt.Errorf("search result without project")
+			}
+			ref, err := protocol.NewObservationRef(*item.Project, item.SyncID)
+			if err != nil { return nil, err }
+			found = append(found, protocol.ObservationMatch{
+				Observation: projectObservation(ref, &item.Observation),
+				Rank: item.Rank,
+			})
+		}
+		result = protocol.ObservationSearchOutput{Matches: found}
+	case protocol.OperationObservationUpdate:
+		var input protocol.ObservationUpdateInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid observation.update input"}
+			break
+		}
+		id, code, err := s.protocolObservationID(ctx, input.Ref)
+		if err != nil {
+			response.Error = &protocol.Error{Code: code, Message: err.Error()}
+			break
+		}
+		change := input.Changes
+		if change.Type == nil && change.Title == nil && change.Content == nil &&
+			change.Scope == nil && change.TopicKey == nil && change.Tags == nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "observation.update requires at least one change"}
+			break
+		}
+		updated, err := s.UpdateObservation(id, UpdateObservationParams{
+			Type: change.Type, Title: change.Title, Content: change.Content,
+			Scope: change.Scope, TopicKey: change.TopicKey, Tags: change.Tags,
+		})
+		if err != nil { return nil, err }
+		result = protocol.ObservationGetOutput{Observation: projectObservation(input.Ref, updated)}
+	case protocol.OperationObservationDelete:
+		var input protocol.ObservationDeleteInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid observation.delete input"}
+			break
+		}
+		id, code, err := s.protocolObservationID(ctx, input.Ref)
+		if err != nil {
+			response.Error = &protocol.Error{Code: code, Message: err.Error()}
+			break
+		}
+		if err := s.DeleteObservation(id); err != nil { return nil, err }
+		result = struct{}{}
+	case protocol.OperationObservationTimeline:
+		var input protocol.ObservationTimelineInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid observation.timeline input"}
+			break
+		}
+		id, code, err := s.protocolObservationID(ctx, input.Ref)
+		if err != nil {
+			response.Error = &protocol.Error{Code: code, Message: err.Error()}
+			break
+		}
+		timeline, err := s.Timeline(id, input.Before, input.After)
+		if err != nil { return nil, err }
+		out := protocol.ObservationTimelineOutput{
+			Focus: projectObservation(input.Ref, &timeline.Focus),
+			TotalInRange: timeline.TotalInRange,
+			SessionID: timeline.Focus.SessionID,
+		}
+		if timeline.SessionInfo != nil {
+			out.SessionStart = timeline.SessionInfo.StartedAt
+			if timeline.SessionInfo.Summary != nil { out.SessionSummary = *timeline.SessionInfo.Summary }
+		}
+		for _, item := range timeline.Before {
+			ref, err := protocol.NewObservationRef(input.Ref.ProjectID, item.SyncID)
+			if err != nil { return nil, err }
+			out.Before = append(out.Before, projectTimelineObservation(ref, &item))
+		}
+		for _, item := range timeline.After {
+			ref, err := protocol.NewObservationRef(input.Ref.ProjectID, item.SyncID)
+			if err != nil { return nil, err }
+			out.After = append(out.After, projectTimelineObservation(ref, &item))
+		}
+		result = out
+	case protocol.OperationContextBuild:
+		var input protocol.ContextBuildInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid context.build input"}
+			break
+		}
+		value, err := s.FormatContextOpts(input.ProjectID, input.Scope, ContextOptions{
+			TopicKey: input.TopicKey, Tags: input.Tags, PreferTags: input.PreferTags,
+		})
+		if err != nil { return nil, err }
+		result = protocol.ContextBuildOutput{Text: value}
 	case protocol.OperationObservationGet:
 		var input protocol.ObservationGetInput
 		if err := json.Unmarshal(request.Payload, &input); err != nil {
@@ -179,3 +297,27 @@ func projectObservation(ref protocol.ResourceRef, obs *Observation) protocol.Obs
 	}
 }
 
+
+func (s *Store) protocolObservationID(ctx context.Context, ref protocol.ResourceRef) (int64, protocol.ErrorCode, error) {
+	if err := ref.Validate(); err != nil { return 0, protocol.CodeInvalidReference, err }
+	row, err := s.q.GetLiveObservationBySyncID(ctx, sql.NullString{String: ref.SyncID, Valid: true})
+	if err == sql.ErrNoRows { return 0, protocol.CodeNotFound, fmt.Errorf("observation not found") }
+	if err != nil { return 0, protocol.CodeInternal, err }
+	if row.Project != ref.ProjectID {
+		return 0, protocol.CodeProjectMismatch, fmt.Errorf("observation does not belong to the specified project")
+	}
+	return row.ID, "", nil
+}
+
+func projectTimelineObservation(ref protocol.ResourceRef, entry *TimelineEntry) protocol.Observation {
+	topic, tool := "", ""
+	if entry.TopicKey != nil { topic = *entry.TopicKey }
+	if entry.ToolName != nil { tool = *entry.ToolName }
+	return protocol.Observation{
+		Ref: ref, SessionID: entry.SessionID, Type: entry.Type,
+		Title: entry.Title, Content: entry.Content, ToolName: tool,
+		Scope: entry.Scope, TopicKey: topic,
+		RevisionCount: entry.RevisionCount, DuplicateCount: entry.DuplicateCount,
+		CreatedAt: entry.CreatedAt, UpdatedAt: entry.UpdatedAt,
+	}
+}
