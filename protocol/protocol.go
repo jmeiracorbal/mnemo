@@ -124,31 +124,53 @@ type ObservationGetInput struct {
 
 // Observation is the public view of a stored Mnemo memory.
 type Observation struct {
-	Ref       ResourceRef `json:"ref"`
-	Type      string      `json:"type"`
-	Title     string      `json:"title"`
-	Content   string      `json:"content"`
-	Scope     string      `json:"scope,omitempty"`
-	TopicKey  string      `json:"topic_key,omitempty"`
-	Tags      []string    `json:"tags,omitempty"`
-	CreatedAt string      `json:"created_at,omitempty"`
-	UpdatedAt string      `json:"updated_at,omitempty"`
+	Ref            ResourceRef `json:"ref"`
+	SessionID      string      `json:"session_id,omitempty"`
+	Type           string      `json:"type"`
+	Title          string      `json:"title"`
+	Content        string      `json:"content"`
+	ToolName       string      `json:"tool_name,omitempty"`
+	Scope          string      `json:"scope,omitempty"`
+	TopicKey       string      `json:"topic_key,omitempty"`
+	Tags           []string    `json:"tags,omitempty"`
+	RevisionCount  int         `json:"revision_count,omitempty"`
+	DuplicateCount int         `json:"duplicate_count,omitempty"`
+	CreatedAt      string      `json:"created_at,omitempty"`
+	UpdatedAt      string      `json:"updated_at,omitempty"`
 }
 
 type ObservationGetOutput struct {
 	Observation Observation `json:"observation"`
 }
 
-// ObservationCreateInput intentionally does not require SQLite IDs or MCP
-// sessions. The controller owns persistence and session attribution.
+// Provenance describes the source of a memory without tying the public
+// protocol to MCP, a particular agent, or an orchestration harness.
+type Provenance struct {
+	AgentID          string `json:"agent_id,omitempty"`
+	SourceKindID     string `json:"source_kind_id,omitempty"`
+	ToolID           string `json:"tool_id,omitempty"`
+	ModelID          string `json:"model_id,omitempty"`
+	ModelProvider    string `json:"model_provider,omitempty"`
+	MCPClientID      string `json:"mcp_client_id,omitempty"`
+	MCPClientName    string `json:"mcp_client_name,omitempty"`
+	MCPClientVersion string `json:"mcp_client_version,omitempty"`
+	MCPTransport     string `json:"mcp_transport,omitempty"`
+}
+
+// ObservationCreateInput uses the real Mnemo project identity. SessionID is
+// optional for standalone callers; MCP adapters pass the already resolved
+// Mnemo session so memory attribution and provenance remain intact.
+// No SQLite row ID, transport detail, or harness identity is exposed.
 type ObservationCreateInput struct {
-	ProjectID string   `json:"project_id"`
-	Type      string   `json:"type"`
-	Title     string   `json:"title"`
-	Content   string   `json:"content"`
-	Scope     string   `json:"scope,omitempty"`
-	TopicKey  string   `json:"topic_key,omitempty"`
-	Tags      []string `json:"tags,omitempty"`
+	ProjectID  string     `json:"project_id"`
+	SessionID  string     `json:"session_id,omitempty"`
+	Type       string     `json:"type"`
+	Title      string     `json:"title"`
+	Content    string     `json:"content"`
+	Scope      string     `json:"scope,omitempty"`
+	TopicKey   string     `json:"topic_key,omitempty"`
+	Tags       []string   `json:"tags,omitempty"`
+	Provenance Provenance `json:"provenance,omitempty"`
 }
 
 func (i ObservationCreateInput) Validate() error {
