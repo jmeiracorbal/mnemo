@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jmeiracorbal/mnemo/client"
@@ -13,38 +14,13 @@ import (
 		"github.com/jmeiracorbal/mnemo/internal/store"
 )
 
-// runSave is retired: session lifecycle is now owned by the controller.
-// Use the MCP tool mem_save instead.
-func runSave() {
-	fmt.Fprintln(os.Stderr, "mnemo save: this command is deprecated.")
-	fmt.Fprintln(os.Stderr, "  Session identity is now owned by the controller runtime.")
-	fmt.Fprintln(os.Stderr, "  Use the MCP tool mem_save to save memories through an active agent session.")
-	os.Exit(1)
-}
-
 // runSearch routes through the controller. It deliberately does not open a
 // Store: hook processes must never touch SQLite, even to initialize it.
 func runSearch() {
-	args := os.Args[2:]
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: mnemo search <query> [--type TYPE] [--project PROJECT] [--scope SCOPE] [--limit N]")
+	input, err := parseSearchArgs(os.Args[2:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo search: %v\n", err)
 		os.Exit(1)
-	}
-	input := protocol.ObservationSearchInput{Query: args[0], Limit: 10}
-	for i := 1; i < len(args)-1; i++ {
-		switch args[i] {
-		case "--type": input.Type = args[i+1]; i++
-		case "--project": input.ProjectID = args[i+1]; i++
-		case "--scope": input.Scope = args[i+1]; i++
-		case "--limit":
-			n, err := strconv.Atoi(args[i+1])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "mnemo search: invalid limit: %v\n", err)
-				os.Exit(1)
-			}
-			input.Limit = n
-			i++
-		}
 	}
 	api, err := loadMnemoClient()
 	if err != nil { fmt.Fprintf(os.Stderr, "mnemo search: %v\n", err); os.Exit(1) }
@@ -65,6 +41,32 @@ func runSearch() {
 			i+1, o.Type, o.Title, content, o.Ref.String(),
 			o.CreatedAt, o.Ref.ProjectID, o.Scope)
 	}
+}
+
+// parseSearchArgs accepts exactly the documented CLI syntax. Invalid and
+// unknown flags are rejected rather than silently ignoring search filters.
+func parseSearchArgs(args []string) (protocol.ObservationSearchInput, error) {
+	if len(args) == 0 || strings.HasPrefix(args[0], "--") {
+		return protocol.ObservationSearchInput{}, fmt.Errorf("usage: mnemo search <query> [--type=TYPE] [--project=PROJECT] [--scope=SCOPE] [--limit=N]")
+	}
+	input := protocol.ObservationSearchInput{Query: args[0], Limit: 10}
+	for _, arg := range args[1:] {
+		switch {
+		case strings.HasPrefix(arg, "--type="):
+			input.Type = strings.TrimPrefix(arg, "--type=")
+		case strings.HasPrefix(arg, "--project="):
+			input.ProjectID = strings.TrimPrefix(arg, "--project=")
+		case strings.HasPrefix(arg, "--scope="):
+			input.Scope = strings.TrimPrefix(arg, "--scope=")
+		case strings.HasPrefix(arg, "--limit="):
+			n, err := strconv.Atoi(strings.TrimPrefix(arg, "--limit="))
+			if err != nil || n <= 0 { return input, fmt.Errorf("invalid --limit %q", arg) }
+			input.Limit = n
+		default:
+			return input, fmt.Errorf("unknown search flag %q", arg)
+		}
+	}
+	return input, nil
 }
 
 func runGet() {
