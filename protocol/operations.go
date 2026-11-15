@@ -19,8 +19,8 @@ type OperationSpec struct {
 	RequiresPayload bool
 }
 
-// The list is the complete normative external-operation inventory in
-// ADR-0006, not a claim that every handler is implemented yet.
+// The list is the complete externally supported mnemo/1 operation inventory
+// approved in ADR-0006. Its dispatch coverage is verified by contract tests.
 const (
 	OperationHealth Operation = "health"
 	OperationLimitsGet Operation = "limits.get"
