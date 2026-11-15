@@ -283,16 +283,6 @@ func (s *Store) ExecuteMCPAction(ctx context.Context, action string, payload jso
 		result = value
 	case "max_observation_length":
 		result = s.MaxObservationLength()
-	case "agent_tool":
-		var input AgentToolRequest
-		if err := json.Unmarshal(payload, &input); err != nil {
-			return nil, err
-		}
-		value, err := s.ExecuteAgentTool(input)
-		if err != nil {
-			return nil, err
-		}
-		result = value
 	case "export":
 		value, err := s.Export()
 		if err != nil {

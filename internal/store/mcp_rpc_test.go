@@ -116,42 +116,31 @@ func TestApplyMCPCommandReturnsStoredResultWithoutRepeatingMutation(t *testing.T
 	}
 }
 
-func TestApplyMCPCommandExecutesPiToolAgainstCanonicalExecutionSession(t *testing.T) {
+func TestNativeSessionResolveUsesCanonicalExecutionIdentity(t *testing.T) {
 	memory, err := New(FallbackConfig(t.TempDir()))
-	if err != nil {
-		t.Fatal(err)
-	}
+	if err != nil { t.Fatal(err) }
 	t.Cleanup(func() { _ = memory.Close() })
-
-	project, nativeID, directory := "project-pi-tool", "pi-native-session", t.TempDir()
-	payload, err := json.Marshal(AgentToolRequest{
-		Agent: agents.AgentPi, NativeID: nativeID, Project: project, Directory: directory,
-		Tool: "mem_save", Arguments: map[string]any{"title": "Pi identity", "content": "The adapter must use Pi's native session."},
-	})
-	if err != nil {
-		t.Fatal(err)
+	const project = "project-pi-tool"
+	const nativeID = "pi-native-session"
+	input := protocol.SessionResolveInput{
+		ProjectID: project, AgentID: string(agents.AgentPi),
+		NativeID: nativeID, Directory: t.TempDir(),
 	}
-	first, err := memory.ApplyMCPCommand("pi-tool-command", "agent_tool", payload)
-	if err != nil {
-		t.Fatalf("execute Pi tool: %v", err)
-	}
-	second, err := memory.ApplyMCPCommand("pi-tool-command", "agent_tool", payload)
-	if err != nil {
-		t.Fatalf("replay Pi tool: %v", err)
-	}
-	if string(first) != string(second) {
-		t.Fatalf("replayed result = %s, want %s", second, first)
-	}
+	request, err := protocol.NewRequest(protocol.OperationSessionResolve, "pi-resolve-1", input)
+	if err != nil { t.Fatal(err) }
+	body, err := json.Marshal(request)
+	if err != nil { t.Fatal(err) }
+	raw, err := memory.ApplyMCPCommand("delivery-1", protocol.Version, body)
+	if err != nil { t.Fatal(err) }
+	var response protocol.Response
+	if err := json.Unmarshal(raw, &response); err != nil { t.Fatal(err) }
+	if response.Error != nil { t.Fatal(response.Error) }
+	var out protocol.SessionResolveOutput
+	if err := json.Unmarshal(response.Payload, &out); err != nil { t.Fatal(err) }
 	identity, err := agents.NewIdentity(agents.AgentPi, project, nativeID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	observations, err := memory.SessionObservations("execution-"+identity.Execution, 10)
-	if err != nil {
-		t.Fatalf("read canonical execution session: %v", err)
-	}
-	if len(observations) != 1 || observations[0].Title != "Pi identity" {
-		t.Fatalf("observations = %+v, want one Pi observation", observations)
+	if err != nil { t.Fatal(err) }
+	if out.SessionID != "execution-"+identity.Execution {
+		t.Fatalf("native session = %q; want canonical execution session", out.SessionID)
 	}
 }
 
