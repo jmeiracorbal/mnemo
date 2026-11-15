@@ -28,6 +28,7 @@ func newRootCommand() *cobra.Command {
 	root.AddCommand(
 		command("save <title> <content> [--type=TYPE] [--project=PROJECT] [--scope=SCOPE] [--topic=TOPIC]", "Save a memory (deprecated: use mem_save MCP tool)", runSave),
 		command("search <query> [--project=PROJECT] [--scope=SCOPE] [--limit=N]", "Search memories", runSearch),
+		command("get <mnemo://project-id/observations/sync-id>", "Read an observation using its stable Mnemo reference", runGet),
 		command("context [project]", "Show context from previous sessions", runContext),
 		command("stats", "Show memory statistics", runStats),
 		command("export [file]", "Export all memories to JSON", runExport),

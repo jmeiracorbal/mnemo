@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/jmeiracorbal/mnemo/client"
+	"github.com/jmeiracorbal/mnemo/protocol"
 	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 )
@@ -74,17 +76,56 @@ func runSearch() {
 
 	fmt.Printf("Found %d memories:\n\n", len(results))
 	for i, r := range results {
-		proj := ""
-		if r.Project != nil {
-			proj = " | project: " + *r.Project
+		if r.Project == nil {
+			fmt.Fprintln(os.Stderr, "mnemo search: observation has no Mnemo project identity")
+			os.Exit(1)
 		}
+		ref, err := protocol.NewObservationRef(*r.Project, r.SyncID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "mnemo search: invalid observation reference: %v\n", err)
+			os.Exit(1)
+		}
+		proj := " | project: " + *r.Project
 		content := r.Content
 		if len(content) > 300 {
-			content = content[:300] + "... [truncated — use mem_get_observation(id) for full content]"
+			content = content[:300] + "... [truncated — use mnemo get <ref> for full content]"
 		}
-		fmt.Printf("[%d] #%d (%s) — %s\n    %s\n    %s%s | scope: %s\n\n",
-			i+1, r.ID, r.Type, r.Title, content, r.CreatedAt, proj, r.Scope)
+		fmt.Printf("[%d] #%d (%s) — %s\n    %s\n    ref: %s\n    %s%s | scope: %s\n\n",
+			i+1, r.ID, r.Type, r.Title, content, ref.String(), r.CreatedAt, proj, r.Scope)
 	}
+}
+
+// runGet reads a canonical observation through the public Mnemo client.
+// CLI processes never open SQLite or bypass the versioned contract.
+func runGet() {
+	if len(os.Args) != 3 {
+		fmt.Fprintln(os.Stderr, "usage: mnemo get <mnemo://project-id/observations/sync-id>")
+		os.Exit(1)
+	}
+	ref, err := protocol.ParseResourceRef(os.Args[2])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo get: %v\n", err)
+		os.Exit(1)
+	}
+	config, err := store.DefaultConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo get: config: %v\n", err)
+		os.Exit(1)
+	}
+	api, err := client.New(config.DataDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo get: controller unavailable: %v\n", err)
+		os.Exit(1)
+	}
+	observation, err := api.Get(context.Background(), ref)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo get: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("%s [%s] %s\n%s\nProject: %s\nSession: %s\nScope: %s\nCreated: %s\n",
+		observation.Ref.String(), observation.Type, observation.Title,
+		observation.Content, observation.Ref.ProjectID,
+		observation.SessionID, observation.Scope, observation.CreatedAt)
 }
 
 // runContext routes through the controller. It deliberately does not open a
