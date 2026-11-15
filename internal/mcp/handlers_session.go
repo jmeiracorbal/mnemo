@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/protocol"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -26,13 +28,17 @@ func handleSessionSummary(s MemoryBackend, runtime *Runtime) server.ToolHandlerF
 		}
 		provenance := store.MCPProvenance(store.ToolMemSessionSummary)
 
-		_, err = s.AddObservation(store.AddObservationParams{
-			SessionID:  sessionID,
-			Type:       "session_summary",
-			Title:      fmt.Sprintf("Session summary: %s", project),
-			Content:    content,
-			Project:    project,
-			Provenance: provenance,
+		_, err = s.CreateObservation(ctx, uuid.NewString(), protocol.ObservationCreateInput{
+			SessionID: sessionID, ProjectID: project, Type: "session_summary",
+			Title: fmt.Sprintf("Session summary: %s", project),
+			Content: content,
+			Provenance: protocol.Provenance{
+			AgentID: provenance.AgentID, SourceKindID: provenance.SourceKindID,
+			ToolID: provenance.ToolID, ModelID: provenance.ModelID,
+			ModelProvider: provenance.ModelProvider,
+			MCPClientID: provenance.MCPClientID, MCPClientName: provenance.MCPClientName,
+			MCPClientVersion: provenance.MCPClientVersion, MCPTransport: provenance.MCPTransport,
+		},
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to save session summary: " + err.Error()), nil

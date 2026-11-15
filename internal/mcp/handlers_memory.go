@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/protocol"
 	"github.com/jmeiracorbal/mnemo/internal/store"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -45,6 +47,13 @@ func handleSearch(s MemoryBackend) server.ToolHandlerFunc {
 		fmt.Fprintf(&b, "Found %d memories:\n\n", len(results))
 		anyTruncated := false
 		for i, r := range results {
+			if r.Project == nil {
+				return mcp.NewToolResultError("Memory has no Mnemo project identity"), nil
+			}
+			ref, err := protocol.NewObservationRef(*r.Project, r.SyncID)
+			if err != nil {
+				return mcp.NewToolResultError("Memory has an invalid resource reference: " + err.Error()), nil
+			}
 			proj := ""
 			if r.Project != nil {
 				proj = fmt.Sprintf(" | project: %s", *r.Project)
@@ -52,15 +61,15 @@ func handleSearch(s MemoryBackend) server.ToolHandlerFunc {
 			preview := truncate(r.Content, 300)
 			if len(r.Content) > 300 {
 				anyTruncated = true
-				preview += " [truncated — use mem_get_observation(id) for full content]"
+				preview += " [truncated — use mem_get_observation(ref) for full content]"
 			}
-			fmt.Fprintf(&b, "[%d] #%d (%s) — %s\n    %s\n    %s%s | scope: %s\n\n",
+			fmt.Fprintf(&b, "[%d] #%d (%s) — %s\n    %s\n    ref: %s\n    %s%s | scope: %s\n\n",
 				i+1, r.ID, r.Type, r.Title,
-				preview,
+				preview, ref.String(),
 				r.CreatedAt, proj, r.Scope)
 		}
 		if anyTruncated {
-			fmt.Fprintf(&b, "---\nResults above are previews (300 chars). To read the full content of a specific memory, call mem_get_observation(id: <ID>).\n")
+			fmt.Fprintf(&b, "---\nResults above are previews (300 chars). To read the full content of a specific memory, call mem_get_observation(ref: <RESOURCE_REF>).\n")
 		}
 
 		return mcp.NewToolResultText(b.String()), nil
@@ -96,16 +105,17 @@ func handleSave(s MemoryBackend, runtime *Runtime) server.ToolHandlerFunc {
 
 		truncated := len(content) > s.MaxObservationLength()
 
-		_, err = s.AddObservation(store.AddObservationParams{
-			SessionID:  sessionID,
-			Type:       typ,
-			Title:      title,
-			Content:    content,
-			Project:    project,
-			Scope:      scope,
-			TopicKey:   topicKey,
-			Tags:       tags,
-			Provenance: provenance,
+		_, err = s.CreateObservation(ctx, uuid.NewString(), protocol.ObservationCreateInput{
+			SessionID: sessionID, ProjectID: project, Type: typ,
+			Title: title, Content: content, Scope: scope, TopicKey: topicKey,
+			Tags: tags,
+			Provenance: protocol.Provenance{
+			AgentID: provenance.AgentID, SourceKindID: provenance.SourceKindID,
+			ToolID: provenance.ToolID, ModelID: provenance.ModelID,
+			ModelProvider: provenance.ModelProvider,
+			MCPClientID: provenance.MCPClientID, MCPClientName: provenance.MCPClientName,
+			MCPClientVersion: provenance.MCPClientVersion, MCPTransport: provenance.MCPTransport,
+		},
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to save: " + err.Error()), nil
@@ -287,39 +297,29 @@ func handleContext(s MemoryBackend) server.ToolHandlerFunc {
 
 func handleGetObservation(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		id := int64(intArg(req, "id", 0))
-		if id == 0 {
-			return mcp.NewToolResultError("id is required"), nil
-		}
-
-		obs, err := s.GetObservation(id)
+		raw, _ := req.GetArguments()["ref"].(string)
+		ref, err := protocol.ParseResourceRef(raw)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Observation #%d not found", id)), nil
+			return mcp.NewToolResultError("Invalid Mnemo resource reference: " + err.Error()), nil
+		}
+		obs, err := s.GetObservationRef(ctx, ref)
+		if err != nil {
+			return mcp.NewToolResultError("Failed to get observation: " + err.Error()), nil
 		}
 
-		project := ""
-		if obs.Project != nil {
-			project = fmt.Sprintf("\nProject: %s", *obs.Project)
-		}
-		scope := fmt.Sprintf("\nScope: %s", obs.Scope)
 		topic := ""
-		if obs.TopicKey != nil {
-			topic = fmt.Sprintf("\nTopic: %s", *obs.TopicKey)
+		if obs.TopicKey != "" {
+			topic = fmt.Sprintf("\nTopic: %s", obs.TopicKey)
 		}
-		toolName := ""
-		if obs.ToolName != nil {
-			toolName = fmt.Sprintf("\nTool: %s", *obs.ToolName)
+		tool := ""
+		if obs.ToolName != "" {
+			tool = fmt.Sprintf("\nTool: %s", obs.ToolName)
 		}
-		duplicateMeta := fmt.Sprintf("\nDuplicates: %d", obs.DuplicateCount)
-		revisionMeta := fmt.Sprintf("\nRevisions: %d", obs.RevisionCount)
-
-		result := fmt.Sprintf("#%d [%s] %s\n%s\nSession: %s%s%s\nCreated: %s",
-			obs.ID, obs.Type, obs.Title,
-			obs.Content,
-			obs.SessionID, project+scope+topic, toolName+duplicateMeta+revisionMeta,
-			obs.CreatedAt,
+		result := fmt.Sprintf("%s [%s] %s\n%s\nSession: %s\nProject: %s\nScope: %s%s%s\nDuplicates: %d\nRevisions: %d\nCreated: %s",
+			obs.Ref.String(), obs.Type, obs.Title, obs.Content,
+			obs.SessionID, obs.Ref.ProjectID, obs.Scope, topic, tool,
+			obs.DuplicateCount, obs.RevisionCount, obs.CreatedAt,
 		)
-
 		return mcp.NewToolResultText(result), nil
 	}
 }
