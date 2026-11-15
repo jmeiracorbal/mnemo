@@ -183,3 +183,56 @@ func TestPublicProtocolLostReplyCannotDuplicateCommittedMemory(t *testing.T) {
 		t.Fatalf("retry replayed mutation or changed identity: %+v, ref=%s", observations, recovered.String())
 	}
 }
+
+func TestPublicProtocolPreservesActualSessionAndProvenance(t *testing.T) {
+	memory, api, _ := newProtocolFixture(t)
+	project := "project-agent-session"
+	sessionID, err := memory.ResolveMCPInstanceSession(project, t.TempDir(), "mcp-test", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := protocol.ObservationCreateInput{
+		ProjectID: project, SessionID: sessionID,
+		Type: "decision", Title: "Keep provenance",
+		Content: "The session and source of a memory must survive public creation.",
+		Provenance: protocol.Provenance{
+			AgentID: store.AgentCodex, SourceKindID: store.SourceMCP,
+			ToolID: store.ToolMemSave, MCPClientID: store.AgentCodex,
+			MCPTransport: "stdio",
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ref, err := api.Create(ctx, "mcp-session-write", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref.ProjectID != project {
+		t.Fatalf("observation stored under incorrect project: %s", ref.String())
+	}
+	rows, err := memory.SessionObservations(sessionID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].SyncID != ref.SyncID {
+		t.Fatalf("MCP session attribution lost: %+v", rows)
+	}
+	if rows[0].Provenance == nil || rows[0].Provenance.AgentID != store.AgentCodex ||
+		rows[0].Provenance.SourceKindID != store.SourceMCP ||
+		rows[0].Provenance.ToolID != store.ToolMemSave {
+		t.Fatalf("MCP provenance lost: %+v", rows[0].Provenance)
+	}
+	retrieved, err := api.Get(ctx, ref)
+	if err != nil || retrieved.SessionID != sessionID {
+		t.Fatalf("public get changed memory session: %+v, %v", retrieved, err)
+	}
+
+	wrongSession, err := memory.ResolveMCPInstanceSession("other-project", t.TempDir(), "other-mcp", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.SessionID = wrongSession
+	if _, err := api.Create(ctx, "cross-project-write", input); err == nil {
+		t.Fatal("cross-project session accepted")
+	}
+}
