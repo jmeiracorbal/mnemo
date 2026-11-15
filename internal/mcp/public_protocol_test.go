@@ -8,8 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/internal/store"
-	"github.com/jmeiracorbal/mnemo/protocol"
+		"github.com/jmeiracorbal/mnemo/protocol"
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -32,7 +31,7 @@ func (b *recordingProtocolBackend) CreateObservation(_ context.Context, id strin
 	return protocol.NewObservationRef(input.ProjectID, "obs-recorder")
 }
 
-func (b *recordingProtocolBackend) GetObservationRef(_ context.Context, ref protocol.ResourceRef) (protocol.Observation, error) {
+func (b *recordingProtocolBackend) Get(_ context.Context, ref protocol.ResourceRef) (protocol.Observation, error) {
 	b.getRef = ref
 	return protocol.Observation{
 		Ref: ref, SessionID: "session-1", Type: "manual", Title: "Title",
@@ -40,13 +39,14 @@ func (b *recordingProtocolBackend) GetObservationRef(_ context.Context, ref prot
 	}, nil
 }
 
-func (*recordingProtocolBackend) MaxObservationLength() int { return 10000 }
+func (*recordingProtocolBackend) Limits(context.Context) (protocol.LimitsOutput, error) {
+	return protocol.LimitsOutput{MaxObservationLength: 10000}, nil
+}
 
-func (b *recordingProtocolBackend) Search(string, store.SearchOptions) ([]store.SearchResult, error) {
-	project := "project-1"
-	return []store.SearchResult{{Observation: store.Observation{
-		ID: 4, SyncID: "obs-record", Project: &project, Type: "manual",
-		Title: "Title", Content: "Complete content",
+func (b *recordingProtocolBackend) Search(_ context.Context, _ protocol.ObservationSearchInput) ([]protocol.ObservationMatch, error) {
+	ref, _ := protocol.NewObservationRef("project-1", "obs-record")
+	return []protocol.ObservationMatch{{Observation: protocol.Observation{
+		Ref: ref, Type: "manual", Title: "Title", Content: "Complete content",
 	}}}, nil
 }
 
