@@ -1,1 +1,1 @@
-Show chronological context around a specific observation. Use after mem_search to drill into the timeline of events surrounding a search result.
+Show chronological context around an observation identified by its canonical `mnemo://<project-id>/observations/<sync-id>` reference. Use the `ref` returned by `mem_search` to inspect memories before and after it.
