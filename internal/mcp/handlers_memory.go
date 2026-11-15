@@ -87,7 +87,7 @@ func handleSave(s MemoryBackend, runtime *Runtime) server.ToolHandlerFunc {
 		}
 		truncated := len(content) > limits.MaxObservationLength
 
-		ref, err := s.CreateObservation(ctx, uuid.NewString(), protocol.ObservationCreateInput{
+		ref, err := s.Create(ctx, uuid.NewString(), protocol.ObservationCreateInput{
 			SessionID: sessionID, ProjectID: project, Type: typ,
 			Title: title, Content: content, Scope: scope, TopicKey: topicKey,
 			Tags: tags,

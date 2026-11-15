@@ -16,7 +16,7 @@ type MemoryBackend interface {
 	ResolveSession(context.Context, string, protocol.SessionResolveInput) (string, error)
 	CloseSession(context.Context, string, protocol.SessionCloseInput) error
 	BindExecutionSession(context.Context, string, protocol.SessionBindExecutionInput) error
-	CreateObservation(context.Context, string, protocol.ObservationCreateInput) (protocol.ResourceRef, error)
+	Create(context.Context, string, protocol.ObservationCreateInput) (protocol.ResourceRef, error)
 	Update(context.Context, string, protocol.ObservationUpdateInput) (protocol.Observation, error)
 	Delete(context.Context, string, protocol.ResourceRef) error
 	CreatePrompt(context.Context, string, protocol.PromptCreateInput) error

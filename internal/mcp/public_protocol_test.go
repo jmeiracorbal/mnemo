@@ -23,7 +23,7 @@ func (b *recordingProtocolBackend) ResolveSession(_ context.Context, _ string, _
 	return b.sessionID, nil
 }
 
-func (b *recordingProtocolBackend) CreateObservation(_ context.Context, id string, input protocol.ObservationCreateInput) (protocol.ResourceRef, error) {
+func (b *recordingProtocolBackend) Create(_ context.Context, id string, input protocol.ObservationCreateInput) (protocol.ResourceRef, error) {
 	if strings.TrimSpace(id) == "" {
 		return protocol.ResourceRef{}, &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "request ID missing"}
 	}

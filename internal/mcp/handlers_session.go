@@ -27,7 +27,7 @@ func handleSessionSummary(s MemoryBackend, runtime *Runtime) server.ToolHandlerF
 		}
 		provenance := mcpProvenance("mem_session_summary")
 
-		_, err = s.CreateObservation(ctx, uuid.NewString(), protocol.ObservationCreateInput{
+		_, err = s.Create(ctx, uuid.NewString(), protocol.ObservationCreateInput{
 			SessionID: sessionID, ProjectID: project, Type: "session_summary",
 			Title: fmt.Sprintf("Session summary: %s", project),
 			Content: content,
