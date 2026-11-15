@@ -368,6 +368,104 @@ func (s *Store) ExecuteProtocolRequest(ctx context.Context, payload json.RawMess
 			Migrated: migrated.Migrated, ObservationsUpdated: migrated.ObservationsUpdated,
 			SessionsUpdated: migrated.SessionsUpdated, PromptsUpdated: migrated.PromptsUpdated,
 		}
+	case protocol.OperationMemoryReview:
+		var input protocol.MemoryReviewInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid memory.review input"}
+			break
+		}
+		report, err := s.ReviewMemoryConflicts(MemoryReviewOptions{
+			Project: input.ProjectID, Scope: input.Scope,
+			TopicKey: input.TopicKey, Limit: input.Limit,
+		})
+		if err != nil { return nil, err }
+		groups := make([]protocol.MemoryConflictGroup, 0, len(report.Groups))
+		for _, group := range report.Groups {
+			converted := protocol.MemoryConflictGroup{
+				ID: group.ID, Kind: group.Kind, Reason: group.Reason,
+				Confidence: group.Confidence, ProjectID: group.Project,
+				Scope: group.Scope, TopicKey: group.TopicKey, SuggestedAction: group.SuggestedAction,
+			}
+			for _, item := range group.Observations {
+				ref, err := s.protocolRefForID(item.ID)
+				if err != nil { return nil, err }
+				entry := protocol.MemoryReviewObservation{
+					Ref: ref, Type: item.Type, Title: item.Title,
+					Scope: item.Scope, TopicKey: item.TopicKey,
+					CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+				}
+				if item.ReviewState != nil {
+					state := &protocol.MemoryReviewState{
+						State: item.ReviewState.State, Reason: item.ReviewState.Reason,
+						ReviewedAt: item.ReviewState.ReviewedAt, UpdatedAt: item.ReviewState.UpdatedAt,
+					}
+					if item.ReviewState.SupersededBy != nil {
+						superseded, err := s.protocolRefForID(*item.ReviewState.SupersededBy)
+						if err != nil { return nil, err }
+						state.SupersededBy = &superseded
+					}
+					entry.ReviewState = state
+				}
+				converted.Observations = append(converted.Observations, entry)
+			}
+			groups = append(groups, converted)
+		}
+		result = protocol.MemoryReviewOutput{Total: report.Total, Groups: groups}
+	case protocol.OperationMemoryMarkReviewed, protocol.OperationMemoryMarkStale:
+		var input protocol.MemoryMarkInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid memory marking input"}
+			break
+		}
+		id, code, err := s.protocolObservationID(ctx, input.Ref)
+		if err != nil { response.Error = &protocol.Error{Code: code, Message: err.Error()}; break }
+		if request.Operation == protocol.OperationMemoryMarkReviewed {
+			err = s.MarkMemoryReviewed(id, input.Reason)
+		} else {
+			err = s.MarkMemoryStale(id, input.Reason)
+		}
+		if err != nil { return nil, err }
+		result = struct{}{}
+	case protocol.OperationMemorySupersede:
+		var input protocol.MemorySupersedeInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid memory.supersede input"}
+			break
+		}
+		if input.OldRef.ProjectID != input.NewRef.ProjectID {
+			response.Error = &protocol.Error{Code: protocol.CodeProjectMismatch, Message: "superseded memories must belong to the same Mnemo project"}
+			break
+		}
+		oldID, code, err := s.protocolObservationID(ctx, input.OldRef)
+		if err != nil { response.Error = &protocol.Error{Code: code, Message: err.Error()}; break }
+		newID, code, err := s.protocolObservationID(ctx, input.NewRef)
+		if err != nil { response.Error = &protocol.Error{Code: code, Message: err.Error()}; break }
+		if err := s.SupersedeMemory(oldID, newID, input.Reason); err != nil { return nil, err }
+		result = struct{}{}
+	case protocol.OperationMemoryConsolidationPlan, protocol.OperationMemoryConsolidate:
+		var input protocol.MemoryConsolidationInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil || input.FromTopic == "" || input.ToTopic == "" {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "from_topic and to_topic are required"}
+			break
+		}
+		var plan *MemoryTopicConsolidationPlan
+		var err error
+		if request.Operation == protocol.OperationMemoryConsolidationPlan {
+			plan, err = s.PlanMemoryTopicConsolidation(input.FromTopic, input.ToTopic, input.ProjectID, input.Scope)
+		} else {
+			plan, err = s.ConsolidateMemoryTopic(input.FromTopic, input.ToTopic, input.ProjectID, input.Scope)
+		}
+		if err != nil { return nil, err }
+		out := protocol.MemoryConsolidationOutput{
+			FromTopic: plan.FromTopic, ToTopic: plan.ToTopic,
+			ProjectID: plan.Project, Scope: plan.Scope, Total: plan.Total,
+		}
+		for _, id := range plan.IDs {
+			ref, err := s.protocolRefForID(id)
+			if err != nil { return nil, err }
+			out.Refs = append(out.Refs, ref)
+		}
+		result = out
 	case protocol.OperationObservationGet:
 		var input protocol.ObservationGetInput
 		if err := json.Unmarshal(request.Payload, &input); err != nil {
@@ -579,4 +677,11 @@ func publicRenamePlan(plan *ProjectRenamePlan) protocol.ProjectRenamePlan {
 		SelectorValue: plan.SelectorValue, NewName: plan.NewName,
 		WillChange: plan.WillChange,
 	}
+}
+
+func (s *Store) protocolRefForID(id int64) (protocol.ResourceRef, error) {
+	obs, err := s.GetObservation(id)
+	if err != nil { return protocol.ResourceRef{}, err }
+	if obs.Project == nil { return protocol.ResourceRef{}, fmt.Errorf("observation has no project identity") }
+	return protocol.NewObservationRef(*obs.Project, obs.SyncID)
 }
