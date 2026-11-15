@@ -12,7 +12,7 @@ func TestRootCommandContainsEveryMenuCommand(t *testing.T) {
 	root := newRootCommand()
 
 	want := []string{
-		"mcp", "save", "search", "context", "session", "stats", "export", "import", "capture",
+		"mcp", "save", "search", "get", "context", "session", "stats", "export", "import", "capture",
 		"projects", "memories", "doctor", "db", "update", "setup", "init", "install-instructions",
 		"migrate", "json", "json-merge", "extract-transcript", "version",
 	}
