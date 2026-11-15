@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	
+
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 	"github.com/jmeiracorbal/mnemo/protocol"
 )
@@ -34,7 +34,8 @@ func (s *Store) ApplyCommand(id string, payload json.RawMessage) (json.RawMessag
 	}
 	key := protocol.Version + ":" + request.RequestID
 
-	// Include action and payload to reject accidental request ID reuse.
+	// The public request body includes operation and content, so its fingerprint
+	// rejects request IDs reused with a different logical command.
 	hash := sha256.Sum256(payload)
 	fingerprint := hex.EncodeToString(hash[:])
 	var result json.RawMessage

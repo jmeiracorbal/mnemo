@@ -49,9 +49,8 @@ type DurableEvent struct {
 	Payload      json.RawMessage
 }
 
-// ControllerStore is the only store surface the Controller requires. The
-// concrete implementation lives in internal/store; this interface breaks the
-// import dependency so events does not couple to the database layer.
+// ControllerStore is the internal persistence boundary of the Mnemo controller.
+// Public callers interact only through the versioned protocol and never own SQLite.
 type ControllerStore interface {
 	ApplyDurableEvent(DurableEvent) error
 	ApplyCommand(id string, payload json.RawMessage) (json.RawMessage, error)

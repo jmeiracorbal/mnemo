@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Command is the durable controller boundary for MCP mutations. MCP clients
-// publish commands; only the controller may apply one to SQLite.
+// Command carries one public mnemo/1 mutation to the installation controller.
+// Each delivery has a distinct transport ID; request_id belongs to its payload.
 type Command struct {
 	ID      string          `json:"id"`
 	Reply   string          `json:"reply"`

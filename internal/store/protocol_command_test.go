@@ -57,7 +57,7 @@ func mustPublicRequest(t *testing.T, operation protocol.Operation, id string, pa
 	return body
 }
 
-func TestApplyCommandReturnsStoredResultWithoutRepeatingMutation(t *testing.T) {
+func TestDurableCommandReturnsStoredResultWithoutRepeatingMutation(t *testing.T) {
 	memory, err := New(FallbackConfig(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
