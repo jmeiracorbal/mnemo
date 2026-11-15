@@ -148,16 +148,6 @@ func (s *Store) ExecuteMCPAction(ctx context.Context, action string, payload jso
 		if err := s.BindExecutionSession(input.Project, input.Agent, input.NativeID, input.SessionID); err != nil {
 			return nil, err
 		}
-	case "add_observation":
-		var input AddObservationParams
-		if err := json.Unmarshal(payload, &input); err != nil {
-			return nil, err
-		}
-		value, err := s.AddObservation(input)
-		if err != nil {
-			return nil, err
-		}
-		result = value
 	case "update_observation":
 		var input struct {
 			ID     int64                   `json:"id"`
@@ -286,18 +276,6 @@ func (s *Store) ExecuteMCPAction(ctx context.Context, action string, payload jso
 			return nil, err
 		}
 		value, err := s.Timeline(input.ObservationID, input.Before, input.After)
-		if err != nil {
-			return nil, err
-		}
-		result = value
-	case "get_observation":
-		var input struct {
-			ID int64 `json:"id"`
-		}
-		if err := json.Unmarshal(payload, &input); err != nil {
-			return nil, err
-		}
-		value, err := s.GetObservation(input.ID)
 		if err != nil {
 			return nil, err
 		}

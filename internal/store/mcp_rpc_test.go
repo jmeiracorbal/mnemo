@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
 func TestApplyMCPCommandImportIsAtomic(t *testing.T) {
@@ -84,15 +85,22 @@ func TestApplyMCPCommandReturnsStoredResultWithoutRepeatingMutation(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := json.Marshal(AddObservationParams{SessionID: sessionID, Type: "manual", Title: "exactly once", Content: "a durable command must not repeat", Project: "project-command"})
+	request, err := protocol.NewRequest(protocol.OperationObservationCreate, "command-1", protocol.ObservationCreateInput{
+		SessionID: sessionID, Type: "manual", Title: "exactly once",
+		Content: "a durable command must not repeat", ProjectID: "project-command",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := memory.ApplyMCPCommand("command-1", "add_observation", payload)
+	payload, err := json.Marshal(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := memory.ApplyMCPCommand("command-1", "add_observation", payload)
+	first, err := memory.ApplyMCPCommand("delivery-1", protocol.Version, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := memory.ApplyMCPCommand("delivery-2", protocol.Version, payload)
 	if err != nil {
 		t.Fatal(err)
 	}

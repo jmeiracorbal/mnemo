@@ -73,7 +73,7 @@ func isMutation(action string, payload json.RawMessage) bool {
 	}
 	switch action {
 	case "health_probe", "resolve_session", "close_sessions", "bind_execution_session",
-		"add_observation", "update_observation", "delete_observation",
+		"update_observation", "delete_observation",
 		"add_prompt", "passive_capture", "merge_tags", "agent_tool",
 		"import", "merge_projects", "rename_project",
 		"mark_memory_reviewed", "mark_memory_stale", "supersede_memory", "consolidate_topic",
