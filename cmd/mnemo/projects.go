@@ -13,8 +13,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/client"
+	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
 type projectsListOptions struct {
@@ -27,7 +28,7 @@ type projectsListOptions struct {
 
 type projectsListReport struct {
 	Total    int                    `json:"total"`
-	Projects []store.ProjectSummary `json:"projects"`
+	Projects []protocol.ProjectSummary `json:"projects"`
 }
 
 type projectsMergeOptions struct {
@@ -51,14 +52,14 @@ type projectsRenameOptions struct {
 type projectsMergeReport struct {
 	DryRun  bool                       `json:"dry_run"`
 	Total   int                        `json:"total"`
-	Plans   []store.ProjectMergePlan   `json:"plans,omitempty"`
-	Results []store.ProjectMergeResult `json:"results,omitempty"`
+	Plans   []protocol.ProjectMergePlan   `json:"plans,omitempty"`
+	Results []protocol.ProjectMergeOutput `json:"results,omitempty"`
 }
 
 type projectsRenameReport struct {
 	DryRun bool                       `json:"dry_run"`
-	Plan   *store.ProjectRenamePlan   `json:"plan,omitempty"`
-	Result *store.ProjectRenameResult `json:"result,omitempty"`
+	Plan   *protocol.ProjectRenamePlan   `json:"plan,omitempty"`
+	Result *protocol.ProjectRenameOutput `json:"result,omitempty"`
 }
 
 func runProjects() {
@@ -92,13 +93,13 @@ func runProjectsList() {
 		fmt.Fprintf(os.Stderr, "mnemo projects list: %v\n", err)
 		os.Exit(1)
 	}
-	cfg, err := loadEventsConfig()
+	api, err := loadMnemoClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
 		os.Exit(1)
 	}
-	var all []store.ProjectSummary
-	if err := events.Call(context.Background(), cfg, "list_project_summaries", struct{}{}, &all); err != nil {
+	all, err := api.ListProjects(context.Background())
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo projects list: %v\n", err)
 		os.Exit(1)
 	}
@@ -120,12 +121,12 @@ func runProjectsMerge() {
 		fmt.Fprintf(os.Stderr, "mnemo projects merge: %v\n", err)
 		os.Exit(1)
 	}
-	cfg, err := loadEventsConfig()
+	api, err := loadMnemoClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
 		os.Exit(1)
 	}
-	plans, err := buildProjectsMergePlansRPC(context.Background(), cfg, opts)
+	plans, err := buildProjectsMergePlans(context.Background(), api, opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo projects merge: %v\n", err)
 		os.Exit(1)
@@ -142,7 +143,7 @@ func runProjectsMerge() {
 		return
 	}
 
-	results, err := applyProjectsMergePlansRPC(context.Background(), cfg, plans)
+	results, err := applyProjectsMergePlans(context.Background(), api, plans)
 	if err != nil {
 		if len(results) > 0 {
 			if emitErr := printProjectsMergeApplyOutput(os.Stdout, opts.JSON, results); emitErr != nil {
@@ -164,19 +165,16 @@ func runProjectsRename() {
 		fmt.Fprintf(os.Stderr, "mnemo projects rename: %v\n", err)
 		os.Exit(1)
 	}
-	cfg, err := loadEventsConfig()
+	api, err := loadMnemoClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
 		os.Exit(1)
 	}
 	selector := projectsRenameSelector(opts)
+	input := protocol.ProjectRenameInput{Selector: selector, Name: opts.Name}
 	if opts.DryRun {
-		input := struct {
-			Selector store.ProjectRenameSelector `json:"selector"`
-			Name     string                      `json:"name"`
-		}{selector, opts.Name}
-		var plan store.ProjectRenamePlan
-		if err := events.Call(context.Background(), cfg, "build_project_rename_plan", input, &plan); err != nil {
+		plan, err := api.PlanProjectRename(context.Background(), input)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo projects rename: %v\n", err)
 			os.Exit(1)
 		}
@@ -186,12 +184,8 @@ func runProjectsRename() {
 		}
 		return
 	}
-	input := struct {
-		Selector store.ProjectRenameSelector `json:"selector"`
-		Name     string                      `json:"name"`
-	}{selector, opts.Name}
-	var result store.ProjectRenameResult
-	if err := events.Call(context.Background(), cfg, "rename_project", input, &result); err != nil {
+	result, err := api.RenameProject(context.Background(), uuid.NewString(), input)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo projects rename: %v\n", err)
 		os.Exit(1)
 	}
@@ -305,8 +299,8 @@ func parseProjectsRenameArgs(args []string) (projectsRenameOptions, error) {
 	return opts, nil
 }
 
-func projectsRenameSelector(opts projectsRenameOptions) store.ProjectRenameSelector {
-	return store.ProjectRenameSelector{ID: opts.ID, Path: opts.Path}
+func projectsRenameSelector(opts projectsRenameOptions) protocol.ProjectSelector {
+	return protocol.ProjectSelector{ID: opts.ID, Path: opts.Path}
 }
 
 func normalizeProjectsSort(value string) (string, error) {
@@ -346,35 +340,19 @@ func parseUnusedSince(value string, now time.Time) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("invalid --unused-since %q", value)
 }
 
-func buildProjectsMergePlansRPC(ctx context.Context, cfg events.Config, opts projectsMergeOptions) ([]store.ProjectMergePlan, error) {
+func buildProjectsMergePlans(ctx context.Context, api *client.Client, opts projectsMergeOptions) ([]protocol.ProjectMergePlan, error) {
 	if !opts.AutoByPath {
-		input := struct {
-			From string `json:"from"`
-			To   string `json:"to"`
-		}{opts.From, opts.To}
-		var plan store.ProjectMergePlan
-		if err := events.Call(ctx, cfg, "build_project_merge_plan", input, &plan); err != nil {
-			return nil, err
-		}
-		return []store.ProjectMergePlan{plan}, nil
+		plan, err := api.PlanProjectMerge(ctx, protocol.ProjectPairInput{From: opts.From, To: opts.To})
+		if err != nil { return nil, err }
+		return []protocol.ProjectMergePlan{plan}, nil
 	}
-
-	var projects []store.ProjectSummary
-	if err := events.Call(ctx, cfg, "list_project_summaries", struct{}{}, &projects); err != nil {
-		return nil, err
-	}
-
+	projects, err := api.ListProjects(ctx)
+	if err != nil { return nil, err }
 	pairings := autoMergePairings(projects)
-	var plans []store.ProjectMergePlan
+	var plans []protocol.ProjectMergePlan
 	for _, pair := range pairings {
-		input := struct {
-			From string `json:"from"`
-			To   string `json:"to"`
-		}{pair[0], pair[1]}
-		var plan store.ProjectMergePlan
-		if err := events.Call(ctx, cfg, "build_project_merge_plan", input, &plan); err != nil {
-			return nil, err
-		}
+		plan, err := api.PlanProjectMerge(ctx, protocol.ProjectPairInput{From: pair[0], To: pair[1]})
+		if err != nil { return nil, err }
 		plans = append(plans, plan)
 	}
 	return plans, nil
@@ -383,8 +361,8 @@ func buildProjectsMergePlansRPC(ctx context.Context, cfg events.Config, opts pro
 // autoMergePairings groups projects by directory and returns [source, destination] pairs
 // for projects that share a path. UUID projects and more-active projects are preferred
 // as destinations.
-func autoMergePairings(projects []store.ProjectSummary) [][2]string {
-	groups := make(map[string][]store.ProjectSummary)
+func autoMergePairings(projects []protocol.ProjectSummary) [][2]string {
+	groups := make(map[string][]protocol.ProjectSummary)
 	for _, project := range projects {
 		directory := normalizedProjectDirectory(project.Directory)
 		if directory == "" {
@@ -414,15 +392,13 @@ func autoMergePairings(projects []store.ProjectSummary) [][2]string {
 	return pairings
 }
 
-func applyProjectsMergePlansRPC(ctx context.Context, cfg events.Config, plans []store.ProjectMergePlan) ([]store.ProjectMergeResult, error) {
-	results := make([]store.ProjectMergeResult, 0, len(plans))
+func applyProjectsMergePlans(ctx context.Context, api *client.Client, plans []protocol.ProjectMergePlan) ([]protocol.ProjectMergeOutput, error) {
+	results := make([]protocol.ProjectMergeOutput, 0, len(plans))
 	for _, plan := range plans {
-		input := struct {
-			From string `json:"from"`
-			To   string `json:"to"`
-		}{plan.From.ID, plan.To.ID}
-		var result store.ProjectMergeResult
-		if err := events.Call(ctx, cfg, "merge_projects", input, &result); err != nil {
+		result, err := api.MergeProjects(ctx, uuid.NewString(), protocol.ProjectPairInput{
+			From: plan.From.ID, To: plan.To.ID,
+		})
+		if err != nil {
 			return results, fmt.Errorf("%s -> %s: %w", plan.From.ID, plan.To.ID, err)
 		}
 		results = append(results, result)
@@ -430,7 +406,7 @@ func applyProjectsMergePlansRPC(ctx context.Context, cfg events.Config, plans []
 	return results, nil
 }
 
-func filterProjectsList(projects []store.ProjectSummary, opts projectsListOptions) []store.ProjectSummary {
+func filterProjectsList(projects []protocol.ProjectSummary, opts projectsListOptions) []protocol.ProjectSummary {
 	filtered := projects[:0]
 	for _, project := range projects {
 		if opts.Empty && (project.ObservationCount != 0 || project.PromptCount != 0) {
@@ -452,7 +428,7 @@ func normalizedProjectDirectory(directory string) string {
 	return filepath.Clean(directory)
 }
 
-func preferProjectMergeDestination(a, b store.ProjectSummary) bool {
+func preferProjectMergeDestination(a, b protocol.ProjectSummary) bool {
 	aUUID := isUUIDProjectID(a.ID)
 	bUUID := isUUIDProjectID(b.ID)
 	if aUUID != bUUID {
@@ -470,7 +446,7 @@ func preferProjectMergeDestination(a, b store.ProjectSummary) bool {
 	return a.ID < b.ID
 }
 
-func projectActivityTotal(project store.ProjectSummary) int {
+func projectActivityTotal(project protocol.ProjectSummary) int {
 	return project.ObservationCount + project.SessionCount + project.PromptCount
 }
 
@@ -493,7 +469,7 @@ func isUUIDProjectID(id string) bool {
 	return true
 }
 
-func projectUnusedSince(project store.ProjectSummary, cutoff time.Time) bool {
+func projectUnusedSince(project protocol.ProjectSummary, cutoff time.Time) bool {
 	if strings.TrimSpace(project.LastSeenAt) == "" {
 		return true
 	}
@@ -504,7 +480,7 @@ func projectUnusedSince(project store.ProjectSummary, cutoff time.Time) bool {
 	return lastSeen.Before(cutoff)
 }
 
-func sortProjectsList(projects []store.ProjectSummary, opts projectsListOptions) {
+func sortProjectsList(projects []protocol.ProjectSummary, opts projectsListOptions) {
 	sort.SliceStable(projects, func(i, j int) bool {
 		cmp := compareProjects(projects[i], projects[j], opts.SortBy)
 		if cmp == 0 {
@@ -517,7 +493,7 @@ func sortProjectsList(projects []store.ProjectSummary, opts projectsListOptions)
 	})
 }
 
-func compareProjects(a, b store.ProjectSummary, sortBy string) int {
+func compareProjects(a, b protocol.ProjectSummary, sortBy string) int {
 	switch sortBy {
 	case "id":
 		return strings.Compare(a.ID, b.ID)
@@ -577,11 +553,11 @@ func parseProjectTime(value string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("invalid project timestamp %q", value)
 }
 
-func printProjectsList(projects []store.ProjectSummary) {
+func printProjectsList(projects []protocol.ProjectSummary) {
 	printProjectsListTo(os.Stdout, projects)
 }
 
-func printProjectsListJSONTo(out io.Writer, projects []store.ProjectSummary) error {
+func printProjectsListJSONTo(out io.Writer, projects []protocol.ProjectSummary) error {
 	data, err := json.MarshalIndent(projectsListReport{Total: len(projects), Projects: projects}, "", "  ")
 	if err != nil {
 		return err
@@ -608,7 +584,7 @@ func printProjectsRenameJSONTo(out io.Writer, report projectsRenameReport) error
 	return err
 }
 
-func printProjectsMergeApplyOutput(out io.Writer, jsonOutput bool, results []store.ProjectMergeResult) error {
+func printProjectsMergeApplyOutput(out io.Writer, jsonOutput bool, results []protocol.ProjectMergeOutput) error {
 	if jsonOutput {
 		return printProjectsMergeJSONTo(out, projectsMergeReport{DryRun: false, Total: len(results), Results: results})
 	}
@@ -616,7 +592,7 @@ func printProjectsMergeApplyOutput(out io.Writer, jsonOutput bool, results []sto
 	return nil
 }
 
-func printProjectsRenameDryRunOutput(out io.Writer, jsonOutput bool, plan store.ProjectRenamePlan) error {
+func printProjectsRenameDryRunOutput(out io.Writer, jsonOutput bool, plan protocol.ProjectRenamePlan) error {
 	if jsonOutput {
 		return printProjectsRenameJSONTo(out, projectsRenameReport{DryRun: true, Plan: &plan})
 	}
@@ -624,7 +600,7 @@ func printProjectsRenameDryRunOutput(out io.Writer, jsonOutput bool, plan store.
 	return nil
 }
 
-func printProjectsRenameApplyOutput(out io.Writer, jsonOutput bool, result store.ProjectRenameResult) error {
+func printProjectsRenameApplyOutput(out io.Writer, jsonOutput bool, result protocol.ProjectRenameOutput) error {
 	if jsonOutput {
 		return printProjectsRenameJSONTo(out, projectsRenameReport{DryRun: false, Result: &result})
 	}
@@ -632,7 +608,7 @@ func printProjectsRenameApplyOutput(out io.Writer, jsonOutput bool, result store
 	return nil
 }
 
-func printProjectsListTo(out io.Writer, projects []store.ProjectSummary) {
+func printProjectsListTo(out io.Writer, projects []protocol.ProjectSummary) {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "ID\tName/Path\tObservations\tSessions\tPrompts\tLast Seen")
 	for _, project := range projects {
@@ -653,7 +629,7 @@ func printProjectsListTo(out io.Writer, projects []store.ProjectSummary) {
 	_ = w.Flush()
 }
 
-func projectDisplayName(project store.ProjectSummary) string {
+func projectDisplayName(project protocol.ProjectSummary) string {
 	if strings.TrimSpace(project.Name) != "" && project.Name != project.ID {
 		return project.Name
 	}
@@ -663,7 +639,7 @@ func projectDisplayName(project store.ProjectSummary) string {
 	return project.Name
 }
 
-func printProjectsMergePlans(out io.Writer, plans []store.ProjectMergePlan) {
+func printProjectsMergePlans(out io.Writer, plans []protocol.ProjectMergePlan) {
 	if len(plans) == 0 {
 		_, _ = fmt.Fprintln(out, "No project merge candidates found.")
 		return
@@ -683,7 +659,7 @@ func printProjectsMergePlans(out io.Writer, plans []store.ProjectMergePlan) {
 	_ = w.Flush()
 }
 
-func printProjectsRenamePlan(out io.Writer, plan store.ProjectRenamePlan) {
+func printProjectsRenamePlan(out io.Writer, plan protocol.ProjectRenamePlan) {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "ID\tCurrent Name\tNew Name\tSelector\tChange")
 	_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s=%s\t%s\n",
@@ -698,7 +674,7 @@ func printProjectsRenamePlan(out io.Writer, plan store.ProjectRenamePlan) {
 	_ = w.Flush()
 }
 
-func printProjectsRenameResult(out io.Writer, result store.ProjectRenameResult) {
+func printProjectsRenameResult(out io.Writer, result protocol.ProjectRenameOutput) {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(w, "ID\tOld Name\tNew Name\tChanged")
 	_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
@@ -710,7 +686,7 @@ func printProjectsRenameResult(out io.Writer, result store.ProjectRenameResult) 
 	_ = w.Flush()
 }
 
-func printProjectsMergeResults(out io.Writer, results []store.ProjectMergeResult) {
+func printProjectsMergeResults(out io.Writer, results []protocol.ProjectMergeOutput) {
 	if len(results) == 0 {
 		_, _ = fmt.Fprintln(out, "No project merge candidates found.")
 		return
