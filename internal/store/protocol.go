@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 )
 
 // protocolFailure serializes a typed public error, not an internal RPC error.
@@ -162,6 +163,119 @@ func (s *Store) ExecuteProtocolRequest(ctx context.Context, payload json.RawMess
 		})
 		if err != nil { return nil, err }
 		result = protocol.ContextBuildOutput{Text: value}
+	case protocol.OperationSessionResolve:
+		var input protocol.SessionResolveInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid session.resolve input"}
+			break
+		}
+		if input.ProjectID == "" || input.InstanceID == "" || input.Directory == "" {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "project_id, directory and instance_id are required"}
+			break
+		}
+		sessionID, err := s.ResolveMCPInstanceSession(input.ProjectID, input.Directory, input.InstanceID, input.PID)
+		if err != nil { return nil, err }
+		result = protocol.SessionResolveOutput{SessionID: sessionID}
+	case protocol.OperationSessionClose:
+		var input protocol.SessionCloseInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid session.close input"}
+			break
+		}
+		if input.InstanceID == "" {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "instance_id is required"}
+			break
+		}
+		if err := s.CloseMCPInstanceSessions(input.InstanceID); err != nil { return nil, err }
+		result = struct{}{}
+	case protocol.OperationSessionBindExecution:
+		var input protocol.SessionBindExecutionInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid session.bind_execution input"}
+			break
+		}
+		if input.ProjectID == "" || input.NativeID == "" || input.SessionID == "" || input.AgentID == "" {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "project_id, agent_id, native_id and session_id are required"}
+			break
+		}
+		if err := s.BindExecutionSession(input.ProjectID, agents.Agent(input.AgentID), input.NativeID, input.SessionID); err != nil {
+			return nil, err
+		}
+		result = struct{}{}
+	case protocol.OperationSessionExists, protocol.OperationSessionObservationCount, protocol.OperationSessionProjectObservationCount:
+		var input protocol.SessionIDInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil || input.SessionID == "" {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "session_id is required"}
+			break
+		}
+		switch request.Operation {
+		case protocol.OperationSessionExists:
+			_, err := s.GetSession(input.SessionID)
+			result = protocol.SessionExistsOutput{Exists: err == nil}
+		case protocol.OperationSessionObservationCount:
+			count, err := s.ObsCount(input.SessionID)
+			if err != nil { return nil, err }
+			result = protocol.SessionCountOutput{Count: count}
+		case protocol.OperationSessionProjectObservationCount:
+			count, err := s.ObsCountForSession(input.SessionID)
+			if err != nil { return nil, err }
+			result = protocol.SessionCountOutput{Count: count}
+		}
+	case protocol.OperationTagList:
+		var input protocol.TagListInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid tag.list input"}
+			break
+		}
+		tags, err := s.ListTags(input.ProjectID)
+		if err != nil { return nil, err }
+		result = protocol.TagListOutput{Tags: publicTags(tags)}
+	case protocol.OperationTagStats:
+		var input protocol.TagStatsInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid tag.stats input"}
+			break
+		}
+		opt := input.Options
+		tags, err := s.TagStats(input.ProjectID, TagStatsOptions{
+			MinCount: opt.MinCount, MaxCount: opt.MaxCount,
+			UnusedSince: opt.UnusedSince, Limit: opt.Limit, SortBy: opt.SortBy,
+		})
+		if err != nil { return nil, err }
+		result = protocol.TagStatsOutput{Tags: publicTags(tags)}
+	case protocol.OperationTagRelated:
+		var input protocol.TagRelatedInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid tag.related input"}
+			break
+		}
+		opt := input.Options
+		tags, err := s.RelatedTags(input.ProjectID, input.Tag, RelatedTagsOptions{
+			Limit: opt.Limit, Since: opt.Since, MinCooccurrence: opt.MinCooccurrence,
+			IncludeObservations: opt.IncludeObservations, IncludeSessions: opt.IncludeSessions,
+		})
+		if err != nil { return nil, err }
+		out := make([]protocol.RelatedTag, 0, len(tags))
+		for _, tag := range tags {
+			out = append(out, protocol.RelatedTag{
+				Tag: tag.Tag, CooccurrenceCount: tag.CooccurrenceCount,
+				Score: tag.Score, LastSeenAt: tag.LastSeenAt,
+			})
+		}
+		result = protocol.TagRelatedOutput{Tags: out}
+	case protocol.OperationTagMerge:
+		var input protocol.TagMergeInput
+		if err := json.Unmarshal(request.Payload, &input); err != nil {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "invalid tag.merge input"}
+			break
+		}
+		if input.From == "" || input.To == "" || input.From == input.To {
+			response.Error = &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "two distinct tag names are required"}
+			break
+		}
+		observations, sessions, err := s.MergeTags(input.From, input.To)
+		if err != nil { return nil, err }
+		result = protocol.TagMergeOutput{Observations: observations, Sessions: sessions}
 	case protocol.OperationObservationGet:
 		var input protocol.ObservationGetInput
 		if err := json.Unmarshal(request.Payload, &input); err != nil {
@@ -329,4 +443,14 @@ func (s *Store) protocolTimelineRef(projectID string, id int64) (protocol.Resour
 		return protocol.ResourceRef{}, fmt.Errorf("timeline observation belongs to a different project")
 	}
 	return protocol.NewObservationRef(projectID, obs.SyncID)
+}
+
+func publicTags(tags []TagInfo) []protocol.TagInfo {
+	out := make([]protocol.TagInfo, 0, len(tags))
+	for _, tag := range tags {
+		out = append(out, protocol.TagInfo{
+			Tag: tag.Tag, Count: tag.Count, LastUsedAt: tag.LastUsedAt,
+		})
+	}
+	return out
 }
