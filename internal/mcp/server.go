@@ -13,6 +13,7 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/protocol"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -75,7 +77,7 @@ func NewServerWithRuntime(s MemoryBackend, version string, allowlist map[string]
 // Close releases all open sessions owned by this runtime. It is safe to call
 // after a read-only MCP connection that never created a session.
 func (r *Runtime) Close(s MemoryBackend) error {
-	return s.CloseMCPInstanceSessions(r.instanceID)
+	return s.CloseSession(context.Background(), uuid.NewString(), protocol.SessionCloseInput{InstanceID: r.instanceID})
 }
 
 func (r *Runtime) resolveSession(s MemoryBackend, project, directory string, req mcp.CallToolRequest) (string, error) {
@@ -85,14 +87,18 @@ func (r *Runtime) resolveSession(s MemoryBackend, project, directory string, req
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	sessionID, err := s.ResolveMCPInstanceSession(project, directory, r.instanceID, r.pid)
+	sessionID, err := s.ResolveSession(context.Background(), uuid.NewString(), protocol.SessionResolveInput{
+		ProjectID: project, Directory: directory, InstanceID: r.instanceID, PID: r.pid,
+	})
 	if err != nil {
 		return "", err
 	}
 	if !bindExecution {
 		return sessionID, nil
 	}
-	if err := s.BindExecutionSession(project, identity.Agent, identity.NativeID, sessionID); err != nil {
+	if err := s.BindExecutionSession(context.Background(), uuid.NewString(), protocol.SessionBindExecutionInput{
+		ProjectID: project, AgentID: string(identity.Agent), NativeID: identity.NativeID, SessionID: sessionID,
+	}); err != nil {
 		return "", err
 	}
 	return sessionID, nil

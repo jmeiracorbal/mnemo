@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/protocol"
+	"context"
 	gomcp "github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -17,14 +19,14 @@ type recordingSessionBackend struct {
 	nativeID  string
 }
 
-func (b *recordingSessionBackend) ResolveMCPInstanceSession(project, directory, instance string, pid int) (string, error) {
+func (b *recordingSessionBackend) ResolveSession(_ context.Context, _ string, input protocol.SessionResolveInput) (string, error) {
 	return b.sessionID, nil
 }
 
-func (b *recordingSessionBackend) BindExecutionSession(project string, agent agents.Agent, nativeID, sessionID string) error {
-	b.project = project
-	b.agent = agent
-	b.nativeID = nativeID
+func (b *recordingSessionBackend) BindExecutionSession(_ context.Context, _ string, input protocol.SessionBindExecutionInput) error {
+	b.project = input.ProjectID
+	b.agent = agents.Agent(input.AgentID)
+	b.nativeID = input.NativeID
 	return nil
 }
 

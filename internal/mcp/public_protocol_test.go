@@ -20,7 +20,7 @@ type recordingProtocolBackend struct {
 	getRef    protocol.ResourceRef
 }
 
-func (b *recordingProtocolBackend) ResolveMCPInstanceSession(_, _, _ string, _ int) (string, error) {
+func (b *recordingProtocolBackend) ResolveSession(_ context.Context, _ string, _ protocol.SessionResolveInput) (string, error) {
 	return b.sessionID, nil
 }
 
