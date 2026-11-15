@@ -39,7 +39,7 @@ func Call(ctx context.Context, cfg Config, request protocol.Request, output *pro
 }
 
 func callDurableCommand(ctx context.Context, cfg Config, nc *nats.Conn, request protocol.Request, output *protocol.Response) error {
-	command, err := NewCommand(protocol.Version, request)
+	command, err := NewCommand(request)
 	if err != nil { return err }
 	inbox := nats.NewInbox()
 	subscription, err := nc.SubscribeSync(inbox)

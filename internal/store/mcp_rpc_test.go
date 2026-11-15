@@ -30,7 +30,7 @@ func TestPublicArchiveImportIsAtomicAndIdempotent(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 	t.Cleanup(func() { _ = dst.Close() })
 	request := mustPublicRequest(t, protocol.OperationArchiveImport, "import-cmd-1", protocol.ArchiveImportInput{Archive: archive})
-	first, err := dst.ApplyMCPCommand("transport-1", protocol.Version, request)
+	first, err := dst.ApplyCommand("transport-1", request)
 	if err != nil { t.Fatal(err) }
 	var firstResponse protocol.Response
 	if err := json.Unmarshal(first, &firstResponse); err != nil { t.Fatal(err) }
@@ -38,7 +38,7 @@ func TestPublicArchiveImportIsAtomicAndIdempotent(t *testing.T) {
 	var imported protocol.ArchiveImportOutput
 	if err := json.Unmarshal(firstResponse.Payload, &imported); err != nil { t.Fatal(err) }
 	if imported.ObservationsImported != 1 { t.Fatalf("imported %d observations", imported.ObservationsImported) }
-	second, err := dst.ApplyMCPCommand("transport-2", protocol.Version, request)
+	second, err := dst.ApplyCommand("transport-2", request)
 	if err != nil { t.Fatal(err) }
 	if string(first) != string(second) { t.Fatal("replayed import returned a different result") }
 	rows, err := dst.q.ExportObservations(context.Background())
@@ -57,7 +57,7 @@ func mustPublicRequest(t *testing.T, operation protocol.Operation, id string, pa
 	return body
 }
 
-func TestApplyMCPCommandReturnsStoredResultWithoutRepeatingMutation(t *testing.T) {
+func TestApplyCommandReturnsStoredResultWithoutRepeatingMutation(t *testing.T) {
 	memory, err := New(FallbackConfig(t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
@@ -78,11 +78,11 @@ func TestApplyMCPCommandReturnsStoredResultWithoutRepeatingMutation(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := memory.ApplyMCPCommand("delivery-1", protocol.Version, payload)
+	first, err := memory.ApplyCommand("delivery-1", payload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := memory.ApplyMCPCommand("delivery-2", protocol.Version, payload)
+	second, err := memory.ApplyCommand("delivery-2", payload)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestNativeSessionResolveUsesCanonicalExecutionIdentity(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 	body, err := json.Marshal(request)
 	if err != nil { t.Fatal(err) }
-	raw, err := memory.ApplyMCPCommand("delivery-1", protocol.Version, body)
+	raw, err := memory.ApplyCommand("delivery-1", body)
 	if err != nil { t.Fatal(err) }
 	var response protocol.Response
 	if err := json.Unmarshal(raw, &response); err != nil { t.Fatal(err) }
@@ -126,17 +126,20 @@ func TestNativeSessionResolveUsesCanonicalExecutionIdentity(t *testing.T) {
 	}
 }
 
-func TestRetiredActionRPCIsRejected(t *testing.T) {
+func TestRetiredActionStringIsNotPublicProtocol(t *testing.T) {
 	memory, err := New(FallbackConfig(t.TempDir()))
 	if err != nil { t.Fatal(err) }
 	t.Cleanup(func() { _ = memory.Close() })
-	for _, action := range []string{"add_observation", "get_observation", "agent_tool", "search", "merge_projects"} {
-		body, err := memory.ApplyMCPCommand("old-command", action, json.RawMessage(`{}`))
+	for _, operation := range []protocol.Operation{"add_observation", "get_observation", "agent_tool", "search", "merge_projects"} {
+		request := protocol.Request{Version: protocol.Version, Operation: operation, RequestID: "old-command", Payload: json.RawMessage(`{}`)}
+		payload, err := json.Marshal(request)
+		if err != nil { t.Fatal(err) }
+		body, err := memory.ApplyCommand("old-command", payload)
 		if err != nil { t.Fatal(err) }
 		var response protocol.Response
 		if err := json.Unmarshal(body, &response); err != nil { t.Fatal(err) }
 		if response.Error == nil || response.Error.Code != protocol.CodeInvalidRequest {
-			t.Fatalf("retired action %q accepted: %s", action, body)
+			t.Fatalf("retired operation %q accepted: %s", operation, body)
 		}
 	}
 }

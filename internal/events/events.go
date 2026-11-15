@@ -54,7 +54,7 @@ type DurableEvent struct {
 // import dependency so events does not couple to the database layer.
 type ControllerStore interface {
 	ApplyDurableEvent(DurableEvent) error
-	ApplyMCPCommand(id, action string, payload json.RawMessage) (json.RawMessage, error)
+	ApplyCommand(id string, payload json.RawMessage) (json.RawMessage, error)
 	ExecuteProtocolRequest(ctx context.Context, payload json.RawMessage) (json.RawMessage, error)
 }
 
@@ -401,11 +401,11 @@ func (c *Controller) handleCommand(_ context.Context, delivery goevents.Event) e
 	if UpgradeMaintenance(c.cfg) {
 		return fmt.Errorf("%w: database recovery window is active", errRetryableDelivery)
 	}
-	if err := command.Validate(); err != nil || command.Action != protocol.Version || command.ID != delivery.ID {
+	if err := command.Validate(); err != nil || command.ID != delivery.ID {
 		c.replyProtocolError(command.Reply, protocol.CodeInvalidRequest, "invalid Mnemo durable command")
 		return nil
 	}
-	raw, err := c.store.ApplyMCPCommand(command.ID, command.Action, command.Payload)
+	raw, err := c.store.ApplyCommand(command.ID, command.Payload)
 	if err != nil {
 		c.replyProtocolError(command.Reply, protocol.CodeInternal, err.Error())
 		return nil

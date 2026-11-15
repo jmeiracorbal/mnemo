@@ -24,7 +24,7 @@ func (s *transportTestStore) ApplyDurableEvent(event DurableEvent) error {
 	return nil
 }
 
-func (*transportTestStore) ApplyMCPCommand(string, string, json.RawMessage) (json.RawMessage, error) {
+func (*transportTestStore) ApplyCommand(string, json.RawMessage) (json.RawMessage, error) {
 	return json.RawMessage(`null`), nil
 }
 

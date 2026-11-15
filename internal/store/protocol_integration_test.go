@@ -142,7 +142,7 @@ func TestPublicProtocolLostReplyCannotDuplicateCommittedMemory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command, err := events.NewCommand(protocol.Version, request)
+	command, err := events.NewCommand(request)
 	if err != nil {
 		t.Fatal(err)
 	}
