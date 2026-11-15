@@ -228,7 +228,7 @@ func TestShippedMnemoMemoryCurationSkill(t *testing.T) {
 		"name: mnemo-memory-curation",
 		"description:",
 		"mnemo memories review --json",
-		"mnemo memories supersede OLD_ID --by=NEW_ID --reason=TEXT",
+		"mnemo memories supersede OLD_REF --by=NEW_REF --reason=TEXT",
 		"Notify the user when likely conflicts are found during normal work",
 		"Never edit `~/.mnemo/memory.db`",
 		"mem_save",

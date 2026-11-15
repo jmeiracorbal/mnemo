@@ -59,12 +59,12 @@ Run a read-only review when any of these happen:
    - propose the safest follow-up;
    - ask before mutating memory.
 
-5. Apply only approved repairs:
+5. Apply only approved repairs using the canonical `mnemo://<project-id>/observations/<sync-id>` references returned by Mnemo, never local SQLite IDs:
 
    ```bash
-   mnemo memories mark-reviewed OBSERVATION_ID --reason=TEXT
-   mnemo memories mark-stale OBSERVATION_ID --reason=TEXT
-   mnemo memories supersede OLD_ID --by=NEW_ID --reason=TEXT
+   mnemo memories mark-reviewed MNEMO_REF --reason=TEXT
+   mnemo memories mark-stale MNEMO_REF --reason=TEXT
+   mnemo memories supersede OLD_REF --by=NEW_REF --reason=TEXT
    mnemo memories consolidate-topic --from=OLD_TOPIC --to=NEW_TOPIC --dry-run --json
    mnemo memories consolidate-topic --from=OLD_TOPIC --to=NEW_TOPIC --yes
    ```

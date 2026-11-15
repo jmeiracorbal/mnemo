@@ -100,7 +100,8 @@ CREATE TABLE processed_mcp_commands (
     id TEXT PRIMARY KEY,
     action TEXT NOT NULL,
     result_json TEXT NOT NULL,
-    processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    processed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    request_hash TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE observations (

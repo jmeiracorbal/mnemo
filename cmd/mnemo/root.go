@@ -26,13 +26,12 @@ func newRootCommand() *cobra.Command {
 	root.SetVersionTemplate("mnemo {{.Version}}\n")
 
 	root.AddCommand(
-		command("save <title> <content> [--type=TYPE] [--project=PROJECT] [--scope=SCOPE] [--topic=TOPIC]", "Save a memory (deprecated: use mem_save MCP tool)", runSave),
-		command("search <query> [--project=PROJECT] [--scope=SCOPE] [--limit=N]", "Search memories", runSearch),
+		command("search <query> [--type=TYPE] [--project=PROJECT] [--scope=SCOPE] [--limit=N]", "Search memories", runSearch),
+		command("get <mnemo://project-id/observations/sync-id>", "Read an observation using its stable Mnemo reference", runGet),
 		command("context [project]", "Show context from previous sessions", runContext),
 		command("stats", "Show memory statistics", runStats),
 		command("export [file]", "Export all memories to JSON", runExport),
 		command("import <file.json>", "Import memories from JSON", runImport),
-		command("capture <content>|-", "Extract learnings from text (deprecated: use mem_capture_passive MCP tool)", runCapture),
 		command("init [--agent=AGENT] [--path=DIR] [--no-project-rules]", "Activate mnemo in the current project", runInit),
 		command("track [--path=DIR]", "Track the existing .mnemo marker in Git (explicit)", runTrack),
 		command("migrate", "Migrate project identity", runMigrateProjects),
@@ -133,9 +132,6 @@ func addCommandTree(root *cobra.Command) {
 		command("consolidate-topic --from=TOPIC --to=TOPIC (--dry-run|--yes) [--project=PROJECT] [--scope=SCOPE] [--json]", "Consolidate memory topic keys", runMemoriesConsolidateTopic),
 	)
 	addChildren(root, "session",
-		command("start ID", "Session lifecycle is owned by the controller (deprecated)", runSession),
-		command("compact ID", "Session lifecycle is owned by the controller (deprecated)", runSession),
-		command("end ID", "Session lifecycle is owned by the controller (deprecated)", runSession),
 		command("exists ID", "Check whether a session exists", runSession),
 		command("obs-count ID", "Count session observations", runSession),
 		command("project-obs-count ID", "Count project observations", runSession),

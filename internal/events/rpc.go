@@ -5,102 +5,53 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-
 	goevents "github.com/jmeiracorbal/go-events"
 	goeventsnats "github.com/jmeiracorbal/go-events/adapters/nats"
-
+	"github.com/jmeiracorbal/mnemo/protocol"
 	"github.com/nats-io/nats.go"
 )
 
 const rpcSubject = "mnemo.controller.rpc"
 
-// RPCRequest is the shared controller request envelope. It carries no SQLite
-// details; action names are interpreted exclusively by the controller.
-type RPCRequest struct {
-	Action  string          `json:"action"`
-	Payload json.RawMessage `json:"payload"`
-}
-
-type RPCResponse struct {
-	Payload json.RawMessage `json:"payload,omitempty"`
-	Error   string          `json:"error,omitempty"`
-}
-
-// Call sends an MCP operation to the installation-wide controller. Clients do
-// not retain a Store or a database path.
-func Call(ctx context.Context, cfg Config, action string, payload any, output any) error {
-	encoded, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("encode controller request: %w", err)
+// Call executes a versioned Mnemo request against the sole controller.
+// Mutations use JetStream; queries use NATS request/reply. There is no
+// controller action-string protocol and no compatibility path.
+func Call(ctx context.Context, cfg Config, request protocol.Request, output *protocol.Response) error {
+	if err := request.Validate(); err != nil { return err }
+	spec, _ := request.Operation.Spec()
+	if spec.Kind == protocol.KindEvent {
+		return &protocol.Error{Code: protocol.CodeInvalidRequest, Message: "event.publish must use the durable event API"}
 	}
 	nc, err := nats.Connect(cfg.URL(), nats.Timeout(2*time.Second))
-	if err != nil {
-		return fmt.Errorf("connect global controller: %w", err)
-	}
+	if err != nil { return fmt.Errorf("connect Mnemo controller: %w", err) }
 	defer nc.Close()
-	if isMutation(action) {
-		return callDurableCommand(ctx, cfg, nc, action, encoded, output)
+	body, err := json.Marshal(request)
+	if err != nil { return fmt.Errorf("encode Mnemo request: %w", err) }
+	if spec.Kind == protocol.KindCommand {
+		return callDurableCommand(ctx, cfg, nc, request, output)
 	}
-	request, err := json.Marshal(RPCRequest{Action: action, Payload: encoded})
-	if err != nil {
-		return fmt.Errorf("encode RPC envelope: %w", err)
-	}
-	message, err := nc.RequestWithContext(ctx, rpcSubject, request)
-	if err != nil {
-		return fmt.Errorf("request controller: %w", err)
-	}
-	var response RPCResponse
-	if err := json.Unmarshal(message.Data, &response); err != nil {
-		return fmt.Errorf("decode controller response: %w", err)
-	}
-	if response.Error != "" {
-		return fmt.Errorf("controller: %s", response.Error)
-	}
-	if output == nil {
-		return nil
-	}
-	if err := json.Unmarshal(response.Payload, output); err != nil {
-		return fmt.Errorf("decode controller payload: %w", err)
+	message, err := nc.RequestWithContext(ctx, rpcSubject, body)
+	if err != nil { return fmt.Errorf("request Mnemo controller: %w", err) }
+	if err := json.Unmarshal(message.Data, output); err != nil {
+		return fmt.Errorf("decode Mnemo response: %w", err)
 	}
 	return nil
 }
 
-func isMutation(action string) bool {
-	switch action {
-	case "health_probe", "resolve_session", "close_sessions", "bind_execution_session",
-		"add_observation", "update_observation", "delete_observation",
-		"add_prompt", "passive_capture", "merge_tags", "agent_tool",
-		"import", "merge_projects", "rename_project",
-		"mark_memory_reviewed", "mark_memory_stale", "supersede_memory", "consolidate_topic",
-		"migrate_project_identity":
-		return true
-	default:
-		return false
-	}
-}
-
-func callDurableCommand(ctx context.Context, cfg Config, nc *nats.Conn, action string, payload json.RawMessage, output any) error {
-	command, err := NewCommand(action, json.RawMessage(payload))
-	if err != nil {
-		return err
-	}
+func callDurableCommand(ctx context.Context, cfg Config, nc *nats.Conn, request protocol.Request, output *protocol.Response) error {
+	command, err := NewCommand(request)
+	if err != nil { return err }
 	inbox := nats.NewInbox()
 	subscription, err := nc.SubscribeSync(inbox)
-	if err != nil {
-		return fmt.Errorf("subscribe durable command reply: %w", err)
-	}
+	if err != nil { return fmt.Errorf("subscribe command reply: %w", err) }
 	defer func() { _ = subscription.Unsubscribe() }()
 	command.Reply = inbox
 	encoded, err := json.Marshal(command)
-	if err != nil {
-		return fmt.Errorf("encode command reply subject: %w", err)
-	}
+	if err != nil { return fmt.Errorf("encode durable command: %w", err) }
 	adapter, err := goeventsnats.New(ctx, goeventsnats.Config{
 		URL: cfg.URL(), Stream: commandStreamName,
 	}, nats.Timeout(2*time.Second))
-	if err != nil {
-		return fmt.Errorf("open durable command transport: %w", err)
-	}
+	if err != nil { return fmt.Errorf("open durable command transport: %w", err) }
 	defer func() { _ = adapter.Close() }()
 	if err := adapter.Publish(ctx, goevents.Event{
 		ID: command.ID, Topic: commandSubject, Data: encoded,
@@ -108,21 +59,9 @@ func callDurableCommand(ctx context.Context, cfg Config, nc *nats.Conn, action s
 		return fmt.Errorf("publish durable command: %w", err)
 	}
 	message, err := subscription.NextMsgWithContext(ctx)
-	if err != nil {
-		return fmt.Errorf("await durable command: %w", err)
-	}
-	var response RPCResponse
-	if err := json.Unmarshal(message.Data, &response); err != nil {
-		return fmt.Errorf("decode command response: %w", err)
-	}
-	if response.Error != "" {
-		return fmt.Errorf("controller: %s", response.Error)
-	}
-	if output == nil {
-		return nil
-	}
-	if err := json.Unmarshal(response.Payload, output); err != nil {
-		return fmt.Errorf("decode command payload: %w", err)
+	if err != nil { return fmt.Errorf("await durable command: %w", err) }
+	if err := json.Unmarshal(message.Data, output); err != nil {
+		return fmt.Errorf("decode durable command response: %w", err)
 	}
 	return nil
 }

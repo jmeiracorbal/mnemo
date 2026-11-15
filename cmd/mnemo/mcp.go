@@ -24,7 +24,12 @@ func runMCP() {
 		fmt.Fprintf(os.Stderr, "mnemo: event config: %v\n", err)
 		os.Exit(1)
 	}
-	if err := events.CheckHealth(context.Background(), cfg); err != nil {
+	backend, err := mcpserver.NewControllerBackend(cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo: controller client: %v\n", err)
+		os.Exit(1)
+	}
+	if err := backend.Health(context.Background()); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: global controller unavailable: %v\n", err)
 		os.Exit(1)
 	}
@@ -36,7 +41,6 @@ func runMCP() {
 	}
 
 	allowlist := mcpserver.ResolveTools(tools)
-	backend := mcpserver.NewControllerBackend(cfg)
 	srv, runtime, err := mcpserver.NewServerWithRuntime(backend, version, allowlist)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo: mcp server: %v\n", err)

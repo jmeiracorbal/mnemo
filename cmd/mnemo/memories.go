@@ -10,8 +10,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
 type memoriesReviewOptions struct {
@@ -34,7 +34,7 @@ type memoriesConsolidateTopicOptions struct {
 
 type memoriesConsolidateTopicReport struct {
 	DryRun bool                               `json:"dry_run"`
-	Plan   store.MemoryTopicConsolidationPlan `json:"plan"`
+	Plan   protocol.MemoryConsolidationOutput `json:"plan"`
 }
 
 func runMemories() {
@@ -61,31 +61,21 @@ func runMemories() {
 
 func printMemoriesUsage() {
 	fmt.Fprintln(os.Stderr, "usage: mnemo memories review [--project=PROJECT] [--scope=SCOPE] [--topic=TOPIC_KEY] [--limit=N] [--json]")
-	fmt.Fprintln(os.Stderr, "       mnemo memories mark-reviewed OBSERVATION_ID [--reason=TEXT]")
-	fmt.Fprintln(os.Stderr, "       mnemo memories mark-stale OBSERVATION_ID [--reason=TEXT]")
-	fmt.Fprintln(os.Stderr, "       mnemo memories supersede OLD_ID --by=NEW_ID [--reason=TEXT]")
+	fmt.Fprintln(os.Stderr, "       mnemo memories mark-reviewed MNEMO_REF [--reason=TEXT]")
+	fmt.Fprintln(os.Stderr, "       mnemo memories mark-stale MNEMO_REF [--reason=TEXT]")
+	fmt.Fprintln(os.Stderr, "       mnemo memories supersede OLD_REF --by=NEW_REF [--reason=TEXT]")
 	fmt.Fprintln(os.Stderr, "       mnemo memories consolidate-topic --from=TOPIC_KEY --to=TOPIC_KEY (--dry-run|--yes) [--project=PROJECT] [--scope=SCOPE] [--json]")
 }
 
 func runMemoriesReview() {
 	opts, err := parseMemoriesReviewArgs(os.Args[3:])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo memories review: %v\n", err)
-		os.Exit(1)
-	}
-	cfg, err := loadEventsConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
-		os.Exit(1)
-	}
-	input := store.MemoryReviewOptions{
-		Project: opts.Project, Scope: opts.Scope, TopicKey: opts.TopicKey, Limit: opts.Limit,
-	}
-	var report store.MemoryReviewReport
-	if err := events.Call(context.Background(), cfg, "review_memories", input, &report); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo memories review: %v\n", err)
-		os.Exit(1)
-	}
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories review: %v\n", err); os.Exit(1) }
+	api, err := loadMnemoClient()
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories review: %v\n", err); os.Exit(1) }
+	report, err := api.ReviewMemories(context.Background(), protocol.MemoryReviewInput{
+		ProjectID: opts.Project, Scope: opts.Scope, TopicKey: opts.TopicKey, Limit: opts.Limit,
+	})
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories review: %v\n", err); os.Exit(1) }
 	if opts.JSON {
 		if err := printJSONTo(os.Stdout, report); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo memories review: json: %v\n", err)
@@ -97,101 +87,61 @@ func runMemoriesReview() {
 }
 
 func runMemoriesMarkReviewed() {
-	id, reason, err := parseMemoryStateArgs(os.Args[3:])
-	if err != nil {
+	ref, reason, err := parseMemoryStateArgs(os.Args[3:])
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories mark-reviewed: %v\n", err); os.Exit(1) }
+	api, err := loadMnemoClient()
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories mark-reviewed: %v\n", err); os.Exit(1) }
+	if err := api.MarkMemoryReviewed(context.Background(), uuid.NewString(), protocol.MemoryMarkInput{Ref: ref, Reason: reason}); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories mark-reviewed: %v\n", err)
 		os.Exit(1)
 	}
-	cfg, err := loadEventsConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
-		os.Exit(1)
-	}
-	input := struct {
-		ID     int64  `json:"id"`
-		Reason string `json:"reason"`
-	}{id, reason}
-	if err := events.Call(context.Background(), cfg, "mark_memory_reviewed", input, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo memories mark-reviewed: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("Marked observation #%d as reviewed\n", id)
+	fmt.Printf("Marked observation %s as reviewed\n", ref.String())
 }
 
 func runMemoriesMarkStale() {
-	id, reason, err := parseMemoryStateArgs(os.Args[3:])
-	if err != nil {
+	ref, reason, err := parseMemoryStateArgs(os.Args[3:])
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories mark-stale: %v\n", err); os.Exit(1) }
+	api, err := loadMnemoClient()
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories mark-stale: %v\n", err); os.Exit(1) }
+	if err := api.MarkMemoryStale(context.Background(), uuid.NewString(), protocol.MemoryMarkInput{Ref: ref, Reason: reason}); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories mark-stale: %v\n", err)
 		os.Exit(1)
 	}
-	cfg, err := loadEventsConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
-		os.Exit(1)
-	}
-	input := struct {
-		ID     int64  `json:"id"`
-		Reason string `json:"reason"`
-	}{id, reason}
-	if err := events.Call(context.Background(), cfg, "mark_memory_stale", input, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo memories mark-stale: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("Marked observation #%d as stale\n", id)
+	fmt.Printf("Marked observation %s as stale\n", ref.String())
 }
 
 func runMemoriesSupersede() {
-	oldID, newID, reason, err := parseMemoriesSupersedeArgs(os.Args[3:])
-	if err != nil {
+	oldRef, newRef, reason, err := parseMemoriesSupersedeArgs(os.Args[3:])
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories supersede: %v\n", err); os.Exit(1) }
+	api, err := loadMnemoClient()
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories supersede: %v\n", err); os.Exit(1) }
+	if err := api.SupersedeMemory(context.Background(), uuid.NewString(), protocol.MemorySupersedeInput{
+		OldRef: oldRef, NewRef: newRef, Reason: reason,
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo memories supersede: %v\n", err)
 		os.Exit(1)
 	}
-	cfg, err := loadEventsConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
-		os.Exit(1)
-	}
-	input := struct {
-		OldID  int64  `json:"old_id"`
-		NewID  int64  `json:"new_id"`
-		Reason string `json:"reason"`
-	}{oldID, newID, reason}
-	if err := events.Call(context.Background(), cfg, "supersede_memory", input, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo memories supersede: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("Marked observation #%d as superseded by #%d\n", oldID, newID)
+	fmt.Printf("Marked observation %s as superseded by %s\n", oldRef.String(), newRef.String())
 }
 
 func runMemoriesConsolidateTopic() {
 	opts, err := parseMemoriesConsolidateTopicArgs(os.Args[3:])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo memories consolidate-topic: %v\n", err)
-		os.Exit(1)
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories consolidate-topic: %v\n", err); os.Exit(1) }
+	api, err := loadMnemoClient()
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories consolidate-topic: %v\n", err); os.Exit(1) }
+	input := protocol.MemoryConsolidationInput{
+		FromTopic: opts.FromTopic, ToTopic: opts.ToTopic,
+		ProjectID: opts.Project, Scope: opts.Scope,
 	}
-	cfg, err := loadEventsConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo: controller unavailable: %v\n", err)
-		os.Exit(1)
-	}
-	input := struct {
-		FromTopic string `json:"from_topic"`
-		ToTopic   string `json:"to_topic"`
-		Project   string `json:"project"`
-		Scope     string `json:"scope"`
-	}{opts.FromTopic, opts.ToTopic, opts.Project, opts.Scope}
-	action := "consolidate_topic"
+	var plan protocol.MemoryConsolidationOutput
 	if opts.DryRun {
-		action = "plan_consolidate_topic"
+		plan, err = api.PlanMemoryConsolidation(context.Background(), input)
+	} else {
+		plan, err = api.ConsolidateMemories(context.Background(), uuid.NewString(), input)
 	}
-	var plan store.MemoryTopicConsolidationPlan
-	if err := events.Call(context.Background(), cfg, action, input, &plan); err != nil {
-		fmt.Fprintf(os.Stderr, "mnemo memories consolidate-topic: %v\n", err)
-		os.Exit(1)
-	}
+	if err != nil { fmt.Fprintf(os.Stderr, "mnemo memories consolidate-topic: %v\n", err); os.Exit(1) }
 	if opts.JSON {
-		report := memoriesConsolidateTopicReport{DryRun: opts.DryRun, Plan: plan}
-		if err := printJSONTo(os.Stdout, report); err != nil {
+		if err := printJSONTo(os.Stdout, memoriesConsolidateTopicReport{DryRun: opts.DryRun, Plan: plan}); err != nil {
 			fmt.Fprintf(os.Stderr, "mnemo memories consolidate-topic: json: %v\n", err)
 			os.Exit(1)
 		}
@@ -225,53 +175,40 @@ func parseMemoriesReviewArgs(args []string) (memoriesReviewOptions, error) {
 	return opts, nil
 }
 
-func parseMemoryStateArgs(args []string) (int64, string, error) {
-	if len(args) == 0 {
-		return 0, "", fmt.Errorf("observation id is required")
-	}
-	id, err := strconv.ParseInt(args[0], 10, 64)
-	if err != nil || id <= 0 {
-		return 0, "", fmt.Errorf("invalid observation id %q", args[0])
-	}
+func parseMemoryStateArgs(args []string) (protocol.ResourceRef, string, error) {
+	if len(args) == 0 { return protocol.ResourceRef{}, "", fmt.Errorf("observation reference is required") }
+	ref, err := protocol.ParseResourceRef(args[0])
+	if err != nil { return protocol.ResourceRef{}, "", err }
 	reason := ""
 	for _, arg := range args[1:] {
 		if strings.HasPrefix(arg, "--reason=") {
 			reason = strings.TrimSpace(arg[len("--reason="):])
 			continue
 		}
-		return 0, "", fmt.Errorf("unknown argument %q", arg)
+		return protocol.ResourceRef{}, "", fmt.Errorf("unknown argument %q", arg)
 	}
-	return id, reason, nil
+	return ref, reason, nil
 }
 
-func parseMemoriesSupersedeArgs(args []string) (int64, int64, string, error) {
-	if len(args) == 0 {
-		return 0, 0, "", fmt.Errorf("old observation id is required")
-	}
-	oldID, err := strconv.ParseInt(args[0], 10, 64)
-	if err != nil || oldID <= 0 {
-		return 0, 0, "", fmt.Errorf("invalid old observation id %q", args[0])
-	}
-	var newID int64
+func parseMemoriesSupersedeArgs(args []string) (protocol.ResourceRef, protocol.ResourceRef, string, error) {
+	if len(args) == 0 { return protocol.ResourceRef{}, protocol.ResourceRef{}, "", fmt.Errorf("old observation reference is required") }
+	oldRef, err := protocol.ParseResourceRef(args[0])
+	if err != nil { return protocol.ResourceRef{}, protocol.ResourceRef{}, "", err }
+	var newRef protocol.ResourceRef
 	reason := ""
 	for _, arg := range args[1:] {
 		switch {
 		case strings.HasPrefix(arg, "--by="):
-			parsed, err := strconv.ParseInt(strings.TrimSpace(arg[len("--by="):]), 10, 64)
-			if err != nil || parsed <= 0 {
-				return 0, 0, "", fmt.Errorf("invalid --by id %q", arg[len("--by="):])
-			}
-			newID = parsed
+			newRef, err = protocol.ParseResourceRef(strings.TrimSpace(arg[len("--by="):]))
+			if err != nil { return protocol.ResourceRef{}, protocol.ResourceRef{}, "", err }
 		case strings.HasPrefix(arg, "--reason="):
 			reason = strings.TrimSpace(arg[len("--reason="):])
 		default:
-			return 0, 0, "", fmt.Errorf("unknown argument %q", arg)
+			return protocol.ResourceRef{}, protocol.ResourceRef{}, "", fmt.Errorf("unknown argument %q", arg)
 		}
 	}
-	if newID == 0 {
-		return 0, 0, "", fmt.Errorf("--by is required")
-	}
-	return oldID, newID, reason, nil
+	if err := newRef.Validate(); err != nil { return protocol.ResourceRef{}, protocol.ResourceRef{}, "", fmt.Errorf("--by requires a valid Mnemo reference: %w", err) }
+	return oldRef, newRef, reason, nil
 }
 
 func parseMemoriesConsolidateTopicArgs(args []string) (memoriesConsolidateTopicOptions, error) {
@@ -308,7 +245,7 @@ func parseMemoriesConsolidateTopicArgs(args []string) (memoriesConsolidateTopicO
 	return opts, nil
 }
 
-func printMemoriesReviewReport(w io.Writer, report *store.MemoryReviewReport) {
+func printMemoriesReviewReport(w io.Writer, report *protocol.MemoryReviewOutput) {
 	if report.Total == 0 {
 		_, _ = fmt.Fprintln(w, "No potential memory conflicts found.")
 		return
@@ -322,25 +259,25 @@ func printMemoriesReviewReport(w io.Writer, report *store.MemoryReviewReport) {
 		}
 		_, _ = fmt.Fprintf(w, "   Suggested action: %s\n", group.SuggestedAction)
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-		_, _ = fmt.Fprintln(tw, "   ID\tTYPE\tTITLE\tUPDATED")
+		_, _ = fmt.Fprintln(tw, "   REF\tTYPE\tTITLE\tUPDATED")
 		for _, obs := range group.Observations {
-			_, _ = fmt.Fprintf(tw, "   %d\t%s\t%s\t%s\n", obs.ID, obs.Type, obs.Title, obs.UpdatedAt)
+			_, _ = fmt.Fprintf(tw, "   %s\t%s\t%s\t%s\n", obs.Ref.String(), obs.Type, obs.Title, obs.UpdatedAt)
 		}
 		_ = tw.Flush()
 		_, _ = fmt.Fprintln(w)
 	}
 }
 
-func printMemoriesConsolidateTopic(w io.Writer, dryRun bool, plan *store.MemoryTopicConsolidationPlan) {
+func printMemoriesConsolidateTopic(w io.Writer, dryRun bool, plan *protocol.MemoryConsolidationOutput) {
 	verb := "Would update"
 	if !dryRun {
 		verb = "Updated"
 	}
 	_, _ = fmt.Fprintf(w, "%s %d observation(s) from topic %q to %q\n", verb, plan.Total, plan.FromTopic, plan.ToTopic)
-	if len(plan.IDs) > 0 {
-		parts := make([]string, 0, len(plan.IDs))
-		for _, id := range plan.IDs {
-			parts = append(parts, fmt.Sprintf("#%d", id))
+	if len(plan.Refs) > 0 {
+		parts := make([]string, 0, len(plan.Refs))
+		for _, id := range plan.Refs {
+			parts = append(parts, id.String())
 		}
 		_, _ = fmt.Fprintf(w, "Observations: %s\n", strings.Join(parts, ", "))
 	}

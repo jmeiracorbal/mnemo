@@ -1,1 +1,1 @@
-Get the full content of a specific observation by ID. Use when you need the complete, untruncated content of an observation found via mem_search or mem_timeline.
+Get the full, untruncated content of an observation using its stable `mnemo://<project-id>/observations/<sync-id>` reference. Obtain the reference from `mem_search`. References belong to a Mnemo project, not to an agent or harness.

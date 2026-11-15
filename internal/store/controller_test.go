@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 	"github.com/jmeiracorbal/mnemo/internal/events"
 	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
 func TestControllerAppliesEventExactlyOnceAfterExecutionBinding(t *testing.T) {
@@ -123,24 +125,33 @@ func TestControllerExecutesMCPMutationsThroughDurableCommands(t *testing.T) {
 	t.Cleanup(cancel)
 	go func() { _ = controller.Run(ctx) }()
 
-	var sessionID string
-	if err := events.Call(context.Background(), cfg, "resolve_session", struct {
-		Project    string `json:"project"`
-		Directory  string `json:"directory"`
-		InstanceID string `json:"instance_id"`
-		PID        int    `json:"pid"`
-	}{"project-rpc", t.TempDir(), "instance-rpc", 7}, &sessionID); err != nil {
-		t.Fatalf("resolve durable MCP session: %v", err)
+	resolvedRequest, err := protocol.NewRequest(protocol.OperationSessionResolve, "controller-test-session", protocol.SessionResolveInput{
+		ProjectID: "project-rpc", Directory: t.TempDir(), InstanceID: "instance-rpc", PID: 7,
+	})
+	if err != nil { t.Fatal(err) }
+	var resolvedResponse protocol.Response
+	if err := events.Call(context.Background(), cfg, resolvedRequest, &resolvedResponse); err != nil {
+		t.Fatalf("resolve durable Mnemo session: %v", err)
 	}
-	var observationID int64
-	if err := events.Call(context.Background(), cfg, "add_observation", store.AddObservationParams{SessionID: sessionID, Type: "manual", Title: "Through controller", Content: "The MCP process did not open SQLite.", Project: "project-rpc"}, &observationID); err != nil {
-		t.Fatalf("save durable MCP observation: %v", err)
+	if resolvedResponse.Error != nil { t.Fatal(resolvedResponse.Error) }
+	var resolved protocol.SessionResolveOutput
+	if err := json.Unmarshal(resolvedResponse.Payload, &resolved); err != nil { t.Fatal(err) }
+	sessionID := resolved.SessionID
+	request, err := protocol.NewRequest(protocol.OperationObservationCreate, "controller-test-request", protocol.ObservationCreateInput{
+		SessionID: sessionID, ProjectID: "project-rpc", Type: "manual",
+		Title: "Through controller", Content: "The MCP process did not open SQLite.",
+	})
+	if err != nil { t.Fatal(err) }
+	var response protocol.Response
+	if err := events.Call(context.Background(), cfg, request, &response); err != nil {
+		t.Fatalf("save durable public observation: %v", err)
 	}
-	if observationID == 0 {
-		t.Fatal("durable command returned no observation ID")
-	}
-	if _, err := memory.GetObservation(observationID); err != nil {
-		t.Fatalf("controller did not persist observation: %v", err)
+	if response.Error != nil { t.Fatal(response.Error) }
+	var created protocol.ObservationCreateOutput
+	if err := json.Unmarshal(response.Payload, &created); err != nil { t.Fatal(err) }
+	observations, err := memory.SessionObservations(sessionID, 10)
+	if err != nil || len(observations) != 1 || observations[0].SyncID != created.Ref.SyncID {
+		t.Fatalf("controller did not persist observation in the resolved session: %+v, %v", observations, err)
 	}
 }
 

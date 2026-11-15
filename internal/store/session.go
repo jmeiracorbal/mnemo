@@ -8,6 +8,7 @@ import (
 
 	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
 	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
 )
 
 // ResolveMCPInstanceSession returns this MCP instance's open session for a
@@ -294,3 +295,41 @@ func (s *Store) createSessionTx(tx *sql.Tx, id, project, directory string, prove
 		ID: id, Project: project, Directory: directory, ProvenanceID: provenanceID,
 	})
 }
+
+func (s *Store) ensureExecutionSession(identity agents.Identity, directory string) (string, error) {
+	var sessionID string
+	err := s.withTx(func(tx *sql.Tx) error {
+		var err error
+		sessionID, err = s.ensureExecutionSessionTx(tx, identity, directory)
+		return err
+	})
+	return sessionID, err
+}
+
+func (s *Store) ensureExecutionSessionTx(tx *sql.Tx, identity agents.Identity, directory string) (string, error) {
+	q := s.q.WithTx(tx)
+	id := "execution-" + identity.Execution
+	endedAt, err := q.GetExecutionSessionEndedAt(context.Background(), dbgen.GetExecutionSessionEndedAtParams{ID: id, Project: identity.Project})
+	if err == sql.ErrNoRows {
+		if err := s.ensureProjectTx(tx, identity.Project); err != nil {
+			return "", err
+		}
+		if err := s.createSessionTx(tx, id, identity.Project, directory, ProvenanceInput{}); err != nil {
+			return "", err
+		}
+	} else if err != nil {
+		return "", err
+	} else if endedAt.Valid {
+		return "", fmt.Errorf("execution is already closed")
+	}
+	if err := q.InsertExecutionSessionIfMissing(context.Background(), dbgen.InsertExecutionSessionIfMissingParams{
+		Project: identity.Project, ExecutionKey: identity.Execution, SessionID: id,
+	}); err != nil {
+		return "", err
+	}
+	if _, err := q.GetSessionPayload(context.Background(), id); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+

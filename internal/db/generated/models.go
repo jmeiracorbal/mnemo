@@ -96,6 +96,7 @@ type ProcessedMcpCommand struct {
 	Action      string `json:"action"`
 	ResultJson  string `json:"result_json"`
 	ProcessedAt string `json:"processed_at"`
+	RequestHash string `json:"request_hash"`
 }
 
 type Project struct {

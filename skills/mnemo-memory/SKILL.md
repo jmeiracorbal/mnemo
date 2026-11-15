@@ -91,7 +91,7 @@ Use:
 - concise, relevant tags;
 - `scope=project` unless the memory genuinely applies across projects.
 
-For an evolving topic, call `mem_suggest_topic_key` and reuse the returned key. Use `mem_update` only when correcting a known observation by ID. Do not save routine progress, guesses, or information already obvious from the code.
+For an evolving topic, call `mem_suggest_topic_key` and reuse the returned key. Use `mem_update` only when correcting a known observation by its canonical `mnemo://<project-id>/observations/<sync-id>` reference; local SQLite IDs are not public. Do not save routine progress, guesses, or information already obvious from the code.
 
 When the user explicitly asks to remember something, always use `mem_save`.
 

@@ -12,7 +12,7 @@ func TestRootCommandContainsEveryMenuCommand(t *testing.T) {
 	root := newRootCommand()
 
 	want := []string{
-		"mcp", "save", "search", "context", "session", "stats", "export", "import", "capture",
+		"mcp", "search", "get", "context", "session", "stats", "export", "import",
 		"projects", "memories", "doctor", "db", "update", "setup", "init", "install-instructions",
 		"migrate", "json", "json-merge", "extract-transcript", "version",
 	}
@@ -30,7 +30,7 @@ func TestRootCommandNestedMenu(t *testing.T) {
 		"setup":    {"status", "print-config", "refresh", "uninstall", "codex", "all"},
 		"projects": {"list", "merge", "rename"},
 		"memories": {"review", "mark-reviewed", "mark-stale", "supersede", "consolidate-topic"},
-		"session":  {"start", "compact", "end", "exists", "obs-count", "project-obs-count"},
+		"session":  {"exists", "obs-count", "project-obs-count"},
 	}
 	for parentName, children := range checks {
 		parent, _, err := root.Find([]string{parentName})
@@ -50,12 +50,12 @@ func TestLeafHelpIsGeneratedWithoutOpeningStore(t *testing.T) {
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
-	root.SetArgs([]string{"save", "--help"})
+	root.SetArgs([]string{"get", "--help"})
 
 	if err := root.Execute(); err != nil {
 		t.Fatalf("help failed: %v", err)
 	}
-	if !strings.Contains(out.String(), "Save a memory") || !strings.Contains(out.String(), "mnemo save") {
+	if !strings.Contains(out.String(), "Read an observation") || !strings.Contains(out.String(), "mnemo get") {
 		t.Fatalf("unexpected generated help:\n%s", out.String())
 	}
 }

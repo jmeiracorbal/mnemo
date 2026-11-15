@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/protocol"
 )
 
 func TestParseProjectsListArgsDefaults(t *testing.T) {
@@ -96,7 +96,7 @@ func TestParseProjectsRenameArgsRequiresSafetyFlag(t *testing.T) {
 }
 
 func TestProjectsListFiltersAndSorts(t *testing.T) {
-	projects := []store.ProjectSummary{
+	projects := []protocol.ProjectSummary{
 		{ID: "beta", Name: "Beta", ObservationCount: 2, LastSeenAt: "2026-01-15 10:00:00"},
 		{ID: "alpha", Name: "Alpha", ObservationCount: 0, LastSeenAt: ""},
 		{ID: "gamma", Name: "Gamma", ObservationCount: 5, LastSeenAt: "2026-01-10 10:00:00"},
@@ -123,7 +123,7 @@ func TestAutoMergePairingsGroupsByDirectoryAndPrefersUUID(t *testing.T) {
 	uuidProject := "11111111-2222-3333-4444-555555555555"
 	legacyProject := "projects-alpha"
 
-	projects := []store.ProjectSummary{
+	projects := []protocol.ProjectSummary{
 		{ID: uuidProject, Directory: "/tmp/alpha", ObservationCount: 1},
 		{ID: legacyProject, Directory: "/tmp/alpha", ObservationCount: 1},
 	}
@@ -141,9 +141,9 @@ func TestPrintProjectsMergeApplyOutputReportsPartialResults(t *testing.T) {
 	source := "projects-alpha"
 	destination := "11111111-2222-3333-4444-555555555555"
 
-	results := []store.ProjectMergeResult{
+	results := []protocol.ProjectMergeOutput{
 		{
-			Plan:                store.ProjectMergePlan{From: store.ProjectSummary{ID: source}, To: store.ProjectSummary{ID: destination}},
+			Plan:                protocol.ProjectMergePlan{From: protocol.ProjectSummary{ID: source}, To: protocol.ProjectSummary{ID: destination}},
 			ObservationsUpdated: 1,
 		},
 	}
@@ -165,21 +165,21 @@ func TestPrintProjectsMergeApplyOutputReportsPartialResults(t *testing.T) {
 }
 
 func TestPreferProjectMergeDestinationPrefersUUIDThenActivity(t *testing.T) {
-	uuidProject := store.ProjectSummary{ID: "11111111-2222-3333-4444-555555555555", ObservationCount: 1}
-	legacyProject := store.ProjectSummary{ID: "projects-alpha", ObservationCount: 10}
+	uuidProject := protocol.ProjectSummary{ID: "11111111-2222-3333-4444-555555555555", ObservationCount: 1}
+	legacyProject := protocol.ProjectSummary{ID: "projects-alpha", ObservationCount: 10}
 	if !preferProjectMergeDestination(uuidProject, legacyProject) {
 		t.Fatal("expected UUID project to be preferred")
 	}
 
-	activeProject := store.ProjectSummary{ID: "22222222-3333-4444-5555-666666666666", ObservationCount: 5}
-	lessActiveProject := store.ProjectSummary{ID: "11111111-2222-3333-4444-555555555555", ObservationCount: 1}
+	activeProject := protocol.ProjectSummary{ID: "22222222-3333-4444-5555-666666666666", ObservationCount: 5}
+	lessActiveProject := protocol.ProjectSummary{ID: "11111111-2222-3333-4444-555555555555", ObservationCount: 1}
 	if !preferProjectMergeDestination(activeProject, lessActiveProject) {
 		t.Fatal("expected more active UUID project to be preferred")
 	}
 }
 
 func TestPrintProjectsListUsesRenamedProjectName(t *testing.T) {
-	projects := []store.ProjectSummary{{
+	projects := []protocol.ProjectSummary{{
 		ID:               "alpha",
 		Name:             "Alpha Project",
 		Directory:        "/tmp/alpha",
@@ -202,7 +202,7 @@ func TestPrintProjectsListUsesRenamedProjectName(t *testing.T) {
 }
 
 func TestPrintProjectsListFallsBackToDirectoryForUnrenamedProject(t *testing.T) {
-	projects := []store.ProjectSummary{{
+	projects := []protocol.ProjectSummary{{
 		ID:        "alpha",
 		Name:      "alpha",
 		Directory: "/tmp/alpha",
@@ -224,7 +224,7 @@ func TestProjectsTableCellSanitizesWhitespace(t *testing.T) {
 }
 
 func TestPrintProjectsListSanitizesTableOutput(t *testing.T) {
-	projects := []store.ProjectSummary{{
+	projects := []protocol.ProjectSummary{{
 		ID:               "project\tone",
 		Name:             "Alpha\nProject\t Demo\r\nSuite",
 		ObservationCount: 1,
@@ -246,7 +246,7 @@ func TestPrintProjectsListSanitizesTableOutput(t *testing.T) {
 }
 
 func TestPrintProjectsListJSONPreservesWhitespace(t *testing.T) {
-	project := store.ProjectSummary{
+	project := protocol.ProjectSummary{
 		ID:               "project\tone",
 		Name:             "Alpha\nProject\t Demo\r\nSuite",
 		CreatedAt:        "2026-01-01\n09:00:00",
@@ -258,7 +258,7 @@ func TestPrintProjectsListJSONPreservesWhitespace(t *testing.T) {
 	}
 	var out bytes.Buffer
 
-	if err := printProjectsListJSONTo(&out, []store.ProjectSummary{project}); err != nil {
+	if err := printProjectsListJSONTo(&out, []protocol.ProjectSummary{project}); err != nil {
 		t.Fatalf("print projects json: %v", err)
 	}
 

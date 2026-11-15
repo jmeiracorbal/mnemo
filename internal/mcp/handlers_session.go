@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/internal/store"
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/protocol"
+		"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -24,14 +25,12 @@ func handleSessionSummary(s MemoryBackend, runtime *Runtime) server.ToolHandlerF
 		if err != nil {
 			return mcp.NewToolResultError("No active session: " + err.Error()), nil
 		}
-		provenance := store.MCPProvenance(store.ToolMemSessionSummary)
+		provenance := mcpProvenance("mem_session_summary")
 
-		_, err = s.AddObservation(store.AddObservationParams{
-			SessionID:  sessionID,
-			Type:       "session_summary",
-			Title:      fmt.Sprintf("Session summary: %s", project),
-			Content:    content,
-			Project:    project,
+		_, err = s.Create(ctx, uuid.NewString(), protocol.ObservationCreateInput{
+			SessionID: sessionID, ProjectID: project, Type: "session_summary",
+			Title: fmt.Sprintf("Session summary: %s", project),
+			Content: content,
 			Provenance: provenance,
 		})
 		if err != nil {
@@ -66,12 +65,9 @@ func handleCapturePassive(s MemoryBackend, runtime *Runtime) server.ToolHandlerF
 			source = "mcp-passive"
 		}
 
-		result, err := s.PassiveCapture(store.PassiveCaptureParams{
-			SessionID:  sessionID,
-			Content:    content,
-			Project:    project,
-			Source:     source,
-			Provenance: store.MCPProvenance(store.ToolMemCapturePassive),
+		result, err := s.CapturePassive(ctx, uuid.NewString(), protocol.CapturePassiveInput{
+			SessionID: sessionID, ProjectID: project, Content: content,
+			Source: source, Provenance: mcpProvenance("mem_capture_passive"),
 		})
 		if err != nil {
 			return mcp.NewToolResultError("Passive capture failed: " + err.Error()), nil

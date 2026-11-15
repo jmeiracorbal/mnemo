@@ -62,14 +62,20 @@ func (q *Queries) GetExecutionSessionID(ctx context.Context, arg GetExecutionSes
 }
 
 const getProcessedMCPCommandResult = `-- name: GetProcessedMCPCommandResult :one
-SELECT result_json FROM processed_mcp_commands WHERE id = ?1
+SELECT action, request_hash, result_json FROM processed_mcp_commands WHERE id = ?1
 `
 
-func (q *Queries) GetProcessedMCPCommandResult(ctx context.Context, id string) (string, error) {
+type GetProcessedMCPCommandResultRow struct {
+	Action      string `json:"action"`
+	RequestHash string `json:"request_hash"`
+	ResultJson  string `json:"result_json"`
+}
+
+func (q *Queries) GetProcessedMCPCommandResult(ctx context.Context, id string) (GetProcessedMCPCommandResultRow, error) {
 	row := q.db.QueryRowContext(ctx, getProcessedMCPCommandResult, id)
-	var result_json string
-	err := row.Scan(&result_json)
-	return result_json, err
+	var i GetProcessedMCPCommandResultRow
+	err := row.Scan(&i.Action, &i.RequestHash, &i.ResultJson)
+	return i, err
 }
 
 const insertExecutionSessionIfMissing = `-- name: InsertExecutionSessionIfMissing :exec
@@ -116,17 +122,23 @@ func (q *Queries) InsertProcessedEvent(ctx context.Context, arg InsertProcessedE
 }
 
 const insertProcessedMCPCommand = `-- name: InsertProcessedMCPCommand :exec
-INSERT INTO processed_mcp_commands (id, action, result_json)
-VALUES (?1, ?2, ?3)
+INSERT INTO processed_mcp_commands (id, action, result_json, request_hash)
+VALUES (?1, ?2, ?3, ?4)
 `
 
 type InsertProcessedMCPCommandParams struct {
-	ID         string `json:"id"`
-	Action     string `json:"action"`
-	ResultJson string `json:"result_json"`
+	ID          string `json:"id"`
+	Action      string `json:"action"`
+	ResultJson  string `json:"result_json"`
+	RequestHash string `json:"request_hash"`
 }
 
 func (q *Queries) InsertProcessedMCPCommand(ctx context.Context, arg InsertProcessedMCPCommandParams) error {
-	_, err := q.db.ExecContext(ctx, insertProcessedMCPCommand, arg.ID, arg.Action, arg.ResultJson)
+	_, err := q.db.ExecContext(ctx, insertProcessedMCPCommand,
+		arg.ID,
+		arg.Action,
+		arg.ResultJson,
+		arg.RequestHash,
+	)
 	return err
 }

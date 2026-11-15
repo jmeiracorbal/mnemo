@@ -6,7 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/google/uuid"
+	"github.com/jmeiracorbal/mnemo/protocol"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -15,7 +16,7 @@ func handleListTags(s MemoryBackend) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		project, _ := req.GetArguments()["project"].(string)
 
-		tags, err := s.ListTags(project)
+		tags, err := s.ListTags(ctx, project)
 		if err != nil {
 			return mcp.NewToolResultError("Failed to list tags: " + err.Error()), nil
 		}
@@ -65,7 +66,7 @@ func handleTagStats(s MemoryBackend) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("limit must be >= 0"), nil
 		}
 
-		opts := store.TagStatsOptions{
+		opts := protocol.TagStatsOptions{
 			MinCount: minCount,
 			MaxCount: maxCount,
 			Limit:    limit,
@@ -83,7 +84,7 @@ func handleTagStats(s MemoryBackend) server.ToolHandlerFunc {
 			opts.UnusedSince = t
 		}
 
-		tags, err := s.TagStats(project, opts)
+		tags, err := s.TagStats(ctx, protocol.TagStatsInput{ProjectID: project, Options: opts})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to get tag stats: " + err.Error()), nil
 		}
@@ -119,15 +120,11 @@ func handleMergeTags(s MemoryBackend) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("both 'from' and 'to' are required"), nil
 		}
 		// Normalize to so the output message shows the canonical target form.
-		canonicalTo := store.NormalizeTag(to)
-		if canonicalTo == "" {
-			return mcp.NewToolResultError(fmt.Sprintf("invalid target tag %q: empty after normalization", to)), nil
-		}
-		obsCount, sessCount, err := s.MergeTags(from, to)
+		merged, err := s.MergeTags(ctx, uuid.NewString(), protocol.TagMergeInput{From: from, To: to})
 		if err != nil {
 			return mcp.NewToolResultError("merge failed: " + err.Error()), nil
 		}
-		msg := fmt.Sprintf("Merged %q → %q: %d observation(s), %d session(s) updated.", from, canonicalTo, obsCount, sessCount)
+		msg := fmt.Sprintf("Merged %q → %q: %d observation(s), %d session(s) updated.", from, merged.CanonicalTo, merged.Observations, merged.Sessions)
 		return mcp.NewToolResultText(msg), nil
 	}
 }
@@ -161,7 +158,7 @@ func handleRelatedTags(s MemoryBackend) server.ToolHandlerFunc {
 			return mcp.NewToolResultError("at least one of include_observations or include_sessions must be true"), nil
 		}
 
-		opts := store.RelatedTagsOptions{
+		opts := protocol.TagRelatedOptions{
 			Limit:               limit,
 			MinCooccurrence:     minCooc,
 			IncludeObservations: includeObs,
@@ -178,7 +175,7 @@ func handleRelatedTags(s MemoryBackend) server.ToolHandlerFunc {
 			opts.Since = t
 		}
 
-		related, err := s.RelatedTags(project, tag, opts)
+		related, err := s.RelatedTags(ctx, protocol.TagRelatedInput{ProjectID: project, Tag: tag, Options: opts})
 		if err != nil {
 			return mcp.NewToolResultError("Failed to get related tags: " + err.Error()), nil
 		}
