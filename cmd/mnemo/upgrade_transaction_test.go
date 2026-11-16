@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
-	"github.com/jmeiracorbal/mnemo/internal/db/recovery"
+	dbmigrate "github.com/jmeiracorbal/mnemo/v2/internal/db/migrate"
+	"github.com/jmeiracorbal/mnemo/v2/internal/db/recovery"
 	_ "modernc.org/sqlite"
 )
 

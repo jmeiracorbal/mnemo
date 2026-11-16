@@ -11,7 +11,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/google/uuid"
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 )
 
 type memoriesReviewOptions struct {

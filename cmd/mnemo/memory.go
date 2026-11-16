@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/jmeiracorbal/mnemo/client"
-	"github.com/jmeiracorbal/mnemo/protocol"
-		"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/v2/client"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
+		"github.com/jmeiracorbal/mnemo/v2/internal/store"
 )
 
 // runSearch routes through the controller. It deliberately does not open a

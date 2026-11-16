@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jmeiracorbal/mnemo/client"
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
-	"github.com/jmeiracorbal/mnemo/internal/store"
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/client"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/v2/internal/store"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 )
 
 // invokeNativeMnemoTool is the native agent presentation adapter. It invokes

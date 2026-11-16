@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	"github.com/jmeiracorbal/mnemo/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/v2/internal/events"
+	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
 )
 
 type setupRefreshOptions struct {

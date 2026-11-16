@@ -8,10 +8,10 @@ import (
 	"os"
 	"strings"
 
-	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	"github.com/jmeiracorbal/mnemo/internal/db/recovery"
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	dbmigrate "github.com/jmeiracorbal/mnemo/v2/internal/db/migrate"
+	"github.com/jmeiracorbal/mnemo/v2/internal/events"
+	"github.com/jmeiracorbal/mnemo/v2/internal/db/recovery"
+	"github.com/jmeiracorbal/mnemo/v2/internal/store"
 )
 
 type dbMigrateOptions struct {

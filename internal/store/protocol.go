@@ -7,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/jmeiracorbal/mnemo/protocol"
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
 )
 
 // protocolFailure serializes a typed public error, not an internal RPC error.

@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
 )
 
 const controllerLaunchLabel = "com.jmeiracorbal.mnemo.controller"

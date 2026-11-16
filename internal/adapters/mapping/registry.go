@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
 )
 
 var (

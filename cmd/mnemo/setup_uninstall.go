@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
 )
 
 type setupUninstallOptions struct {

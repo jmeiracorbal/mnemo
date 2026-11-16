@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
+	dbgen "github.com/jmeiracorbal/mnemo/v2/internal/db/generated"
 )
 
 func (s *Store) AddObservation(p AddObservationParams) (int64, error) {

@@ -8,10 +8,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	"github.com/jmeiracorbal/mnemo/internal/procstate"
-	"github.com/jmeiracorbal/mnemo/internal/sessionreaper"
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/v2/internal/events"
+	"github.com/jmeiracorbal/mnemo/v2/internal/procstate"
+	"github.com/jmeiracorbal/mnemo/v2/internal/sessionreaper"
+	"github.com/jmeiracorbal/mnemo/v2/internal/store"
 )
 
 // runController is the installation-owned singleton service. It is never

@@ -3,10 +3,10 @@ package mapping_test
 import (
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
-	_ "github.com/jmeiracorbal/mnemo/internal/adapters/agents/mnemo-opencode"
-	_ "github.com/jmeiracorbal/mnemo/internal/adapters/agents/mnemo-pi"
-	"github.com/jmeiracorbal/mnemo/internal/adapters/mapping"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
+	_ "github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents/mnemo-opencode"
+	_ "github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents/mnemo-pi"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/mapping"
 )
 
 func TestAgentEventMappingsAreUnchanged(t *testing.T) {

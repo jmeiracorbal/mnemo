@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/internal/updatecheck"
+	"github.com/jmeiracorbal/mnemo/v2/internal/updatecheck"
 )
 
 const installScriptURL = "https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh"

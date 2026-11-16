@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	mnemoassets "github.com/jmeiracorbal/mnemo"
+	mnemoassets "github.com/jmeiracorbal/mnemo/v2"
 )
 
 func writeCodexCompactionPrompt(home string) ([]string, error) {

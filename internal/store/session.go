@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
+	dbgen "github.com/jmeiracorbal/mnemo/v2/internal/db/generated"
 	"github.com/google/uuid"
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
 )
 
 // ResolveMCPInstanceSession returns this MCP instance's open session for a

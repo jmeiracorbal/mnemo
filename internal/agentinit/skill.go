@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	mnemoassets "github.com/jmeiracorbal/mnemo"
+	mnemoassets "github.com/jmeiracorbal/mnemo/v2"
 )
 
 // globalSkills are the embedded skills installed under ~/.agents/skills and

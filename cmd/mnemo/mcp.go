@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	mcpserver "github.com/jmeiracorbal/mnemo/internal/mcp"
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/v2/internal/events"
+	mcpserver "github.com/jmeiracorbal/mnemo/v2/internal/mcp"
+	"github.com/jmeiracorbal/mnemo/v2/internal/store"
 	"github.com/mark3labs/mcp-go/server"
 )
 

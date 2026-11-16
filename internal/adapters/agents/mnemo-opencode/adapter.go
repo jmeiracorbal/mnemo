@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
-	"github.com/jmeiracorbal/mnemo/internal/adapters/mapping"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/mapping"
 )
 
 type openCodeAdapter struct{ agents.BaseDirectAdapter }

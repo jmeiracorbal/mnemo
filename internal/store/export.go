@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
+	dbgen "github.com/jmeiracorbal/mnemo/v2/internal/db/generated"
 )
 
 func (s *Store) Export() (*ExportData, error) {

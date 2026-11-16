@@ -7,7 +7,7 @@ import (
 	"time"
 	goevents "github.com/jmeiracorbal/go-events"
 	goeventsnats "github.com/jmeiracorbal/go-events/adapters/nats"
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 	"github.com/nats-io/nats.go"
 )
 

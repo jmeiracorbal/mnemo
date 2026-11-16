@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
-	events "github.com/jmeiracorbal/mnemo/internal/events"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
+	events "github.com/jmeiracorbal/mnemo/v2/internal/events"
 )
 
 func TestEventWireContract(t *testing.T) {

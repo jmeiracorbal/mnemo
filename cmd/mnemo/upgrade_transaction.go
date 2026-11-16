@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"context"
 
-	"github.com/jmeiracorbal/mnemo/internal/db/recovery"
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/v2/internal/db/recovery"
+	"github.com/jmeiracorbal/mnemo/v2/internal/store"
 )
 
 type upgradeTransaction struct {

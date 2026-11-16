@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/jmeiracorbal/mnemo/templates"
+	"github.com/jmeiracorbal/mnemo/v2/templates"
 )
 
 // InstallProjectInstructions writes agent-specific memory authority rules into

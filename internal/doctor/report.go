@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/internal/agentinit"
-	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
+	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
+	dbmigrate "github.com/jmeiracorbal/mnemo/v2/internal/db/migrate"
 )
 
 type Options struct {

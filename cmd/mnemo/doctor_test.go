@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/internal/agentinit"
-	"github.com/jmeiracorbal/mnemo/internal/doctor"
+	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/v2/internal/doctor"
 )
 
 func TestParseDoctorArgs(t *testing.T) {

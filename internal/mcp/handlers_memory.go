@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 		"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )

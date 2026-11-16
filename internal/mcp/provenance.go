@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 )
 
 // Provenance belongs to Mnemo's MCP adapter, not to the store or to a harness.

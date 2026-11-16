@@ -2,7 +2,7 @@
 // thread-safe registry that external integrators extend via Register.
 package mapping
 
-import "github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+import "github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
 
 const LifecycleActionStartSession = "start_session"
 

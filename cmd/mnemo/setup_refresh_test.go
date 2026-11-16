@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
 )
 
 func TestParseSetupRefreshArgs(t *testing.T) {

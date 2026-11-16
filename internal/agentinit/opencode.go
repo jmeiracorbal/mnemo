@@ -3,7 +3,7 @@ package agentinit
 import (
 	"path/filepath"
 
-	"github.com/jmeiracorbal/mnemo/templates"
+	"github.com/jmeiracorbal/mnemo/v2/templates"
 )
 
 func openCodeLabel() string { return "OpenCode" }

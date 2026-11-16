@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/internal/updatecheck"
+	"github.com/jmeiracorbal/mnemo/v2/internal/updatecheck"
 )
 
 func maybeWarnUpdate(args []string) {

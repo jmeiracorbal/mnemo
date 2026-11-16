@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	dbfiles "github.com/jmeiracorbal/mnemo/database"
+	dbfiles "github.com/jmeiracorbal/mnemo/v2/database"
 	_ "modernc.org/sqlite"
 )
 

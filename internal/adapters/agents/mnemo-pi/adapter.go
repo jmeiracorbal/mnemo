@@ -2,8 +2,8 @@
 package mnemo_pi
 
 import (
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
-	"github.com/jmeiracorbal/mnemo/internal/adapters/mapping"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/mapping"
 )
 
 func init() {

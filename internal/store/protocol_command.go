@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
-	"github.com/jmeiracorbal/mnemo/protocol"
+	dbgen "github.com/jmeiracorbal/mnemo/v2/internal/db/generated"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 )
 
 // ApplyCommand executes one durable mnemo/1 mutation and stores the result

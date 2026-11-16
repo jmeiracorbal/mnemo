@@ -3,7 +3,7 @@ package client
 import (
 	"context"
 
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 )
 
 func (c *Client) CreatePrompt(ctx context.Context, requestID string, input protocol.PromptCreateInput) error {
