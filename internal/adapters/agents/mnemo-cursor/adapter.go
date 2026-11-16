@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
 )
 
 type cursorAdapter struct{ agents.BaseJSONAdapter }

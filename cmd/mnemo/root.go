@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/jmeiracorbal/mnemo/internal/agentinit"
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/v2/internal/store"
 	"github.com/spf13/cobra"
 )
 

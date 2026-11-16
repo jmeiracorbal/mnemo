@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/v2/internal/events"
+	dbgen "github.com/jmeiracorbal/mnemo/v2/internal/db/generated"
 )
 
 // BindExecutionSession records the controller-owned session selected by an MCP

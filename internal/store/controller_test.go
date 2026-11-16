@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/internal/adapters/agents"
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	"github.com/jmeiracorbal/mnemo/internal/store"
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
+	"github.com/jmeiracorbal/mnemo/v2/internal/events"
+	"github.com/jmeiracorbal/mnemo/v2/internal/store"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 )
 
 func TestControllerAppliesEventExactlyOnceAfterExecutionBinding(t *testing.T) {
@@ -199,7 +199,11 @@ func TestUpgradeVerificationWithRealSQLiteAndDurableStreams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer memory.Close()
+	t.Cleanup(func() {
+		if err := memory.Close(); err != nil {
+			t.Errorf("close memory store: %v", err)
+		}
+	})
 	cfg := events.Config{Port: freePort(t), DataDir: t.TempDir()}
 	controller, err := events.NewController(cfg, memory)
 	if err != nil {

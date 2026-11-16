@@ -1,7 +1,7 @@
 // Package mnemo_claude registers the Claude Code agent adapter.
 package mnemo_claude
 
-import "github.com/jmeiracorbal/mnemo/internal/adapters/agents"
+import "github.com/jmeiracorbal/mnemo/v2/internal/adapters/agents"
 
 type claudeAdapter struct{ agents.BaseJSONAdapter }
 

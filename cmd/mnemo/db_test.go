@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
+	dbmigrate "github.com/jmeiracorbal/mnemo/v2/internal/db/migrate"
 )
 
 func TestParseDBMigrateArgs(t *testing.T) {

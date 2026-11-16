@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/v2/internal/store"
 )
 
 func TestEnsureControllerServiceRestartsOnlyWhenNeeded(t *testing.T) {

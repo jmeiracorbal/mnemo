@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
 )
 
 func TestIsSetupAgentAlias(t *testing.T) {

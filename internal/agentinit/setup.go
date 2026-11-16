@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	mnemoassets "github.com/jmeiracorbal/mnemo"
-	"github.com/jmeiracorbal/mnemo/internal/jsonmerge"
+	mnemoassets "github.com/jmeiracorbal/mnemo/v2"
+	"github.com/jmeiracorbal/mnemo/v2/internal/jsonmerge"
 )
 
 // ConfigSnippet is a file fragment to print or apply during setup.

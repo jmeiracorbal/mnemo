@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
-	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
+	dbgen "github.com/jmeiracorbal/mnemo/v2/internal/db/generated"
+	dbmigrate "github.com/jmeiracorbal/mnemo/v2/internal/db/migrate"
 	_ "modernc.org/sqlite"
 )
 

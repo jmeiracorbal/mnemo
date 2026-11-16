@@ -6,7 +6,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/jmeiracorbal/mnemo/internal/jsonmerge"
+	"github.com/jmeiracorbal/mnemo/v2/internal/jsonmerge"
 )
 
 // runJSON reads JSON from stdin and extracts a value by key path.

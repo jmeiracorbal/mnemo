@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	dbmigrate "github.com/jmeiracorbal/mnemo/internal/db/migrate"
+	dbmigrate "github.com/jmeiracorbal/mnemo/v2/internal/db/migrate"
 )
 
 func TestCheckStoreReadOnlyUsesMigratedDatabase(t *testing.T) {

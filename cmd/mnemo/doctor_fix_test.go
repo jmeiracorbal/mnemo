@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/internal/doctor"
+	"github.com/jmeiracorbal/mnemo/v2/internal/doctor"
 )
 
 // installFakeCLI puts an executable named name on PATH that runs script.

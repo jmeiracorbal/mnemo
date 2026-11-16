@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/internal/updatecheck"
+	"github.com/jmeiracorbal/mnemo/v2/internal/updatecheck"
 )
 
 func TestRunUpdateCommandCheckJSONDoesNotInstall(t *testing.T) {

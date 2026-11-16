@@ -3,7 +3,7 @@ package mcp
 import (
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/internal/store"
+	"github.com/jmeiracorbal/mnemo/v2/internal/store"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 

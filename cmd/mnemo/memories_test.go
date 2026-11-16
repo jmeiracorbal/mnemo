@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 )
 
 func TestParseMemoriesConsolidateTopicRequiresSafetyFlag(t *testing.T) {

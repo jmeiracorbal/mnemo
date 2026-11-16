@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/templates"
+	"github.com/jmeiracorbal/mnemo/v2/templates"
 )
 
 func codexLabel() string { return "Codex" }

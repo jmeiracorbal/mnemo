@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	dbgen "github.com/jmeiracorbal/mnemo/internal/db/generated"
+	dbgen "github.com/jmeiracorbal/mnemo/v2/internal/db/generated"
 )
 
 var tagAliases = map[string]string{

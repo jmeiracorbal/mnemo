@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 )
 
 func TestParseProjectsListArgsDefaults(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jmeiracorbal/mnemo/internal/agentinit"
+	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
 )
 
 // runTrack explicitly opts an initialized Git project into tracking its .mnemo marker.

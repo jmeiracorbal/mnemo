@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jmeiracorbal/mnemo/client"
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/client"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 )
 
 type projectsListOptions struct {

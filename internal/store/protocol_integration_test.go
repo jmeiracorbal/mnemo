@@ -12,10 +12,10 @@ import (
 
 	goevents "github.com/jmeiracorbal/go-events"
 	goeventsnats "github.com/jmeiracorbal/go-events/adapters/nats"
-	"github.com/jmeiracorbal/mnemo/client"
-	"github.com/jmeiracorbal/mnemo/internal/events"
-	"github.com/jmeiracorbal/mnemo/internal/store"
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/client"
+	"github.com/jmeiracorbal/mnemo/v2/internal/events"
+	"github.com/jmeiracorbal/mnemo/v2/internal/store"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 	"github.com/nats-io/nats.go"
 )
 

@@ -1,4 +1,4 @@
-module github.com/jmeiracorbal/mnemo
+module github.com/jmeiracorbal/mnemo/v2
 
 go 1.26.11
 

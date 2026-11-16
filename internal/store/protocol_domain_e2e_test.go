@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmeiracorbal/mnemo/protocol"
+	"github.com/jmeiracorbal/mnemo/v2/protocol"
 )
 
 func TestPublicProjectPlanningAndMerge(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jmeiracorbal/mnemo/templates"
+	"github.com/jmeiracorbal/mnemo/v2/templates"
 )
 
 func cursorLabel() string { return "Cursor" }
