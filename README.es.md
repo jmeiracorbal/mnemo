@@ -84,7 +84,7 @@ Luego en tu agente: `mem_save` una decisión, cierra la sesión, abre otra — `
 mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ```
 
-El instalador y `mnemo update` siguen la última versión estable publicada (`v1.0.1`). Usa `mnemo update --check` para comprobar si hay una actualización sin instalarla; añade `--json` para obtener el resultado en JSON. `mnemo update` permite revisar y confirmar la instalación. Usa `mnemo update --prerelease` únicamente para optar por versiones preliminares. Consulta [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) para más información sobre actualizaciones y configuración por agente.
+El instalador y `mnemo update` siguen la última versión estable publicada (`v2.0.0`). Usa `mnemo update --check` para comprobar si hay una actualización sin instalarla; añade `--json` para obtener el resultado en JSON. `mnemo update` permite revisar y confirmar la instalación. Usa `mnemo update --prerelease` únicamente para optar por versiones preliminares. Consulta [Installation](https://github.com/jmeiracorbal/mnemo/wiki/Installation) para más información sobre actualizaciones y configuración por agente.
 
 <a id="como-funciona"></a>
 
@@ -147,7 +147,7 @@ Los adaptadores de agentes y el controlador de eventos persistentes forman parte
 
 | Vía | Comando |
 |---|---|
-| Estable fijada (`v1.0.1`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v1.0.1 bash</code> |
+| Estable fijada (`v2.0.0`) | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; MNEMO_VERSION=v2.0.0 bash</code> |
 | Última estable | <code>curl -sSf https://raw.githubusercontent.com/jmeiracorbal/mnemo/main/install.sh &#124; bash</code> |
 | Un agente | `bash -s -- --agent=codex` |
 | Todos los agentes | `bash -s -- --agent=all` |
