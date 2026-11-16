@@ -199,7 +199,11 @@ func TestUpgradeVerificationWithRealSQLiteAndDurableStreams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer memory.Close()
+	t.Cleanup(func() {
+		if err := memory.Close(); err != nil {
+			t.Errorf("close memory store: %v", err)
+		}
+	})
 	cfg := events.Config{Port: freePort(t), DataDir: t.TempDir()}
 	controller, err := events.NewController(cfg, memory)
 	if err != nil {
