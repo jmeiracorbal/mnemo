@@ -21,9 +21,9 @@ const markerName = ".mnemo"
 // Fixed forever — changing this would invalidate all existing project IDs.
 var mnemoNamespace = uuid.MustParse("6f3e4b2a-1c5d-4e7f-8a9b-0c1d2e3f4a5b")
 
-// ProjectUUIDFromPath returns the deterministic UUID v5 for an absolute project path.
-// Same path always produces the same UUID. Used by both init and migrate.
-// Panics if absPath is not absolute to prevent non-deterministic IDs.
+// ProjectUUIDFromPath preserves the legacy UUID v5 derivation for migrations.
+// New projects use random UUIDs; existing legacy identities must remain stable.
+// Panics if absPath is not absolute to prevent non-deterministic migration IDs.
 func ProjectUUIDFromPath(absPath string) string {
 	if !filepath.IsAbs(absPath) {
 		panic("ProjectUUIDFromPath: path must be absolute, got: " + absPath)
