@@ -76,8 +76,8 @@ func writeMarker(root string, m *Marker) error {
 	return os.WriteFile(filepath.Join(root, markerName), append(data, '\n'), 0644)
 }
 
-// EnsureProjectID returns the project UUID from .mnemo. If not set, derives it
-// deterministically from the absolute path, persists it, and returns it.
+// EnsureProjectID returns the project UUID from .mnemo. If not set, creates
+// a random UUID v4 once, persists it, and returns it. Existing IDs are preserved.
 func EnsureProjectID(root string) (string, error) {
 	m, err := readMarker(root)
 	if err != nil {
@@ -86,11 +86,11 @@ func EnsureProjectID(root string) (string, error) {
 	if m.ID != "" {
 		return m.ID, nil
 	}
-	abs, err := filepath.Abs(root)
+	id, err := uuid.NewRandom()
 	if err != nil {
-		return "", fmt.Errorf("resolve path: %w", err)
+		return "", fmt.Errorf("generate project UUID: %w", err)
 	}
-	m.ID = ProjectUUIDFromPath(abs)
+	m.ID = id.String()
 	if err := writeMarker(root, m); err != nil {
 		return "", fmt.Errorf("write project ID to .mnemo: %w", err)
 	}

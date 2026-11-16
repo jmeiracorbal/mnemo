@@ -33,7 +33,6 @@ func newRootCommand() *cobra.Command {
 		command("export [file]", "Export all memories to JSON", runExport),
 		command("import <file.json>", "Import memories from JSON", runImport),
 		command("init [--agent=AGENT] [--path=DIR] [--no-project-rules]", "Activate mnemo in the current project", runInit),
-		command("track [--path=DIR]", "Track the existing .mnemo marker in Git (explicit)", runTrack),
 		command("migrate", "Migrate project identity", runMigrateProjects),
 		command("mcp", "Start MCP server (stdio)", runMCP),
 		command("projects", "Manage known projects", runProjects),

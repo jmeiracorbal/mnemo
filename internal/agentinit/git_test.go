@@ -15,13 +15,6 @@ func gitRun(t *testing.T, root string, args ...string) (string, error) {
 	return string(out), err
 }
 
-func writeMarkerForTest(t *testing.T, root string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(root, ".mnemo"), []byte(`{"version":1,"id":"stable-uuid","agents":["codex"]}`), 0644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func gitRepoForTest(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -31,164 +24,72 @@ func gitRepoForTest(t *testing.T) string {
 	return root
 }
 
-func TestEnsureMarkerTrackedOutsideGitFailsWithoutCreatingGitignore(t *testing.T) {
-	root := t.TempDir()
-	writeMarkerForTest(t, root)
-	if err := EnsureMarkerTracked(root); err == nil || !strings.Contains(err.Error(), "not a Git repository") {
-		t.Fatalf("expected non-Git error, got %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(root, ".gitignore")); !os.IsNotExist(err) {
-		t.Fatalf("unexpected .gitignore: %v", err)
-	}
-}
-
-func TestEnsureMarkerTrackedRemovesLegacyIgnoreAndStagesMarker(t *testing.T) {
-	for _, ignore := range []string{".mnemo", "/.mnemo"} {
-		t.Run(ignore, func(t *testing.T) {
-			root := gitRepoForTest(t)
-			writeMarkerForTest(t, root)
-			original := "# project\n*.log\n" + ignore + "\n.keep\n"
-			if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(original), 0644); err != nil {
-				t.Fatal(err)
-			}
-			for attempt := 0; attempt < 2; attempt++ {
-				if err := EnsureMarkerTracked(root); err != nil {
-					t.Fatalf("attempt %d: %v", attempt, err)
-				}
-			}
-			data, err := os.ReadFile(filepath.Join(root, ".gitignore"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got, want := string(data), "# project\n*.log\n.keep\n"; got != want {
-				t.Fatalf("unexpected ignore file: %q want %q", got, want)
-			}
-			if out, err := gitRun(t, root, "ls-files", "--error-unmatch", "--", ".mnemo"); err != nil {
-				t.Fatalf("marker not tracked: %s %v", out, err)
-			}
-			if out, err := gitRun(t, root, "diff", "--cached", "--name-only"); err != nil || strings.TrimSpace(out) != ".mnemo" {
-				t.Fatalf("unexpected staging: %q %v", out, err)
-			}
-		})
-	}
-}
-
-func TestEnsureMarkerTrackedStagesNewFileWithoutCreatingGitignore(t *testing.T) {
+func TestEnsureMarkerIgnoredIsIdempotentAndPreservesOtherRules(t *testing.T) {
 	root := gitRepoForTest(t)
-	writeMarkerForTest(t, root)
-	if err := EnsureMarkerTracked(root); err != nil {
+	original := "# keep\n.env\n!.mnemo\n"
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(original), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".gitignore")); !os.IsNotExist(err) {
-		t.Fatalf("unexpected .gitignore: %v", err)
-	}
-	if out, err := gitRun(t, root, "ls-files", "--error-unmatch", "--", ".mnemo"); err != nil {
-		t.Fatalf("marker not tracked: %s %v", out, err)
-	}
-}
-
-func TestEnsureMarkerTrackedDoesNotRestageAnExistingMarker(t *testing.T) {
-	root := gitRepoForTest(t)
-	writeMarkerForTest(t, root)
-	if out, err := gitRun(t, root, "add", "--", ".mnemo"); err != nil {
-		t.Fatalf("initial add: %s %v", out, err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".mnemo\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".mnemo"), []byte(`{"version":1,"id":"stable-uuid","agents":["cursor"]}`), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := EnsureMarkerTracked(root); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := gitRun(t, root, "diff", "--", ".mnemo"); err != nil || !strings.Contains(out, "cursor") {
-		t.Fatalf("existing marker was unexpectedly restaged: %s %v", out, err)
-	}
-}
-
-func TestEnsureMarkerTrackedRejectsOtherIgnoreSources(t *testing.T) {
-	root := gitRepoForTest(t)
-	writeMarkerForTest(t, root)
-	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".mnemo\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".git", "info", "exclude"), []byte(".mnemo\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	err := EnsureMarkerTracked(root)
-	if err == nil || !strings.Contains(err.Error(), "still excluded") {
-		t.Fatalf("expected other ignore source error, got %v", err)
-	}
-	if out, err := gitRun(t, root, "ls-files", "--error-unmatch", "--", ".mnemo"); err == nil {
-		t.Fatalf("marker should not have been staged: %s", out)
-	}
-	ignore, err := os.ReadFile(filepath.Join(root, ".gitignore"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(ignore) != ".mnemo\n" {
-		t.Fatalf("ignore file changed despite error: %q", ignore)
-	}
-}
-
-func TestEnsureMarkerTrackedRestoresGitignoreWhenStagingFails(t *testing.T) {
-	root := gitRepoForTest(t)
-	writeMarkerForTest(t, root)
-	original := "# keep\n.mnemo\n.env\n"
-	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(original), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, ".git", "index.lock"), []byte("locked"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := EnsureMarkerTracked(root); err == nil || !strings.Contains(err.Error(), "stage .mnemo") {
-		t.Fatalf("expected staging error, got %v", err)
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := EnsureMarkerIgnored(root); err != nil {
+			t.Fatalf("attempt %d: %v", attempt, err)
+		}
 	}
 	got, err := os.ReadFile(filepath.Join(root, ".gitignore"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != original {
-		t.Fatalf("ignore changed on staging failure: got %q, want %q", got, original)
+	want := original + "/.mnemo\n"
+	if string(got) != want {
+		t.Fatalf("unexpected ignore contents: %q want %q", got, want)
+	}
+	info, err := os.Stat(filepath.Join(root, ".gitignore"))
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("permissions changed: %v %v", info, err)
+	}
+	if out, err := gitRun(t, root, "check-ignore", "-q", "--", ".mnemo"); err != nil {
+		t.Fatalf("marker is not excluded: %s %v", out, err)
+	}
+	if out, err := gitRun(t, root, "ls-files", "--", ".mnemo"); err != nil || strings.TrimSpace(out) != "" {
+		t.Fatalf("marker unexpectedly staged: %s %v", out, err)
 	}
 }
 
-func TestRemoveMarkerIgnoreRulePreservesUnrelatedPatterns(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".gitignore")
-	original := "other/.mnemo\r\n!.mnemo\r\n# .mnemo\r\n/.mnemo\r\n*.log"
-	if err := os.WriteFile(path, []byte(original), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := removeMarkerIgnoreRule(path); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := string(data), "other/.mnemo\r\n!.mnemo\r\n# .mnemo\r\n*.log"; got != want {
-		t.Fatalf("unexpected content: %q want %q", got, want)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0600 {
-		t.Fatalf("unexpected permissions: %s", info.Mode())
-	}
-}
-
-func TestEnsureMarkerTrackedHonorsNegatedIgnoreRule(t *testing.T) {
+func TestEnsureMarkerIgnoredCreatesRuleOnlyInGit(t *testing.T) {
 	root := gitRepoForTest(t)
-	writeMarkerForTest(t, root)
-	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("!.mnemo\n"), 0644); err != nil {
+	if err := EnsureMarkerIgnored(root); err != nil {
 		t.Fatal(err)
 	}
-	if err := EnsureMarkerTracked(root); err != nil {
+	got, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if err != nil || string(got) != "/.mnemo\n" {
+		t.Fatalf("unexpected ignore file: %q %v", got, err)
+	}
+	withoutGit := t.TempDir()
+	if err := EnsureMarkerIgnored(withoutGit); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(withoutGit, ".gitignore")); !os.IsNotExist(err) {
+		t.Fatalf("non-Git directory received ignore file: %v", err)
+	}
+}
+
+func TestEnsureMarkerIgnoredRejectsAlreadyTrackedMarkerWithoutChangingFiles(t *testing.T) {
+	root := gitRepoForTest(t)
+	path := filepath.Join(root, ".mnemo")
+	if err := os.WriteFile(path, []byte("existing marker\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := gitRun(t, root, "add", "--", ".mnemo"); err != nil {
+		t.Fatalf("git add: %s %v", out, err)
+	}
+	err := EnsureMarkerIgnored(root)
+	if err == nil || !strings.Contains(err.Error(), "git rm --cached") {
+		t.Fatalf("tracked marker must fail explicitly: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".gitignore")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected .gitignore modification: %v", err)
 	}
 	if out, err := gitRun(t, root, "ls-files", "--error-unmatch", "--", ".mnemo"); err != nil {
-		t.Fatalf("marker not tracked: %s %v", out, err)
+		t.Fatalf("tracked marker was removed from index: %s %v", out, err)
 	}
 }

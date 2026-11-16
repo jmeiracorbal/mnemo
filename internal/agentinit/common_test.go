@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestAppendSectionCreatesAndUpdatesManagedBlock(t *testing.T) {
@@ -170,5 +172,45 @@ func TestProjectIDForMigrationRejectsMalformedMarker(t *testing.T) {
 	}
 	if _, err := ProjectIDForMigration(root); err == nil {
 		t.Fatal("expected malformed marker error")
+	}
+}
+
+func TestEnsureProjectIDGeneratesRandomStableUUID(t *testing.T) {
+	root := t.TempDir()
+	first, err := EnsureProjectID(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := uuid.Parse(first)
+	if err != nil || parsed.Version() != uuid.Version(4) {
+		t.Fatalf("project id must be random UUID v4: %q %v", first, err)
+	}
+	again, err := EnsureProjectID(root)
+	if err != nil || again != first {
+		t.Fatalf("existing project id changed: %q -> %q (%v)", first, again, err)
+	}
+	another, err := EnsureProjectID(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if another == first {
+		t.Fatal("independent projects received the same id")
+	}
+}
+
+func TestEnsureProjectIDPreservesExistingValue(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, ".mnemo")
+	content := "{\"version\":1,\"id\":\"00000000-0000-5000-8000-000000000001\",\"agents\":[\"codex\"]}\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := EnsureProjectID(root)
+	if err != nil || got != "00000000-0000-5000-8000-000000000001" {
+		t.Fatalf("existing id was not preserved: %s %v", got, err)
+	}
+	actual, err := os.ReadFile(path)
+	if err != nil || string(actual) != content {
+		t.Fatalf("marker was unexpectedly rewritten: %q %v", actual, err)
 	}
 }
