@@ -1,15 +1,18 @@
 package doctor
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
 	dbmigrate "github.com/jmeiracorbal/mnemo/v2/internal/db/migrate"
+	"github.com/jmeiracorbal/mnemo/v2/internal/events"
 )
 
 type Options struct {
@@ -112,6 +115,7 @@ func BuildReport(opts Options) Report {
 	}
 	if opts.DataDir != "" {
 		report.addCheck(checkStoreReadOnly(opts.DataDir))
+		report.addCheck(checkControllerHealth(opts.DataDir, opts.Agent))
 	}
 
 	report.finalize()
@@ -219,6 +223,32 @@ func checkStoreReadOnly(dataDir string) Check {
 	default:
 		return Check{ID: "store", Status: "error", Severity: "error", Message: status.Message, Path: status.DBPath, Details: details}
 	}
+}
+
+func checkControllerHealth(dataDir, agent string) Check {
+	configPath := filepath.Join(dataDir, "config.toml")
+	cfg, err := events.LoadConfig(dataDir)
+	if err != nil {
+		check := errorCheck("controller", "load controller configuration: "+err.Error(), configPath)
+		check.Fix = controllerHealthFix(agent)
+		return check
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := events.CheckHealth(ctx, cfg); err != nil {
+		check := errorCheck("controller", "Mnemo controller is unavailable: "+err.Error(), cfg.URL())
+		check.Fix = controllerHealthFix(agent)
+		return check
+	}
+	return okCheck("controller", "Mnemo controller and JetStream are reachable", cfg.URL())
+}
+
+func controllerHealthFix(agent string) string {
+	if agent == "" || agent == "all" {
+		return "mnemo doctor --fix"
+	}
+	return "mnemo doctor --fix --agent=" + agent
 }
 
 func pendingVersions(pending []dbmigrate.Migration) []string {
