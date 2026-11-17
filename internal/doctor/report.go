@@ -115,7 +115,9 @@ func BuildReport(opts Options) Report {
 	}
 	if opts.DataDir != "" {
 		report.addCheck(checkStoreReadOnly(opts.DataDir))
-		report.addCheck(checkControllerHealth(opts.DataDir, opts.Agent))
+		if isManagedControllerDataDir(home, opts.DataDir) {
+			report.addCheck(checkControllerHealth(opts.DataDir, opts.Agent))
+		}
 	}
 
 	report.finalize()
@@ -249,6 +251,22 @@ func controllerHealthFix(agent string) string {
 		return "mnemo doctor --fix"
 	}
 	return "mnemo doctor --fix --agent=" + agent
+}
+
+func isManagedControllerDataDir(home, dataDir string) bool {
+	actualHome, err := os.UserHomeDir()
+	if err != nil || filepath.Clean(home) != filepath.Clean(actualHome) {
+		return false
+	}
+	managedDataDir, err := filepath.Abs(filepath.Join(actualHome, ".mnemo"))
+	if err != nil {
+		return false
+	}
+	configuredDataDir, err := filepath.Abs(dataDir)
+	if err != nil {
+		return false
+	}
+	return filepath.Clean(managedDataDir) == filepath.Clean(configuredDataDir)
 }
 
 func pendingVersions(pending []dbmigrate.Migration) []string {
