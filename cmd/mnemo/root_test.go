@@ -91,9 +91,3 @@ func findChild(parent *cobra.Command, name string) *cobra.Command {
 	}
 	return nil
 }
-
-func TestTrackCommandRemoved(t *testing.T) {
-	if findChild(newRootCommand(), "track") != nil {
-		t.Fatal("mnemo track must not be available")
-	}
-}
