@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://jmeiracorbal.github.io/mnemo/">
-    <img src="assets/brand/mnemo-banner.png" alt="mnemo — 面向 AI 编程代理的持久化记忆" width="920">
+    <img src="../assets/brand/mnemo-banner.png" alt="mnemo — 面向 AI 编程代理的持久化记忆" width="920">
   </a>
 </p>
 
@@ -9,13 +9,13 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> ·
+  <a href="../README.md">English</a> ·
   <a href="README.es.md">Español</a> ·
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="许可证" src="https://img.shields.io/badge/license-Apache%202.0-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
+  <a href="../LICENSE"><img alt="许可证" src="https://img.shields.io/badge/license-Apache%202.0-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://github.com/jmeiracorbal/mnemo/releases"><img alt="Release" src="https://img.shields.io/github/v/release/jmeiracorbal/mnemo?label=release&labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://github.com/jmeiracorbal/mnemo/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/jmeiracorbal/mnemo?style=flat&labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://go.dev"><img alt="Go" src="https://img.shields.io/badge/go-1.26-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
@@ -38,11 +38,11 @@
   <a href="#支持的代理">代理</a> ·
   <a href="#文档">文档</a> ·
   <a href="#社区">社区</a> ·
-  <a href="ROADMAP.md">路线图</a>
+  <a href="../ROADMAP.md">路线图</a>
 </p>
 
 <p align="center">
-  <img src="assets/brand/mnemo-terminal.png" alt="mnemo 终端演示" width="920">
+  <img src="../assets/brand/mnemo-terminal.png" alt="mnemo 终端演示" width="920">
 </p>
 
 ---
@@ -85,7 +85,7 @@ mnemo search "SQLite" --project "$(mnemo json id < .mnemo)"
 ## 工作原理
 
 <p align="center">
-  <img src="assets/brand/mnemo-flow.png" alt="代理 → mnemo → 本地 SQLite 记忆" width="920">
+  <img src="../assets/brand/mnemo-flow.png" alt="代理 → mnemo → 本地 SQLite 记忆" width="920">
 </p>
 
 1. **代理** 通过 MCP 工具、hooks 和可移植 Agent Skills 与 mnemo 交互。
@@ -160,7 +160,7 @@ Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否�
 | [CLI 参考](https://github.com/jmeiracorbal/mnemo/wiki/CLI-Reference) | 命令、MCP 工具、搜索模式 |
 | [故障排查](https://github.com/jmeiracorbal/mnemo/wiki/Troubleshooting) | 诊断与控制器恢复 |
 | [存储](https://github.com/jmeiracorbal/mnemo/wiki/Storage-and-Migrations) | SQLite、迁移、sqlc |
-| [路线图](ROADMAP.md) | 计划中的产品与维护工作 |
+| [路线图](../ROADMAP.md) | 计划中的产品与维护工作 |
 
 ## 设计原则
 
@@ -174,11 +174,11 @@ Claude Code 会在设置了 `CLAUDE_CONFIG_DIR` 时使用该配置目录，否�
 
 如果 mnemo 改善了你的代理工作流，欢迎给仓库点 Star —— 这表示本地、代理中立的记忆值得继续建设。
 
-- [Contributing](CONTRIBUTING.md) — 构建、测试与提交 PR
-- [Code of Conduct](CODE_OF_CONDUCT.md) — 社区行为准则
-- [Security](SECURITY.md) — 私密漏洞报告
-- [Site](https://jmeiracorbal.github.io/mnemo/) · [Wiki](https://github.com/jmeiracorbal/mnemo/wiki) · [Roadmap](ROADMAP.md)
+- [Contributing](../CONTRIBUTING.md) — 构建、测试与提交 PR
+- [Code of Conduct](../CODE_OF_CONDUCT.md) — 社区行为准则
+- [Security](../SECURITY.md) — 私密漏洞报告
+- [Site](https://jmeiracorbal.github.io/mnemo/) · [Wiki](https://github.com/jmeiracorbal/mnemo/wiki) · [Roadmap](../ROADMAP.md)
 
 ## 许可证
 
-[Apache 2.0](LICENSE)：你可以自由使用、修改和分发，但必须保留版权声明，并在所有分发中包含 [NOTICE](NOTICE) 文件。
+[Apache 2.0](../LICENSE)：你可以自由使用、修改和分发，但必须保留版权声明，并在所有分发中包含 [NOTICE](../NOTICE) 文件。

@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://jmeiracorbal.github.io/mnemo/">
-    <img src="assets/brand/mnemo-banner.png" alt="mnemo — memoria persistente para agentes de programación" width="920">
+    <img src="../assets/brand/mnemo-banner.png" alt="mnemo — memoria persistente para agentes de programación" width="920">
   </a>
 </p>
 
@@ -9,13 +9,13 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> ·
+  <a href="../README.md">English</a> ·
   <a href="README.es.md">Español</a> ·
   <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="Licencia" src="https://img.shields.io/badge/license-Apache%202.0-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
+  <a href="../LICENSE"><img alt="Licencia" src="https://img.shields.io/badge/license-Apache%202.0-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://github.com/jmeiracorbal/mnemo/releases"><img alt="Release" src="https://img.shields.io/github/v/release/jmeiracorbal/mnemo?label=release&labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://github.com/jmeiracorbal/mnemo/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/jmeiracorbal/mnemo?style=flat&labelColor=e2eaf2&color=0f1f38"></a>
   <a href="https://go.dev"><img alt="Go" src="https://img.shields.io/badge/go-1.26-0f1f38?labelColor=e2eaf2&color=0f1f38"></a>
@@ -38,11 +38,11 @@
   <a href="#agentes-soportados">Agentes</a> ·
   <a href="#documentacion">Documentación</a> ·
   <a href="#comunidad">Comunidad</a> ·
-  <a href="ROADMAP.md">Roadmap</a>
+  <a href="../ROADMAP.md">Roadmap</a>
 </p>
 
 <p align="center">
-  <img src="assets/brand/mnemo-terminal.png" alt="demo de terminal de mnemo" width="920">
+  <img src="../assets/brand/mnemo-terminal.png" alt="demo de terminal de mnemo" width="920">
 </p>
 
 ---
@@ -91,7 +91,7 @@ El instalador y `mnemo update` siguen la última versión estable publicada (`v2
 ## Cómo funciona
 
 <p align="center">
-  <img src="assets/brand/mnemo-flow.png" alt="agentes → mnemo → memoria SQLite local" width="920">
+  <img src="../assets/brand/mnemo-flow.png" alt="agentes → mnemo → memoria SQLite local" width="920">
 </p>
 
 1. **Los agentes** hablan con mnemo mediante herramientas MCP, hooks y Agent Skills portables.
@@ -170,7 +170,7 @@ Flags de update y desinstalación: [Installation](https://github.com/jmeiracorba
 | [Referencia CLI](https://github.com/jmeiracorbal/mnemo/wiki/CLI-Reference) | Comandos, MCP tools, modos de búsqueda |
 | [Diagnóstico](https://github.com/jmeiracorbal/mnemo/wiki/Troubleshooting) | Diagnósticos y recuperación del controller |
 | [Almacenamiento](https://github.com/jmeiracorbal/mnemo/wiki/Storage-and-Migrations) | SQLite, migraciones, sqlc |
-| [Roadmap](ROADMAP.md) | Trabajo planificado de producto y mantenimiento |
+| [Roadmap](../ROADMAP.md) | Trabajo planificado de producto y mantenimiento |
 
 ## Principios de diseño
 
@@ -186,11 +186,11 @@ Flags de update y desinstalación: [Installation](https://github.com/jmeiracorba
 
 Si mnemo mejora tu flujo con agentes, dale una estrella al repo: señala que la memoria local y neutra entre agentes merece construirse.
 
-- [Contributing](CONTRIBUTING.md) — build, tests y PRs
-- [Code of Conduct](CODE_OF_CONDUCT.md) — normas de la comunidad
-- [Security](SECURITY.md) — reporte privado de vulnerabilidades
-- [Site](https://jmeiracorbal.github.io/mnemo/) · [Wiki](https://github.com/jmeiracorbal/mnemo/wiki) · [Roadmap](ROADMAP.md)
+- [Contributing](../CONTRIBUTING.md) — build, tests y PRs
+- [Code of Conduct](../CODE_OF_CONDUCT.md) — normas de la comunidad
+- [Security](../SECURITY.md) — reporte privado de vulnerabilidades
+- [Site](https://jmeiracorbal.github.io/mnemo/) · [Wiki](https://github.com/jmeiracorbal/mnemo/wiki) · [Roadmap](../ROADMAP.md)
 
 ## Licencia
 
-[Apache 2.0](LICENSE): puedes usar, modificar y distribuir libremente; conserva el aviso de copyright e incluye [NOTICE](NOTICE) en las distribuciones.
+[Apache 2.0](../LICENSE): puedes usar, modificar y distribuir libremente; conserva el aviso de copyright e incluye [NOTICE](../NOTICE) en las distribuciones.

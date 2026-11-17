@@ -2,7 +2,8 @@
 
 Thanks for helping improve mnemo. This project ships a Go binary and agent
 integrations (hooks, MCP, skills). Keep changes small, verifiable, and aligned
-with the core invariants in [`AGENTS.md`](AGENTS.md).
+with the core invariants in
+[`docs/maintainers/project-invariants.md`](docs/maintainers/project-invariants.md).
 
 ## Before you start
 
