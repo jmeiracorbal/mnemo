@@ -1,15 +1,18 @@
 package doctor
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jmeiracorbal/mnemo/v2/internal/agentinit"
 	dbmigrate "github.com/jmeiracorbal/mnemo/v2/internal/db/migrate"
+	"github.com/jmeiracorbal/mnemo/v2/internal/events"
 )
 
 type Options struct {
@@ -112,6 +115,9 @@ func BuildReport(opts Options) Report {
 	}
 	if opts.DataDir != "" {
 		report.addCheck(checkStoreReadOnly(opts.DataDir))
+		if isManagedControllerDataDir(home, opts.DataDir) {
+			report.addCheck(checkControllerHealth(opts.DataDir, opts.Agent))
+		}
 	}
 
 	report.finalize()
@@ -219,6 +225,48 @@ func checkStoreReadOnly(dataDir string) Check {
 	default:
 		return Check{ID: "store", Status: "error", Severity: "error", Message: status.Message, Path: status.DBPath, Details: details}
 	}
+}
+
+func checkControllerHealth(dataDir, agent string) Check {
+	configPath := filepath.Join(dataDir, "config.toml")
+	cfg, err := events.LoadConfig(dataDir)
+	if err != nil {
+		check := errorCheck("controller", "load controller configuration: "+err.Error(), configPath)
+		check.Fix = controllerHealthFix(agent)
+		return check
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := events.CheckHealth(ctx, cfg); err != nil {
+		check := errorCheck("controller", "Mnemo controller is unavailable: "+err.Error(), cfg.URL())
+		check.Fix = controllerHealthFix(agent)
+		return check
+	}
+	return okCheck("controller", "Mnemo controller and JetStream are reachable", cfg.URL())
+}
+
+func controllerHealthFix(agent string) string {
+	if agent == "" || agent == "all" {
+		return "mnemo doctor --fix"
+	}
+	return "mnemo doctor --fix --agent=" + agent
+}
+
+func isManagedControllerDataDir(home, dataDir string) bool {
+	actualHome, err := os.UserHomeDir()
+	if err != nil || filepath.Clean(home) != filepath.Clean(actualHome) {
+		return false
+	}
+	managedDataDir, err := filepath.Abs(filepath.Join(actualHome, ".mnemo"))
+	if err != nil {
+		return false
+	}
+	configuredDataDir, err := filepath.Abs(dataDir)
+	if err != nil {
+		return false
+	}
+	return filepath.Clean(managedDataDir) == filepath.Clean(configuredDataDir)
 }
 
 func pendingVersions(pending []dbmigrate.Migration) []string {

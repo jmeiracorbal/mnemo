@@ -110,9 +110,8 @@ func printDoctorReport(report doctor.Report) {
 	}
 }
 
-// fixDoctorReport repairs every agent with a failing check: it removes legacy
-// integrations through the agent's own CLI, then rewrites the agent's mnemo
-// configuration with setup refresh. Both steps are idempotent.
+// fixDoctorReport repairs every failing integration and restores the managed
+// controller when its health check fails. Repairs are idempotent.
 func fixDoctorReport(report doctor.Report, opts doctorOptions, out io.Writer) error {
 	home := opts.Home
 	if home == "" {
@@ -124,7 +123,12 @@ func fixDoctorReport(report doctor.Report, opts doctorOptions, out io.Writer) er
 	}
 	var agents []string
 	legacy := map[string]bool{}
+	controllerNeedsRepair := false
 	for _, check := range report.Checks {
+		if check.ID == "controller" && check.Status != "ok" {
+			controllerNeedsRepair = true
+			continue
+		}
 		if check.Agent == "" || check.Status == "ok" {
 			continue
 		}
@@ -134,6 +138,13 @@ func fixDoctorReport(report doctor.Report, opts doctorOptions, out io.Writer) er
 		if strings.HasPrefix(check.ID, "legacy_plugin.") {
 			legacy[check.Agent] = true
 		}
+	}
+	if controllerNeedsRepair && len(agents) == 0 {
+		agent := opts.Agent
+		if agent == "" {
+			agent = "all"
+		}
+		agents = append(agents, agent)
 	}
 	if len(agents) == 0 {
 		_, _ = fmt.Fprintln(out, "mnemo doctor --fix: nothing to repair")
