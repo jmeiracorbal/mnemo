@@ -21,9 +21,9 @@ const markerName = ".mnemo"
 // Fixed forever — changing this would invalidate all existing project IDs.
 var mnemoNamespace = uuid.MustParse("6f3e4b2a-1c5d-4e7f-8a9b-0c1d2e3f4a5b")
 
-// ProjectUUIDFromPath returns the deterministic UUID v5 for an absolute project path.
-// Same path always produces the same UUID. Used by both init and migrate.
-// Panics if absPath is not absolute to prevent non-deterministic IDs.
+// ProjectUUIDFromPath preserves the legacy UUID v5 derivation for migrations.
+// New projects use random UUIDs; existing legacy identities must remain stable.
+// Panics if absPath is not absolute to prevent non-deterministic migration IDs.
 func ProjectUUIDFromPath(absPath string) string {
 	if !filepath.IsAbs(absPath) {
 		panic("ProjectUUIDFromPath: path must be absolute, got: " + absPath)
@@ -76,8 +76,8 @@ func writeMarker(root string, m *Marker) error {
 	return os.WriteFile(filepath.Join(root, markerName), append(data, '\n'), 0644)
 }
 
-// EnsureProjectID returns the project UUID from .mnemo. If not set, derives it
-// deterministically from the absolute path, persists it, and returns it.
+// EnsureProjectID returns the project UUID from .mnemo. If not set, creates
+// a random UUID v4 once, persists it, and returns it. Existing IDs are preserved.
 func EnsureProjectID(root string) (string, error) {
 	m, err := readMarker(root)
 	if err != nil {
@@ -86,11 +86,11 @@ func EnsureProjectID(root string) (string, error) {
 	if m.ID != "" {
 		return m.ID, nil
 	}
-	abs, err := filepath.Abs(root)
+	id, err := uuid.NewRandom()
 	if err != nil {
-		return "", fmt.Errorf("resolve path: %w", err)
+		return "", fmt.Errorf("generate project UUID: %w", err)
 	}
-	m.ID = ProjectUUIDFromPath(abs)
+	m.ID = id.String()
 	if err := writeMarker(root, m); err != nil {
 		return "", fmt.Errorf("write project ID to .mnemo: %w", err)
 	}

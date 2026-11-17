@@ -14,11 +14,11 @@ Memories, sessions, and observations are stored in `~/.mnemo/memory.db`. The loc
 
 A project may contain a `.mnemo` marker with its project ID and the names of
 activated agents. This marker does **not** contain stored memories or account
-credentials. In Git repositories, tracking the marker is optional: `mnemo init`
-does not stage it, while the explicitly invoked `mnemo track` command makes it
-available for a user-reviewed Git commit. Committing or publishing `.mnemo`
-discloses the project ID and agent names to anyone with access to that repository.
-It does not publish the local database or authorize access to memory data.
+credentials. The marker is excluded from Git by `mnemo init`, and the
+application refuses initialization when it is already tracked. New project IDs
+are random UUID v4 values; existing markers retain their IDs. The marker will
+be shared via mnemo-cloud only after account authentication and project
+authorization. Possession of the marker never grants API access by itself.
 
 ## No data collection
 

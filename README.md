@@ -94,14 +94,14 @@ The installer and `mnemo update` follow the latest published stable release (`v2
 
 ```text
 project/
-├── .mnemo      # project ID + activated agents (Git-trackable)
+├── .mnemo      # private project ID + activated agents (excluded from Git)
 ├── AGENTS.md   # shared memory authority
 ├── CLAUDE.md   # Claude rules when selected
 ├── .cursor/    # Cursor rules when selected
 └── .pi/        # Pi prompt extensions when selected
 ```
 
-**Git tracking is opt-in:** `mnemo init` no longer adds `.mnemo` to `.gitignore` and does not change Git tracking. To share an existing project ID across clones, run `mnemo track` inside the repository. This explicit command removes legacy `.mnemo` ignore rules and stages only `.mnemo` without changing its ID. Review and commit the resulting changes; mnemo never commits or pushes them. **Existing installations:** after updating mnemo, run `mnemo track` in each repository you want to migrate; updating alone will not change Git state. The marker currently contains the project ID and activated agent names, not stored memories or credentials. A project ID is not an authorization token: a future cloud service must enforce user/organization access on every operation (OWASP API1:2023, Broken Object Level Authorization).
+**Project marker:** `.mnemo` is never intended for Git tracking. `mnemo init` adds `/.mnemo` to the project's `.gitignore` idempotently and refuses to proceed if the marker is already tracked (remove it from the index with `git rm --cached -- .mnemo`). New projects receive a random UUID v4; existing project IDs are preserved. Sharing the marker will be handled by mnemo-cloud after registration and authorization; knowing its ID grants no access.
 
 See [Durable Events](https://github.com/jmeiracorbal/mnemo/wiki/Durable-Events) for delivery and failure semantics.
 

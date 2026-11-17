@@ -37,6 +37,10 @@ func runInit() {
 	}
 	root := agentinit.ProjectRoot(abs)
 
+	if err := agentinit.EnsureMarkerIgnored(root); err != nil {
+		fmt.Fprintf(os.Stderr, "mnemo init: Git exclusion: %v\n", err)
+		os.Exit(1)
+	}
 	projectID, err := agentinit.EnsureProjectID(root)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mnemo init: project ID: %v\n", err)
